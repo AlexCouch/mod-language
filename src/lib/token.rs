@@ -174,12 +174,46 @@ pub enum TokenData {
 #[allow(missing_docs)]
 pub struct Token {
   pub data: TokenData,
-  pub origin: SourceOrigin,
+  pub origin: SourceRegion,
 }
 
 impl Token {
   /// Create a new Token
-  pub fn new (data: TokenData, origin: SourceOrigin) -> Self {
+  pub fn new (data: TokenData, origin: SourceRegion) -> Self {
     Self { data, origin }
+  }
+}
+
+
+/// A wrapper for printing Vecs of Tokens for debug purposes
+pub struct TokenVecDebugger<'a> {
+  tokens: &'a [Token],
+  source: &'a Source,
+}
+
+impl<'a> TokenVecDebugger<'a> {
+  /// Create a new TokenVecDebugger
+  pub fn new (tokens: &'a [Token], source: &'a Source) -> Self {
+    Self { tokens, source }
+  }
+}
+
+impl<'a> Debug for TokenVecDebugger<'a> {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    writeln!(f, "Tokens({}) [", self.tokens.len())?;
+
+    for (i, token) in self.tokens.iter().enumerate() {
+      writeln!(
+        f, "  {} @ [{}:{:?} to {}:{:?}]: {:?}",
+        i,
+        self.source.path,
+        token.origin.start,
+        self.source.path,
+        token.origin.end,
+        token.data
+      )?
+    }
+
+    writeln!(f, "]")
   }
 }
