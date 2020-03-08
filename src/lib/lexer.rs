@@ -1,22 +1,24 @@
+//! Contains Lexer and supporting structures and functions
+
 use super::source::*;
 use super::token::*;
 
 /// The result of a single step of lexical analysis in a Lexer
-pub enum LexletResult {
+enum LexletResult {
   Some(Token),
   Err(char),
   None
 }
 
 /// The type of function used by a Lexer to analyze a particular variant of syntax
-pub type Lexlet = fn (&mut Lexer) -> LexletResult;
+type Lexlet = fn (&mut Lexer) -> LexletResult;
 
 
 /// State information for a lexical analysis session
 pub struct Lexer<'a> {
-  pub source: std::str::Chars<'a>,
-  pub offset: usize,
-  pub location: SourceLocation,
+  source: std::str::Chars<'a>,
+  offset: usize,
+  location: SourceLocation,
   prev: Option<char>,
   curr: Option<char>,
   next: Option<char>,

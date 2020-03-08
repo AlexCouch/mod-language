@@ -1,3 +1,5 @@
+//! Contains Source, SourceTracker, and access functions, as well as SourceLocation, SourceRegion, and SourceOrigin
+
 use std::{
   collections::{ HashMap, hash_map::DefaultHasher },
   hash::{ Hash, Hasher },
@@ -120,6 +122,7 @@ pub fn remove_source (id: u32) {
 
 /// A pair of integers representing a line and column in a source file
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(missing_docs)]
 pub struct SourceLocation {
   pub line: u32,
   pub column: u32,
@@ -127,6 +130,7 @@ pub struct SourceLocation {
 
 /// A pair of SourceLocations indicating a region in a source file
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(missing_docs)]
 pub struct SourceRegion {
   pub start: SourceLocation,
   pub end: SourceLocation,
@@ -135,7 +139,9 @@ pub struct SourceRegion {
 /// A pair of SourceLocations and a Source ID
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SourceOrigin {
+  /// The area of a Source an item came from
   pub region: SourceRegion,
+  /// The id of the Source an item came from
   pub id: u32,
 }
 

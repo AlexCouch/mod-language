@@ -1,3 +1,5 @@
+//! Contains Token and its component structures
+
 use std::{
   fmt::{ Debug, Formatter, Result as FMTResult, },
   str::from_utf8_unchecked as str_from_utf8_unchecked,
@@ -96,6 +98,7 @@ impl AsRef<str> for Identifier {
 
 /// An enum containing either an Integer or FloatingPoint numeric value
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[allow(missing_docs)]
 pub enum Number {
   Integer(u64),
   FloatingPoint(f64),
@@ -105,6 +108,7 @@ pub enum Number {
 /// An enum representing a language control word such as `fn` or `let`
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(missing_docs)]
 pub enum Keyword {
   Function,
   Let,
@@ -120,6 +124,7 @@ pub const KEYWORD_VALUES: &[(&str, Keyword)] = &[
 /// An enum representing a language operator symbol such as `+` or `-`
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(missing_docs)]
 pub enum Operator {
   Plus,
   Minus,
@@ -152,6 +157,7 @@ pub const OPERATOR_VALUES: &[(&str, Operator)] = &[
 
 /// An enum containing the interior data of a Token, such as an Identifier, Number, String, Keyword, or other variant
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum TokenData {
   Identifier(Identifier),
   Number(Number),
@@ -165,6 +171,7 @@ pub enum TokenData {
 
 /// A single unit of language syntax, such as an identifier, a number, or an operator
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub struct Token {
   pub data: TokenData,
   pub origin: SourceOrigin,
