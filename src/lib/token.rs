@@ -8,6 +8,7 @@ use std::{
 
 use super::source::*;
 use super::ansi;
+use super::util::Either;
 
 
 /// A value identifying a particular language variable or type
@@ -88,6 +89,11 @@ impl Identifier {
       false
     }
   }
+
+  /// Get a specific char at an index in an Identifier and convert it to `char`
+  pub fn get (&self, index: usize) -> Option<char> {
+    self.value.get(index).map(|ch| *ch as _)
+  }
 }
 
 impl AsRef<str> for Identifier {
@@ -111,15 +117,9 @@ pub enum Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Keyword {
-  Function,
   Let,
+  Function,
 }
-
-/// A lookup table from substrings to their associated Keyword
-pub const KEYWORD_VALUES: &[(&str, Keyword)] = &[
-  ("fn",  Keyword::Function),
-  ("let", Keyword::Let),
-];
 
 
 /// An enum representing a language operator symbol such as `+` or `-`
@@ -127,6 +127,14 @@ pub const KEYWORD_VALUES: &[(&str, Keyword)] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Operator {
+  Not,
+  And,
+  Xor,
+  Or,
+  As,
+
+  Equal,
+  Assign,
   Plus,
   Minus,
   Asterisk,
@@ -140,20 +148,46 @@ pub enum Operator {
   RightBracket,
 }
 
-/// A lookup table from substrings to their associated Operator
-pub const OPERATOR_VALUES: &[(&str, Operator)] = &[
-  ("+", Operator::Plus),
-  ("-", Operator::Minus),
-  ("*", Operator::Asterisk),
-  ("/", Operator::ForwardSlash),
-  (",", Operator::Comma),
-  (":", Operator::Colon),
-  (";", Operator::SemiColon),
-  ("(", Operator::LeftParenthesis),
-  (")", Operator::RightParenthesis),
-  ("{", Operator::LeftBracket),
-  ("}", Operator::RightBracket),
-];
+
+/// A lookup table from substrings to their associated Keyword or Operator
+/// 
+/// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
+pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
+  &[
+    ("let", Either::A(Keyword::Let)),
+    ("not", Either::B(Operator::Not)),
+    ("and", Either::B(Operator::And)),
+    ("xor", Either::B(Operator::Xor)),
+    ("fn",  Either::A(Keyword::Function)),
+    ("or",  Either::B(Operator::Or)),
+    ("as",  Either::B(Operator::As)),
+  ]
+};
+
+
+/// A lookup table from substrings of symbols to their associated Operator
+/// 
+/// E.g. only contains operators which cannot be interpreted as an identifer
+/// 
+/// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
+pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
+  use Operator::*;
+  &[
+    ("==", Equal),
+    ("=",  Assign),
+    ("+",  Plus),
+    ("-",  Minus),
+    ("*",  Asterisk),
+    ("/",  ForwardSlash),
+    (",",  Comma),
+    (":",  Colon),
+    (";",  SemiColon),
+    ("(",  LeftParenthesis),
+    (")",  RightParenthesis),
+    ("{",  LeftBracket),
+    ("}",  RightBracket),
+  ]
+};
 
 
 /// An enum containing the interior data of a Token, such as an Identifier, Number, String, Keyword, or other variant
@@ -194,11 +228,11 @@ pub fn print_tokens (tokens: &[Token], source: &Source)  {
     println!(
       "  {} @ [{}{}:{:?}{} to {}{}:{:?}{}]: {:?}",
       i,
-      ansi::Foreground::BrightBlack,
+      ansi::Foreground::Cyan,
       source.path,
       token.origin.start,
       ansi::Foreground::Reset,
-      ansi::Foreground::BrightBlack,
+      ansi::Foreground::Cyan,
       source.path,
       token.origin.end,
       ansi::Foreground::Reset,

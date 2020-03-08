@@ -5,16 +5,17 @@ use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   fs::read_to_string,
   cell::RefCell,
-  str::Chars,
 };
 
 use super::ansi;
+use super::util::{ padding, count_digits };
 
 
-/// A pair of integers representing a line and column in a source file
+/// A set of integers representing an index, line and column in a source file
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub struct SourceLocation {
+  pub index: usize,
   pub line: u32,
   pub column: u32,
 }
@@ -60,27 +61,45 @@ pub enum MessageKind {
   Notice,
 }
 
-impl Display for MessageKind {
-  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+impl MessageKind {
+  /// Get the ansi Foreground color code associated with a MessageKind
+  pub fn get_ansi (self) -> ansi::Foreground {
     use MessageKind::*;
 
+    match self {
+      Error => ansi::Foreground::Red,
+      Warning => ansi::Foreground::Yellow,
+      Notice => ansi::Foreground::Green,
+    }
+  }
+
+  /// Get a MessageKind in str form
+  pub fn get_name (self) -> &'static str {
+    use MessageKind::*;
+
+    match self {
+      Error => "Error",
+      Warning => "Warning",
+      Notice => "Notice",
+    }
+  }
+
+  /// Get a string of whitespace the same length as a MessageKind in str form, minus some offset
+  pub fn get_whitespace (self, offset: usize) -> &'static str {
+    padding((self.get_name().len() - offset) as _)
+  }
+}
+
+impl Display for MessageKind {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
     write!(
       f, "{}{}{}",
-      match self {
-        Error => ansi::Foreground::Red,
-        Warning => ansi::Foreground::Yellow,
-        Notice => ansi::Foreground::Cyan,
-      },
-      match self {
-        Error => "Error",
-        Warning => "Warning",
-        Notice => "Notice",
-      },
+      self.get_ansi(),
+      self.get_name(),
       ansi::Foreground::Reset
     )
   }
 }
-
 
 /// A user-directed message such as an Error
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,12 +109,12 @@ pub struct Message {
   /// The variant or severity of a Message
   pub kind: MessageKind,
   /// Possibly contains contextual information for a Message
-  pub content: Option<String>,
+  pub content: String,
 }
 
 impl Message {
   /// Create a new user-directed Message for a Source
-  pub fn new (origin: Option<SourceRegion>, kind: MessageKind, content: Option<String>) -> Self {
+  pub fn new (origin: Option<SourceRegion>, kind: MessageKind, content: String) -> Self {
     Self {
       origin,
       kind,
@@ -103,23 +122,132 @@ impl Message {
     }
   }
 
+  /// Print the source excerpt for a Message
+  /// 
+  /// Requires a reference to source chars
+  #[allow(clippy::cognitive_complexity)] // Some functions are just complicated ok?
+  pub fn excerpt (&self, chars: &[char]) {
+    let origin = if let Some(origin) = self.origin { origin } else { return };
+
+    let mut start_index = origin.start.index.min(chars.len() - 1);
+
+    if start_index != 0 {
+      if chars[start_index] == '\n' {
+        start_index += 1;
+      } else {
+        while start_index > 0 {
+          if chars[start_index - 1] != '\n' {
+            start_index -= 1;
+          } else {
+            break
+          }
+        }
+      }
+    }
+
+    let mut end_index = origin.end.index.min(chars.len());
+
+    if end_index != chars.len() {
+      if chars[end_index] == '\n' {
+        end_index -= 1;
+      } else {
+        while end_index < chars.len() - 1 {
+          if chars[end_index + 1] != '\n' {
+            end_index += 1;
+          } else {
+            break
+          }
+        }
+      }
+    }
+
+    let slice = &chars[start_index..end_index];
+    
+    let mut num_lines = 1usize;
+
+    for ch in slice.iter() {
+      if *ch == '\n' { num_lines += 1 }
+    }
+
+    if num_lines == 1 {
+      let line_num = origin.start.line + 1;
+      let line_num_digits = count_digits(line_num as _, 10);
+      
+      print!("{}|\n|{} {} {}|{}  ", self.kind.get_ansi(), ansi::Foreground::Cyan, line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack);
+
+      for (i, ch) in slice.iter().enumerate() {
+        if i == origin.start.column as _ { print!("{}", ansi::Foreground::Reset); }
+        else if i == origin.end.column as _ { print!("{}", ansi::Foreground::BrightBlack); }
+        print!("{}", ch);
+      }
+
+      print!("\n{}{}|--", padding((line_num_digits + 3) as _), self.kind.get_ansi());
+
+      for i in 0..slice.len() as _ {
+        if i < origin.start.column { print!("-") }
+        else if i < origin.end.column { print!("^") }
+        else { break }
+      }
+
+      println!("{}", ansi::Foreground::Reset);
+    } else {
+      let last_line_num = origin.end.line + 1;
+      let last_line_num_digits = count_digits(last_line_num as _, 10);
+      let gap_pad = padding((last_line_num_digits + 2) as _);
+
+      print!("{}|\n|{}|", self.kind.get_ansi(), gap_pad,);
+      
+      for _ in 0..origin.start.column + 2 {
+        print!("-");
+      }
+      
+      let first_line_num = origin.start.line + 1;
+      let first_line_num_digits = count_digits(first_line_num as _, 10);
+      print!("v\n| {}{}{}{} |{}  ", padding((last_line_num_digits - first_line_num_digits) as _), ansi::Foreground::Cyan, first_line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack);
+
+      let mut line_num = first_line_num;
+      let mut column = 0;
+
+      for ch in slice.iter() {
+        if *ch != '\n' {
+          if line_num - 1 == origin.start.line && column == origin.start.column as _ { print!("{}", ansi::Foreground::Reset); }
+          else if line_num - 1 == origin.end.line && column == origin.end.column as _ { print!("{}", ansi::Foreground::BrightBlack); }
+          print!("{}", ch);
+          column += 1;
+        } else {
+          column = 0;
+          line_num += 1;
+          let line_num_digits = count_digits(line_num as _, 10);
+          print!("\n{}| {}{}{}{} |  ", self.kind.get_ansi(), padding((last_line_num_digits - line_num_digits) as _), ansi::Foreground::Cyan, line_num, self.kind.get_ansi());
+          if line_num > first_line_num { print!("{}", ansi::Foreground::Reset); }
+        }
+      }
+
+      print!("\n {}{}|", gap_pad, self.kind.get_ansi());
+
+      for _ in 0..origin.end.column + 1 {
+        print!("-")
+      }
+      
+      println!("^{}", ansi::Foreground::Reset);
+    }
+  }
+
   /// Print a Message to the stdout
   /// 
-  /// Requires a reference to its parent Source for paths
+  /// Requires a reference to its parent Source for paths and excerpts
   pub fn print (&self, source: &Source) {
-    print!("\n{} at [{}{}", self.kind, ansi::Foreground::BrightBlack, source.path);
+    println!("\n{}: {}", self.kind, self.content);
+
+    print!("{}|{} {}at: {}{}", self.kind.get_ansi(), ansi::Foreground::Reset, self.kind.get_whitespace(4), ansi::Foreground::Cyan, source.path);
 
     if let Some(origin) = self.origin {
-      print!(":{:?}{} to {}{}:{:?}", origin.start, ansi::Foreground::Reset, ansi::Foreground::BrightBlack, source.path, origin.end);
+      print!(":{:?}{}", origin.start, ansi::Foreground::Reset);
     }
+    
+    println!("{}", ansi::Foreground::Reset);
 
-    print!("{}]", ansi::Foreground::Reset);
-
-    if let Some(content) = self.content.as_ref() {
-      print!(": {}", content);
-    }
-
-    println!();
+    self.excerpt(source.chars());
   }
 }
 
@@ -129,7 +257,7 @@ pub struct Source {
   /// The file path a Source originated from
   pub path: String,
   /// The content of a Source
-  pub content: String,
+  pub content: Vec<char>,
   /// User-directed messages created while processing a Source
   pub messages: RefCell<Vec<Message>>,
 }
@@ -142,19 +270,19 @@ impl Source {
 
     Ok(Source {
       path,
-      content,
+      content: content.chars().collect(),
       messages: RefCell::new(Vec::new())
     })
   }
 
   /// Get an iterator of the chars of the content of a Source
-  pub fn chars (&self) -> Chars {
-    self.content.chars()
+  pub fn chars (&self) -> &[char] {
+    self.content.as_slice()
   }
 
 
   /// Add a Message to the list of Messages associated with a Source
-  pub fn message (&self, origin: Option<SourceRegion>, kind: MessageKind, content: Option<String>) {
+  pub fn message (&self, origin: Option<SourceRegion>, kind: MessageKind, content: String) {
     self.messages.borrow_mut().push(Message::new(
       origin,
       kind,
@@ -164,7 +292,7 @@ impl Source {
 
   
   /// Add an Error Message to the list of Messages associated with a Source
-  pub fn error (&self, origin: Option<SourceRegion>, content: Option<String>) {
+  pub fn error (&self, origin: Option<SourceRegion>, content: String) {
     self.messages.borrow_mut().push(Message::new(
       origin,
       MessageKind::Error,
@@ -173,7 +301,7 @@ impl Source {
   }
   
   /// Add a Warning Message to the list of Messages associated with a Source
-  pub fn warning (&self, origin: Option<SourceRegion>, content: Option<String>) {
+  pub fn warning (&self, origin: Option<SourceRegion>, content: String) {
     self.messages.borrow_mut().push(Message::new(
       origin,
       MessageKind::Warning,
@@ -182,7 +310,7 @@ impl Source {
   }
   
   /// Add a Notice Message to the list of Messages associated with a Source
-  pub fn notice (&self, origin: Option<SourceRegion>, content: Option<String>) {
+  pub fn notice (&self, origin: Option<SourceRegion>, content: String) {
     self.messages.borrow_mut().push(Message::new(
       origin,
       MessageKind::Notice,
@@ -218,5 +346,28 @@ impl Source {
     for message in self.messages.borrow().iter() {
       if message.kind == MessageKind::Notice { message.print(self) }
     }
+  }
+
+  /// Find the index offset of a line and column in a Source, if it is in range
+  pub fn line_and_column_to_index (&self, line: u32, column: u32) -> Option<usize> {
+    let mut index = 0;
+    let mut ol = 0u32;
+    let mut oc = 0u32;
+
+    for ch in self.chars().iter() {
+      if ol == line && oc == column { return Some(index) }
+
+      if *ch == '\n' {
+        ol += 1;
+        oc = 0;
+      } else {
+        oc += 1;
+      }
+
+      index += 1;
+    }
+
+    if ol == line && oc == column { Some(index) }
+    else { None }
   }
 }

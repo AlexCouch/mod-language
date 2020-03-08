@@ -51,6 +51,7 @@ pub fn is_enabled () -> bool {
   unsafe { ANSI_ENABLED }
 }
 
+
 /// An ansi foreground color, printing this will colorize future text output
 #[repr(u8)]
 #[allow(missing_docs)]
