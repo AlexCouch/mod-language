@@ -1,7 +1,7 @@
 //! Contains Token and its component structures
 
 use std::{
-  fmt::{ Debug, Formatter, Result as FMTResult, },
+  fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   str::from_utf8_unchecked as str_from_utf8_unchecked,
   slice::from_raw_parts as slice_from_raw_parts,
 };
@@ -220,25 +220,49 @@ impl Token {
 }
 
 
-/// Print a Vec of Tokens with their Source attributions
-pub fn print_tokens (tokens: &[Token], source: &Source)  {
-  println!("Tokens({}) [", tokens.len());
+/// Contains a Vec of Tokens and a reference to the Source they were generated from
+pub struct TokenStream<'a> {
+  tokens: Vec<Token>,
+  /// The source the Tokens in a TokenStream originated from
+  pub source: &'a Source
+}
 
-  for (i, token) in tokens.iter().enumerate() {
-    println!(
-      "  {} @ [{}{}:{:?}{} to {}{}:{:?}{}]: {:?}",
-      i,
-      ansi::Foreground::Cyan,
-      source.path,
-      token.origin.start,
-      ansi::Foreground::Reset,
-      ansi::Foreground::Cyan,
-      source.path,
-      token.origin.end,
-      ansi::Foreground::Reset,
-      token.data
-    )
+impl<'a> TokenStream<'a> {
+  /// Create a new TokenStream
+  pub fn new (tokens: Vec<Token>, source: &'a Source) -> Self {
+    Self {
+      tokens,
+      source,
+    }
   }
 
-  println!("]")
+  /// Get a slice of the Tokens in a TokenStream
+  pub fn tokens (&self) -> &[Token] {
+    self.tokens.as_slice()
+  }
+}
+
+impl<'a> Display for TokenStream<'a> {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    writeln!(f, "TokenStream({}) [", self.tokens.len())?;
+
+    for (i, token) in self.tokens.iter().enumerate() {
+      writeln!(
+        f,
+        "  {} @ [{}{}:{:?}{} to {}{}:{:?}{}]: {:?}",
+        i,
+        ansi::Foreground::Cyan,
+        self.source.path,
+        token.origin.start,
+        ansi::Foreground::Reset,
+        ansi::Foreground::Cyan,
+        self.source.path,
+        token.origin.end,
+        ansi::Foreground::Reset,
+        token.data
+      )?;
+    }
+
+    writeln!(f, "]")
+  }
 }

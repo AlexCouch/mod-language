@@ -1,7 +1,6 @@
 use mod_language::{
   source::{ Source, SourceRegion, SourceLocation },
-  lexer::{ Lexer, InvalidLexicalSymbol },
-  token::print_tokens,
+  lexer::Lexer,
   ansi,
 };
 
@@ -15,16 +14,9 @@ fn main () -> std::io::Result<()> {
 
   let mut lexer = Lexer::new(&source).unwrap();
 
-  let mut tokens = Vec::new();
-  
-  loop {
-    match lexer.lex_token() {
-      Ok(tok_or_eof) => if let Some(token) = tok_or_eof { tokens.push(token) } else { break },
-      Err(InvalidLexicalSymbol { symbol, origin }) => lexer.error_at(origin, format!("Unexpected lexical symbol {:?}", symbol))
-    }
-  }
+  let stream = lexer.lex_stream();
 
-  print_tokens(&tokens, &source);
+  println!("Lexing complete:\n{}", stream);
 
   source.notice(None, format!("Test {}", 123));
   source.warning(None, format!("Test {}", 456));

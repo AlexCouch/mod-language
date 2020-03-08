@@ -313,6 +313,18 @@ impl<'a> Lexer<'a> {
 
     Ok(None)
   }
+
+  /// Convert an entire Source's content into a TokenStream
+  pub fn lex_stream (&mut self) -> TokenStream {
+    let mut tokens = Vec::new();
+  
+    loop {
+      match self.lex_token() {
+        Ok(tok_or_eof) => if let Some(token) = tok_or_eof { tokens.push(token) } else { break TokenStream::new(tokens, self.source) },
+        Err(InvalidLexicalSymbol { symbol, origin }) => self.error_at(origin, format!("Unexpected lexical symbol {:?}", symbol))
+      }
+    }
+  }
 }
 
 
