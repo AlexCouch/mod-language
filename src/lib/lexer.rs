@@ -3,10 +3,18 @@
 use super::source::*;
 use super::token::*;
 
+/// An unrecognized lexical symbol
+pub struct InvalidLexicalSymbol {
+  /// The invalid symbol
+  pub symbol: char,
+  /// The area of a Source an invalid symbol was found
+  pub origin: SourceRegion,
+}
+
 /// The result of a single step of lexical analysis in a Lexer
 enum LexletResult {
   Some(Token),
-  Err(char),
+  Err(InvalidLexicalSymbol),
   None
 }
 
@@ -195,13 +203,13 @@ impl<'a> Lexer<'a> {
 
 
   /// Advance by one Token of a Lexer's source and return the Token
-  pub fn lex_token (&mut self) -> Result<Option<Token>, char> {
+  pub fn lex_token (&mut self) -> Result<Option<Token>, InvalidLexicalSymbol> {
     if self.curr_char().is_none() { return Ok(None) }
-
+    
     for lexlet in LEXLETS.iter() {
       match lexlet(self) {
         LexletResult::Some(token) => return Ok(Some(token)),
-        LexletResult::Err(ch) => return Err(ch),
+        LexletResult::Err(sym) => return Err(sym),
         LexletResult::None => continue
       } 
     }
@@ -253,8 +261,9 @@ const LEXLETS: &[Lexlet] = &[
   lex_identifier,
   |lexer: &mut Lexer| -> LexletResult {
     if let Some(ch) = lexer.curr_char() {
+      lexer.push_marker();
       lexer.advance();
-      LexletResult::Err(ch)
+      LexletResult::Err(InvalidLexicalSymbol { symbol: ch, origin: lexer.pop_marker_region().unwrap() })
     } else {
       LexletResult::None
     }

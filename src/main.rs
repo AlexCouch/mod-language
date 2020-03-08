@@ -1,6 +1,6 @@
 use mod_language::{
   source::Source,
-  lexer::Lexer,
+  lexer::{ Lexer, InvalidLexicalSymbol },
   token::TokenVecDebugger,
 };
 
@@ -15,7 +15,7 @@ fn main () -> std::io::Result<()> {
   loop {
     match lexer.lex_token() {
       Ok(tok_or_eof) => if let Some(token) = tok_or_eof { tokens.push(token) } else { break },
-      Err(ch) => lexer.error_at(lexer.curr_region(), Some(format!("Unexpected lexical symbol {:?}", ch)))
+      Err(InvalidLexicalSymbol { symbol, origin }) => lexer.error_at(origin, Some(format!("Unexpected lexical symbol {:?}", symbol)))
     }
   }
 
