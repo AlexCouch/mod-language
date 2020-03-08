@@ -1,11 +1,16 @@
 use mod_language::{
   source::Source,
   lexer::{ Lexer, InvalidLexicalSymbol },
-  token::TokenVecDebugger,
+  token::print_tokens,
+  ansi,
 };
 
 
+
 fn main () -> std::io::Result<()> {
+  if !ansi::enable() { println!("Failed to enable ansi coloring for terminal") }
+  else { println!("\n{}Ansi coloring enabled for terminal{}\n", ansi::Foreground::Green, ansi::Foreground::Reset) }
+  
   let source = Source::load("./test_scripts/min.ms".to_owned())?;
 
   let mut lexer = Lexer::new(&source).unwrap();
@@ -19,7 +24,10 @@ fn main () -> std::io::Result<()> {
     }
   }
 
-  println!("Got tokens: {:?}", TokenVecDebugger::new(&tokens, &source));
+  print_tokens(&tokens, &source);
+
+  source.notice(None, Some(format!("Test {}", 123)));
+  source.warning(None, Some(format!("Test {}", 456)));
 
   source.print_notices();
   source.print_warnings();

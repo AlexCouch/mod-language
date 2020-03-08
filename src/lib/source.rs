@@ -8,6 +8,8 @@ use std::{
   str::Chars,
 };
 
+use super::ansi;
+
 
 /// A pair of integers representing a line and column in a source file
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -60,13 +62,25 @@ pub enum MessageKind {
 
 impl Display for MessageKind {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    write!(f, "{}", match self {
-      Self::Error => "Error",
-      Self::Warning => "Warning",
-      Self::Notice => "Notice",
-    })
+    use MessageKind::*;
+
+    write!(
+      f, "{}{}{}",
+      match self {
+        Error => ansi::Foreground::Red,
+        Warning => ansi::Foreground::Yellow,
+        Notice => ansi::Foreground::Cyan,
+      },
+      match self {
+        Error => "Error",
+        Warning => "Warning",
+        Notice => "Notice",
+      },
+      ansi::Foreground::Reset
+    )
   }
 }
+
 
 /// A user-directed message such as an Error
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,13 +107,13 @@ impl Message {
   /// 
   /// Requires a reference to its parent Source for paths
   pub fn print (&self, source: &Source) {
-    print!("{} at [{}", self.kind, source.path);
+    print!("\n{} at [{}{}", self.kind, ansi::Foreground::BrightBlack, source.path);
 
     if let Some(origin) = self.origin {
-      print!(":{:?} to {}:{:?}", origin.start, source.path, origin.end);
+      print!(":{:?}{} to {}{}:{:?}", origin.start, ansi::Foreground::Reset, ansi::Foreground::BrightBlack, source.path, origin.end);
     }
 
-    print!("]");
+    print!("{}]", ansi::Foreground::Reset);
 
     if let Some(content) = self.content.as_ref() {
       print!(": {}", content);

@@ -7,6 +7,7 @@ use std::{
 };
 
 use super::source::*;
+use super::ansi;
 
 
 /// A value identifying a particular language variable or type
@@ -185,35 +186,25 @@ impl Token {
 }
 
 
-/// A wrapper for printing Vecs of Tokens for debug purposes
-pub struct TokenVecDebugger<'a> {
-  tokens: &'a [Token],
-  source: &'a Source,
-}
+/// Print a Vec of Tokens with their Source attributions
+pub fn print_tokens (tokens: &[Token], source: &Source)  {
+  println!("Tokens({}) [", tokens.len());
 
-impl<'a> TokenVecDebugger<'a> {
-  /// Create a new TokenVecDebugger
-  pub fn new (tokens: &'a [Token], source: &'a Source) -> Self {
-    Self { tokens, source }
+  for (i, token) in tokens.iter().enumerate() {
+    println!(
+      "  {} @ [{}{}:{:?}{} to {}{}:{:?}{}]: {:?}",
+      i,
+      ansi::Foreground::BrightBlack,
+      source.path,
+      token.origin.start,
+      ansi::Foreground::Reset,
+      ansi::Foreground::BrightBlack,
+      source.path,
+      token.origin.end,
+      ansi::Foreground::Reset,
+      token.data
+    )
   }
-}
 
-impl<'a> Debug for TokenVecDebugger<'a> {
-  fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    writeln!(f, "Tokens({}) [", self.tokens.len())?;
-
-    for (i, token) in self.tokens.iter().enumerate() {
-      writeln!(
-        f, "  {} @ [{}:{:?} to {}:{:?}]: {:?}",
-        i,
-        self.source.path,
-        token.origin.start,
-        self.source.path,
-        token.origin.end,
-        token.data
-      )?
-    }
-
-    writeln!(f, "]")
-  }
+  println!("]")
 }
