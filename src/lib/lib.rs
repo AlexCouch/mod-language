@@ -9,3 +9,5 @@ pub mod ansi;
 pub mod source;
 pub mod token;
 pub mod lexer;
+pub mod ast;
+pub mod parser;

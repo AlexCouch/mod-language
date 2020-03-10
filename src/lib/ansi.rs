@@ -4,6 +4,7 @@ use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult },
 };
 
+
 #[cfg(windows)]
 mod windows {
   const STD_OUTPUT_HANDLE: u32 = -11 as _;

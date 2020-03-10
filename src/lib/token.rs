@@ -4,11 +4,14 @@ use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   str::from_utf8_unchecked as str_from_utf8_unchecked,
   slice::from_raw_parts as slice_from_raw_parts,
+  ops::{ Deref },
 };
 
-use super::source::*;
-use super::ansi;
-use super::util::Either;
+use crate::{
+  source::*,
+  ansi,
+  util::Either,
+};
 
 
 /// A value identifying a particular language variable or type
@@ -190,6 +193,18 @@ pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
 };
 
 
+/// An enum indicating a specific variant of interior data in a Token, but not containing any itself
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(missing_docs)]
+pub enum TokenKind {
+  Identifier,
+  Number,
+  String,
+  Keyword,
+  Operator
+}
+
+
 /// An enum containing the interior data of a Token, such as an Identifier, Number, String, Keyword, or other variant
 #[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
@@ -201,6 +216,18 @@ pub enum TokenData {
   Operator(Operator),
 }
 
+impl TokenData {
+  /// Get the TokenKind of a TokenData
+  pub fn kind (&self) -> TokenKind {
+    match self {
+      TokenData::Identifier(_) => TokenKind::Identifier,
+      TokenData::Number(_) => TokenKind::Number,
+      TokenData::String(_) => TokenKind::String,
+      TokenData::Keyword(_) => TokenKind::Keyword,
+      TokenData::Operator(_) => TokenKind::Operator,
+    }
+  }
+}
 
 
 
@@ -217,6 +244,11 @@ impl Token {
   pub fn new (data: TokenData, origin: SourceRegion) -> Self {
     Self { data, origin }
   }
+}
+
+impl Deref for Token {
+  type Target = TokenData;
+  #[inline] fn deref (&self) -> &Self::Target { &self.data }
 }
 
 

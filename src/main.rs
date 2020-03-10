@@ -12,7 +12,7 @@ fn main () -> std::io::Result<()> {
   
   let source = Source::load("./test_scripts/min.ms".to_owned())?;
 
-  let mut lexer = Lexer::new(&source).unwrap();
+  let mut lexer = Lexer::new(&source);
 
   let stream = lexer.lex_stream();
 
@@ -23,12 +23,12 @@ fn main () -> std::io::Result<()> {
 
   let region = SourceRegion {
     start: SourceLocation {
-      index: source.line_and_column_to_index(17, 0).unwrap(),
+      index: source.line_and_column_to_index(17, 11).unwrap(),
       line: 17,
       column: 11,
     },
     end: SourceLocation {
-      index: source.line_and_column_to_index(19, 2).unwrap(),
+      index: source.line_and_column_to_index(19, 11).unwrap(),
       line: 19,
       column: 11,
     },

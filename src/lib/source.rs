@@ -7,8 +7,10 @@ use std::{
   cell::RefCell,
 };
 
-use super::ansi;
-use super::util::{ padding, count_digits };
+use crate::{
+  ansi,
+  util::{ padding, count_digits },
+};
 
 
 /// A set of integers representing an index, line and column in a source file
