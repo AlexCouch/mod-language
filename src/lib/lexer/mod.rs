@@ -86,7 +86,7 @@ impl<'a> Lexer<'a> {
 
     self.locale.prev = self.locale.curr;
     self.locale.curr = self.locale.next;
-    self.locale.next = self.chars.get(self.locale.location.index).deref_wrapper();
+    self.locale.next = self.chars.get(self.locale.location.index + 1).deref_wrapper();
 
     self.locale.curr
   }
