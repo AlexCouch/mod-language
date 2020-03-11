@@ -148,12 +148,7 @@ impl<'a> Parser<'a> {
 
   /// Create a user-directed Message in the Source of the TokenStream of a Parser
   /// 
-  /// If there is an active marker on the top of the marker stack,
-  /// this will use it to create a SourceRegion, without popping it from the stack
-  /// 
-  /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// This will use the current Token's SourceRegion, and panics if one is not available
   pub fn message (&mut self, kind: MessageKind, content: String) {
     self.stream.source.message(
       Some(self.curr_region()),
@@ -168,8 +163,7 @@ impl<'a> Parser<'a> {
   /// this will pop it and create a SourceRegion from it.
   /// 
   /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// the SourceRegion generated will be taken from Parser's current Token
   pub fn message_pop (&mut self, kind: MessageKind, content: String) {
     self.stream.source.message(
       Some(self.pop_marker_region().or_else(|| Some(self.curr_region())).unwrap()),
@@ -191,12 +185,7 @@ impl<'a> Parser<'a> {
 
   /// Create a user-directed Error Message in the Source of the TokenStream of a Parser
   /// 
-  /// If there is an active marker on the top of the marker stack,
-  /// this will use it to create a SourceRegion, without popping it from the stack
-  /// 
-  /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// This will use the current Token's SourceRegion, and panics if one is not available
   pub fn error (&mut self, content: String) {
     self.message(
       MessageKind::Error,
@@ -210,8 +199,7 @@ impl<'a> Parser<'a> {
   /// this will pop it and create a SourceRegion from it.
   /// 
   /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// the SourceRegion generated will be taken from Parser's current Token
   pub fn error_pop (&mut self, content: String) {
     self.message_pop(MessageKind::Error, content)
   }
@@ -225,12 +213,7 @@ impl<'a> Parser<'a> {
   
   /// Create a user-directed Warning Message in the Source of the TokenStream of a Parser
   /// 
-  /// If there is an active marker on the top of the marker stack,
-  /// this will use it to create a SourceRegion, without popping it from the stack
-  /// 
-  /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// This will use the current Token's SourceRegion, and panics if one is not available
   pub fn warning (&mut self, content: String) {
     self.message(
       MessageKind::Warning,
@@ -244,8 +227,7 @@ impl<'a> Parser<'a> {
   /// this will pop it and create a SourceRegion from it.
   /// 
   /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// the SourceRegion generated will be taken from Parser's current Token
   pub fn warning_pop (&mut self, content: String) {
     self.message_pop(MessageKind::Warning, content)
   }
@@ -259,12 +241,7 @@ impl<'a> Parser<'a> {
   
   /// Create a user-directed Notice Message in the Source of the TokenStream of a Parser
   /// 
-  /// If there is an active marker on the top of the marker stack,
-  /// this will use it to create a SourceRegion, without popping it from the stack
-  /// 
-  /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// This will use the current Token's SourceRegion, and panics if one is not available
   pub fn notice (&mut self, content: String) {
     self.message(
       MessageKind::Notice,
@@ -278,8 +255,7 @@ impl<'a> Parser<'a> {
   /// this will pop it and create a SourceRegion from it.
   /// 
   /// If there are no markers in the stack,
-  /// the SourceRegion generated will be zero-width,
-  /// and will originate at the Lexer's current location
+  /// the SourceRegion generated will be taken from Parser's current Token
   pub fn notice_pop (&mut self, content: String) {
     self.message_pop(MessageKind::Notice, content)
   }
