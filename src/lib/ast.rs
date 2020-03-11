@@ -28,6 +28,12 @@ impl Debug for TypeExpression {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
 }
 
+impl TypeExpression {
+  /// Create a new TypeExpression
+  pub fn new (data: TypeExpressionData, origin: SourceRegion) -> Self {
+    Self { data, origin }
+  }
+}
 
 
 /// An enum containing the particular variant of an expression
@@ -61,6 +67,13 @@ impl Debug for Expression {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
 }
 
+impl Expression {
+  /// Create a new Expression
+  pub fn new (data: ExpressionData, origin: SourceRegion) -> Self {
+    Self { data, origin }
+  }
+}
+
 
 
 /// An enum containing the particular variant of a statement
@@ -83,6 +96,13 @@ pub struct Statement {
 
 impl Debug for Statement {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+}
+
+impl Statement {
+  /// Create a new Statement
+  pub fn new (data: StatementData, origin: SourceRegion) -> Self {
+    Self { data, origin }
+  }
 }
 
 
@@ -131,6 +151,13 @@ pub struct Item {
 
 impl Debug for Item {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+}
+
+impl Item {
+  /// Create a new Item
+  pub fn new (data: ItemData, origin: SourceRegion) -> Self {
+    Self { data, origin }
+  }
 }
 
 
