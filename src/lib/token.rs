@@ -20,9 +20,15 @@ pub struct Identifier {
   length: usize,
 }
 
-impl Debug for Identifier {
+impl Display for Identifier {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
     write!(f, "{}", self.as_ref())
+  }
+}
+
+impl Debug for Identifier {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    Display::fmt(self, f)
   }
 }
 
