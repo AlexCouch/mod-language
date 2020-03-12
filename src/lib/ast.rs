@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-  source::SourceRegion,
+  source::{ SourceRegion, SourceLocation },
   token::{ TokenStream, Number, Identifier, Operator },
 };
 
@@ -36,6 +36,11 @@ impl TypeExpression {
   /// Create a new TypeExpression
   pub fn new (data: TypeExpressionData, origin: SourceRegion) -> Self {
     Self { data, origin }
+  }
+
+  /// Create a new TypeExpression with no SourceRegion origin
+  pub fn no_src (data: TypeExpressionData) -> Self {
+    Self { data, origin: SourceLocation::ZERO.to_region() }
   }
 }
 
@@ -85,6 +90,11 @@ impl Expression {
   pub fn new (data: ExpressionData, origin: SourceRegion) -> Self {
     Self { data, origin }
   }
+
+  /// Create a new Expression with no SourceRegion origin
+  pub fn no_src (data: ExpressionData) -> Self {
+    Self { data, origin: SourceLocation::ZERO.to_region() }
+  }
 }
 
 
@@ -119,6 +129,11 @@ impl Statement {
   /// Create a new Statement
   pub fn new (data: StatementData, origin: SourceRegion) -> Self {
     Self { data, origin }
+  }
+
+  /// Create a new Statement with no SourceRegion origin
+  pub fn no_src (data: StatementData) -> Self {
+    Self { data, origin: SourceLocation::ZERO.to_region() }
   }
 }
 
@@ -178,6 +193,11 @@ impl Item {
   /// Create a new Item
   pub fn new (data: ItemData, origin: SourceRegion) -> Self {
     Self { data, origin }
+  }
+
+  /// Create a new Item with no SourceRegion origin
+  pub fn no_src (data: ItemData) -> Self {
+    Self { data, origin: SourceLocation::ZERO.to_region() }
   }
 }
 

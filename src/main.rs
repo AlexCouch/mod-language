@@ -98,42 +98,34 @@ fn main () -> std::io::Result<()> {
     let expr = expression(&mut parser);
 
     println!("Got expression: {:#?}", expr);
-    let zo = SourceLocation { index: 0, line: 0, column: 0 }.to_region();
 
-    assert_eq!(expr, Some(Expression::new(
+    assert_eq!(expr, Some(Expression::no_src(
       ExpressionData::Call {
-        callee: box Expression::new(
-          ExpressionData::Identifier(Identifier::from("func")),
-          zo
+        callee: box Expression::no_src(
+          ExpressionData::Identifier(Identifier::from("func"))
         ),
         arguments: vec! [
-          Expression::new(
+          Expression::no_src(
             ExpressionData::Binary {
-              left: box Expression::new(
-                ExpressionData::Number(Number::Integer(1)),
-                zo
+              left: box Expression::no_src(
+                ExpressionData::Number(Number::Integer(1))
               ),
-              right: box Expression::new(
+              right: box Expression::no_src(
                 ExpressionData::Binary {
-                  left: box Expression::new(
-                    ExpressionData::Number(Number::Integer(2)),
-                    zo
+                  left: box Expression::no_src(
+                    ExpressionData::Number(Number::Integer(2))
                   ),
-                  right: box Expression::new(
-                    ExpressionData::Number(Number::Integer(3)),
-                    zo
+                  right: box Expression::no_src(
+                    ExpressionData::Number(Number::Integer(3))
                   ),
                   operator: Operator::Plus
-                },
-                zo
+                }
               ),
               operator: Operator::Asterisk
-            },
-            zo
+            }
           )
         ]
-      },
-      zo
+      }
     )));
 
     if source.messages.borrow().len() != 0 {

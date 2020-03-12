@@ -23,6 +23,9 @@ pub struct SourceLocation {
 }
 
 impl SourceLocation {
+  /// A SourceLocation with all values initialized to zero
+  pub const ZERO: Self = Self { index: 0, line: 0, column: 0 };
+
   /// Create a zero-width SourceRegion from a SourceLocation
   pub fn to_region (self) -> SourceRegion {
     SourceRegion {

@@ -343,6 +343,11 @@ impl Token {
   pub fn new (data: TokenData, origin: SourceRegion) -> Self {
     Self { data, origin }
   }
+
+  /// Create a new Token with no SourceRegion origin
+  pub fn no_src (data: TokenData) -> Self {
+    Self { data, origin: SourceLocation::ZERO.to_region() }
+  }
 }
 
 impl Deref for Token {
