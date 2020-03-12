@@ -6,7 +6,7 @@ use crate::{
   ast::{ Expression, ExpressionData, },
 };
 
-use super::{ Parser, sync };
+use super::{ Parser, ParseletPredicate, ParseletFunction, sync, };
 
 
 
@@ -16,10 +16,10 @@ use super::{ Parser, sync };
 /// Check for and utilize infix operators in order to complete an Expression
 pub fn complete_partial_expression (precedence: usize, mut left: Expression, parser: &mut Parser) -> Option<Expression> {
   while let Some(token) = parser.curr_tok() {
-    if let Some(parselet) = InfixParselet::get(token) {
-      if precedence >= parselet.precedence { break }
+    if let Some((parselet_precedence, parselet_function)) = InfixParselet::get_precedence_and_function(token) {
+      if precedence >= parselet_precedence { break }
 
-      left = parselet.parse(left, parser)?;
+      left = parselet_function(left, parser)?;
     } else {
       break
     }
@@ -32,8 +32,8 @@ pub fn complete_partial_expression (precedence: usize, mut left: Expression, par
 /// 
 /// `expression` calls this with precedence 0 to build the longest expression available
 pub fn pratt (precedence: usize, parser: &mut Parser) -> Option<Expression> {
-  if let Some(parselet) = PrefixParselet::get(parser.curr_tok()?) {
-    complete_partial_expression(precedence, parselet.parse(parser)?, parser)
+  if let Some(parselet_function) = PrefixParselet::get_function(parser.curr_tok()?) {
+    complete_partial_expression(precedence, parselet_function(parser)?, parser)
   } else {
     parser.error("No semantic match for this token in the context of an expression".to_owned());
 
@@ -96,24 +96,13 @@ fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
 
 
 struct PrefixParselet {
-  predicate: fn (&Token) -> bool,
-  parser: fn (&mut Parser) -> Option<Expression>,
+  predicate: ParseletPredicate,
+  function: ParseletFunction<Expression>,
 }
 
 impl PrefixParselet {
-  #[inline]
-  fn predicate (&self, token: &Token) -> bool {
-    (self.predicate)(token)
-  }
-
-  #[inline]
-  fn parse (&self, parser: &mut Parser) -> Option<Expression> {
-    (self.parser)(parser)
-  }
-
-
   const PARSELETS: &'static [Self] = {
-    macro_rules! pfx { ($( $predicate: expr => $parser: expr ),* $(,)?) => { &[ $( PrefixParselet { predicate: $predicate, parser: $parser } ),* ] } }
+    macro_rules! pfx { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( PrefixParselet { predicate: $predicate, function: $function } ),* ] } }
 
     pfx! [
       |token| token.kind() == TokenKind::Identifier => pfx_identifier,
@@ -122,10 +111,10 @@ impl PrefixParselet {
     ]
   };
 
-  fn get (token: &Token) -> Option<&'static Self> {
+  fn get_function (token: &Token) -> Option<ParseletFunction<Expression>> {
     for parselet in Self::PARSELETS.iter() {
-      if parselet.predicate(token) {
-        return Some(parselet)
+      if (parselet.predicate)(token) {
+        return Some(parselet.function)
       }
     }
 
@@ -235,24 +224,15 @@ fn ifx_call (left: Expression, parser: &mut Parser) -> Option<Expression> {
 }
 
 
+type ParseletInfixFunction<L, T> = fn (L, &mut Parser) -> Option<T>;
+
 struct InfixParselet {
   precedence: usize,
-  predicate: fn (&Token) -> bool,
-  parser: fn (Expression, &mut Parser) -> Option<Expression>,
+  predicate: ParseletPredicate,
+  function: ParseletInfixFunction<Expression, Expression>,
 }
 
 impl InfixParselet {
-  #[inline]
-  fn predicate (&self, token: &Token) -> bool {
-    (self.predicate)(token)
-  }
-
-  #[inline]
-  fn parse (&self, expression: Expression, parser: &mut Parser) -> Option<Expression> {
-    (self.parser)(expression, parser)
-  }
-
-
   const BINARY_PRECEDENCES: &'static [(Operator, usize)] = {
     &[
       (Plus, 50),
@@ -277,7 +257,7 @@ impl InfixParselet {
   
 
   const PARSELETS: &'static [Self] = {
-    macro_rules! ifx { ($( [$precedence: expr] $predicate: expr => $parser: expr ),* $(,)?) => { &[ $( InfixParselet { precedence: $precedence, predicate: $predicate, parser: $parser } ),* ] } }
+    macro_rules! ifx { ($( [$precedence: expr] $predicate: expr => $function: expr ),* $(,)?) => { &[ $( InfixParselet { precedence: $precedence, predicate: $predicate, function: $function } ),* ] } }
 
     ifx! [
       [10] |token| token.is_operator(LeftParenthesis) => ifx_call,
@@ -286,10 +266,10 @@ impl InfixParselet {
     ]
   };
 
-  fn get (token: &Token) -> Option<&'static InfixParselet> {
+  fn get_precedence_and_function (token: &Token) -> Option<(usize, ParseletInfixFunction<Expression, Expression>)> {
     for parselet in Self::PARSELETS.iter() {
-      if parselet.predicate(token) {
-        return Some(parselet)
+      if (parselet.predicate)(token) {
+        return Some((parselet.precedence, parselet.function))
       }
     }
   

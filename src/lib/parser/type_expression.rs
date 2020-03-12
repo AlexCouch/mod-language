@@ -5,7 +5,7 @@ use crate::{
   ast::{ TypeExpression, TypeExpressionData, },
 };
 
-use super::Parser;
+use super::{ Parser, ParseletPredicate, ParseletFunction, };
 
 
 
@@ -14,8 +14,8 @@ use super::Parser;
 
 /// Parse a single TypeExpression
 pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
-  if let Some(parselet) = TypeParselet::get(parser.curr_tok()?) {
-    parselet.parse(parser)
+  if let Some(parselet_function) = TypeParselet::get_function(parser.curr_tok()?) {
+    parselet_function(parser)
   } else {
     parser.error("No semantic match for this token in the context of a type expression".to_owned());
 
@@ -40,22 +40,11 @@ fn identifier (parser: &mut Parser) -> Option<TypeExpression> {
 
 
 struct TypeParselet {
-  predicate: fn (&Token) -> bool,
-  parser: fn (&mut Parser) -> Option<TypeExpression>,
+  predicate: ParseletPredicate,
+  parser: ParseletFunction<TypeExpression>,
 }
 
 impl TypeParselet {
-  #[inline]
-  fn predicate (&self, token: &Token) -> bool {
-    (self.predicate)(token)
-  }
-  
-  #[inline]
-  fn parse (&self, parser: &mut Parser) -> Option<TypeExpression> {
-    (self.parser)(parser)
-  }
-  
-
   const PARSELETS: &'static [Self] = {
     macro_rules! tpx { ($( $predicate: expr => $parser: expr ),* $(,)?) => { &[ $( TypeParselet { predicate: $predicate, parser: $parser } ),* ] } }
 
@@ -64,10 +53,10 @@ impl TypeParselet {
     ]
   };
 
-  fn get (token: &Token) -> Option<&'static TypeParselet> {
+  fn get_function (token: &Token) -> Option<ParseletFunction<TypeExpression>> {
     for parselet in Self::PARSELETS.iter() {
-      if parselet.predicate(token) {
-        return Some(parselet)
+      if (parselet.predicate)(token) {
+        return Some(parselet.parser)
       }
     }
   

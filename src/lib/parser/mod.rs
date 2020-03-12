@@ -15,6 +15,11 @@ pub mod item;
 
 use sync::SyncPredicate;
 
+/// The type of predicate functions for determining if a particular parselet is valid for a Token
+pub type ParseletPredicate = fn (&Token) -> bool;
+/// Type type of function used by a parselet to handle a segment of an input stream
+pub type ParseletFunction<T> = fn (&mut Parser) -> Option<T>;
+
 
 /// Contains state information about the location of a Parser in a TokenStream
 #[derive(Debug, Clone, Copy)]
