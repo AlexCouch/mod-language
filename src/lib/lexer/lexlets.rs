@@ -1,6 +1,6 @@
 use crate::source::SourceRegion;
-use crate::token::{ Token, TokenData, Identifier, Number, IDENTIFIER_VALUES, SYM_OPERATOR_VALUES };
-use crate::util::{ Either };
+use crate::token::{ Token, TokenData, Identifier, Number, IDENTIFIER_VALUES, SYM_OPERATOR_VALUES, };
+use crate::util::{ Either, };
 
 use super::Lexer;
 

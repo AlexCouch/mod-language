@@ -1,13 +1,13 @@
 //! Contains Lexer and supporting structures and functions
 
 use crate::{
-  source::*,
-  token::*,
-  util::{ DerefWrapper },
+  source::{ Source, SourceLocation, SourceRegion, MessageKind, },
+  token::{ Token, TokenStream, },
+  util::{ DerefWrapper, },
 };
 
 mod lexlets;
-use lexlets::{ LEXLETS, LexletResult };
+use lexlets::{ LEXLETS, LexletResult, };
 
 pub use lexlets::InvalidLexicalSymbol;
 

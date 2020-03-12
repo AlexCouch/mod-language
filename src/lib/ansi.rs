@@ -1,7 +1,7 @@
 //! Contains procedures for colorizing console messages
 
 use std::{
-  fmt::{ Display, Debug, Formatter, Result as FMTResult },
+  fmt::{ Display, Debug, Formatter, Result as FMTResult, },
 };
 
 

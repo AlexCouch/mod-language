@@ -4,11 +4,11 @@ use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   str::from_utf8_unchecked as str_from_utf8_unchecked,
   slice::from_raw_parts as slice_from_raw_parts,
-  ops::{ Deref },
+  ops::{ Deref, },
 };
 
 use crate::{
-  source::*,
+  source::{ Source, SourceLocation, SourceRegion, },
   ansi,
   util::Either,
 };

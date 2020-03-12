@@ -1,7 +1,7 @@
 #![feature(box_syntax)]
 
 use mod_language::{
-  source::{ Source, SourceRegion, SourceLocation },
+  source::{ Source, SourceRegion, SourceLocation, },
   lexer::Lexer,
   ansi,
 };
@@ -48,7 +48,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test type_expression
-    use mod_language::{ ast::*, parser::{ Parser, type_expression::type_expression } };
+    use mod_language::{ ast::{ TypeExpression, TypeExpressionData, }, parser::{ Parser, type_expression::type_expression, }, };
 
 
     let source = Source::load("./test_scripts/type_expression.ms".to_owned())?;
@@ -82,7 +82,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test expression
-    use mod_language::{ ast::*, parser::{ Parser, expression::expression }, token::{ Identifier, Operator, Number } };
+    use mod_language::{ ast::{ Expression, ExpressionData, }, parser::{ Parser, expression::expression, }, token::{ Identifier, Operator, Number, }, };
 
 
     let source = Source::load("./test_scripts/expression.ms".to_owned())?;

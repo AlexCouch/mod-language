@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-  source::{ SourceRegion, SourceLocation },
-  token::{ TokenStream, Number, Identifier, Operator },
+  source::{ SourceRegion, SourceLocation, },
+  token::{ TokenStream, Number, Identifier, Operator, },
 };
 
 

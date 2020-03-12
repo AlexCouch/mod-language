@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
   ansi,
-  util::{ padding, count_digits },
+  util::{ padding, count_digits, },
 };
 
 

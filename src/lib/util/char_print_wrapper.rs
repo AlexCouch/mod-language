@@ -1,4 +1,4 @@
-use std::fmt::{ Debug, Display, Formatter, Result as FMTResult };
+use std::fmt::{ Debug, Display, Formatter, Result as FMTResult, };
 
 /// Wrapper for printing slices of char
 pub struct CharPrintWrapper<'a>(pub &'a[char]);

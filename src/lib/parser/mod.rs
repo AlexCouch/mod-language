@@ -1,8 +1,8 @@
 //! Contains Parser and supporting structures and functions
 
 use crate::{
-  token::{ Token, TokenStream },
-  source::{ SourceLocation, SourceRegion, MessageKind }
+  token::{ Token, TokenStream, },
+  source::{ SourceLocation, SourceRegion, MessageKind, }
 };
 
 

@@ -1,7 +1,7 @@
 //! The SyncPredicate trait and various SyncPredicates and builders
 
 use crate::{
-  token::{ Token, TokenKind, TokenData, Operator, Keyword },
+  token::{ Token, TokenKind, TokenData, Operator, Keyword, },
 };
 
 

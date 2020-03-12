@@ -1,8 +1,8 @@
 //! The TypeExpression Parser function and its dependencies
 
 use crate::{
-  token::{ Token, TokenKind, TokenData },
-  ast::{ TypeExpression, TypeExpressionData },
+  token::{ Token, TokenKind, TokenData, },
+  ast::{ TypeExpression, TypeExpressionData, },
 };
 
 use super::Parser;

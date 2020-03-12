@@ -1,9 +1,9 @@
 //! The Statement Parser function and its dependencies
 
 use crate::{
-  source::{ SourceRegion },
-  token::{ Token, TokenData, TokenKind, Operator, Operator::* },
-  ast::{ Expression, ExpressionData },
+  source::{ SourceRegion, },
+  token::{ Token, TokenData, TokenKind, Operator, Operator::*, },
+  ast::{ Expression, ExpressionData, },
 };
 
 use super::{ Parser, sync };
