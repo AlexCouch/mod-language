@@ -130,6 +130,18 @@ pub enum Keyword {
   Function,
 }
 
+impl Keyword {
+  /// Get the textual value of a Keyword
+  pub fn value (self) -> &'static str {
+    use Keyword::*;
+    
+    match self {
+      Let      => "let",
+      Function => "fn",
+    }
+  }
+}
+
 
 /// An enum representing a language operator symbol such as `+` or `-`
 #[repr(u8)]
@@ -155,6 +167,35 @@ pub enum Operator {
   RightParenthesis,
   LeftBracket,
   RightBracket,
+}
+
+impl Operator {
+  /// Get the textual value of an Operator
+  pub fn value (self) -> &'static str {
+    use Operator::*;
+
+    match self {
+      Not => "not",
+      And => "and",
+      Xor => "xor",
+      Or  => "or",
+      As  => "as",
+    
+      Equal            => "==",
+      Assign           => "=",
+      Plus             => "+",
+      Minus            => "-",
+      Asterisk         => "*",
+      ForwardSlash     => "/",
+      Comma            => ",",
+      Colon            => ":",
+      SemiColon        => ";",
+      LeftParenthesis  => "(",
+      RightParenthesis => ")",
+      LeftBracket      => "{",
+      RightBracket     => "}",
+    }
+  }
 }
 
 
@@ -232,6 +273,46 @@ impl TokenData {
       TokenData::Keyword(_) => TokenKind::Keyword,
       TokenData::Operator(_) => TokenKind::Operator,
     }
+  }
+
+  /// Determine if a TokenData is an Operator of a specific kind
+  pub fn is_operator (&self, operator: Operator) -> bool {
+    *self == TokenData::Operator(operator)
+  }
+
+  /// Determine if a TokenData is a Keyword of a specific kind
+  pub fn is_keyword (&self, keyword: Keyword) -> bool {
+    *self == TokenData::Keyword(keyword)
+  }
+
+  /// Determine if a TokenData is any Operator of a given set
+  /// 
+  /// Returns the Operator that matched or None
+  pub fn is_any_operator_of (&self, operators: &[Operator]) -> Option<Operator> {
+    if let TokenData::Operator(operator) = self {
+      for matched_operator in operators.iter() {
+        if matched_operator == operator {
+          return Some(*operator)
+        }
+      }
+    }
+
+    None
+  }
+
+  /// Determine if a TokenData is any Keyword of a given set
+  /// 
+  /// Returns the Keyword that matched or None
+  pub fn is_any_keyword_of (&self, keywords: &[Keyword]) -> Option<Keyword> {
+    if let TokenData::Keyword(keyword) = self {
+      for matched_keyword in keywords.iter() {
+        if matched_keyword == keyword {
+          return Some(*keyword)
+        }
+      }
+    }
+
+    None
   }
 }
 
