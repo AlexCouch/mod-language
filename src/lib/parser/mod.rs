@@ -6,7 +6,7 @@ use crate::{
 };
 
 
-pub mod sync_predicate;
+pub mod sync;
 pub mod type_expression;
 pub mod expression;
 pub mod statement;
