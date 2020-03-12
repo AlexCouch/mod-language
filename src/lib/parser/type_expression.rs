@@ -28,7 +28,7 @@ pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
 // Parselets //
 
 
-fn identifier (parser: &mut Parser) -> Option<TypeExpression> {
+fn tpx_identifier (parser: &mut Parser) -> Option<TypeExpression> {
   if let Some(&Token { data: TokenData::Identifier(ref ident), origin }) = parser.curr_tok() {
     let result = Some(TypeExpression::new(TypeExpressionData::Identifier(ident.clone()), origin));
     parser.advance();
@@ -49,7 +49,7 @@ impl TypeParselet {
     macro_rules! tpx { ($( $predicate: expr => $parser: expr ),* $(,)?) => { &[ $( TypeParselet { predicate: $predicate, parser: $parser } ),* ] } }
 
     tpx! [
-      |token| token.kind() == TokenKind::Identifier => identifier,
+      |token| token.kind() == TokenKind::Identifier => tpx_identifier,
     ]
   };
 
