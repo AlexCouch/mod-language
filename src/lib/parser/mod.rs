@@ -96,6 +96,7 @@ impl<'a> Parser<'a> {
   /// Save the locale state of a Parser
   /// 
   /// Panics if there is already a saved locale
+  #[track_caller]
   pub fn save_locale (&mut self) {
     assert!(self.stored_locale.is_none());
     self.stored_locale.replace(self.locale);
@@ -104,6 +105,7 @@ impl<'a> Parser<'a> {
   /// Restore a saved locale state of a Parser
   /// 
   /// Panics if there is not a saved locale
+  #[track_caller]
   pub fn load_locale (&mut self) {
     self.locale = self.stored_locale.take().unwrap();
   }
@@ -111,6 +113,7 @@ impl<'a> Parser<'a> {
   /// Delete the saved locale state of a Parser
   /// 
   /// Panics if there is not a saved locale
+  #[track_caller]
   pub fn discard_saved_locale (&mut self) {
     self.stored_locale.take().unwrap();
   }
@@ -119,6 +122,7 @@ impl<'a> Parser<'a> {
   /// Create a SourceLocation bookmark in a Parser
   /// 
   /// Panics if there is no active Token
+  #[track_caller]
   pub fn push_marker (&mut self) {
     self.markers.push(self.locale.curr.unwrap().origin.start);
   }
@@ -152,6 +156,7 @@ impl<'a> Parser<'a> {
   /// Get the Parser's current Token's SourceRegion
   /// 
   /// Panics if there is no active Token
+  #[track_caller]
   pub fn curr_region (&self) -> SourceRegion {
     self.locale.curr.unwrap().origin
   }

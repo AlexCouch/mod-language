@@ -95,6 +95,7 @@ impl<'a> Lexer<'a> {
   /// Save the locale state of a Lexer
   /// 
   /// Panics if there is already a saved locale
+  #[track_caller]
   pub fn save_locale (&mut self) {
     assert!(self.stored_locale.is_none());
     self.stored_locale.replace(self.locale);
@@ -103,6 +104,7 @@ impl<'a> Lexer<'a> {
   /// Restore a saved locale state of a Lexer
   /// 
   /// Panics if there is not a saved locale
+  #[track_caller]
   pub fn load_locale (&mut self) {
     self.locale = self.stored_locale.take().unwrap();
   }
@@ -110,6 +112,7 @@ impl<'a> Lexer<'a> {
   /// Delete the saved locale state of a Lexer
   /// 
   /// Panics if there is not a saved locale
+  #[track_caller]
   pub fn discard_saved_locale (&mut self) {
     self.stored_locale.take().unwrap();
   }

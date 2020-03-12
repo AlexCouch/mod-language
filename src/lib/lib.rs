@@ -3,6 +3,7 @@
 #![warn(missing_docs)]
 
 #![feature(box_syntax)]
+#![feature(track_caller)]
 
 extern crate self as mod_language;
 
