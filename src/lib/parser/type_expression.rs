@@ -29,8 +29,8 @@ pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
 
 
 fn identifier (parser: &mut Parser) -> Option<TypeExpression> {
-  if let Some(Token { data: TokenData::Identifier(ident), origin }) = parser.curr_tok() {
-    let result = Some(TypeExpression::new(TypeExpressionData::Identifier(*ident), *origin));
+  if let Some(&Token { data: TokenData::Identifier(ref ident), origin }) = parser.curr_tok() {
+    let result = Some(TypeExpression::new(TypeExpressionData::Identifier(ident.clone()), origin));
     parser.advance();
     return result
   }

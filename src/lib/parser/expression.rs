@@ -53,9 +53,10 @@ pub fn expression (parser: &mut Parser) -> Option<Expression> {
 
 
 fn pfx_identifier (parser: &mut Parser) -> Option<Expression> {
-  if let Some(&Token { data: TokenData::Identifier(ident), origin }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Identifier(ref ident), origin }) = parser.curr_tok() {
+    let result = Some(Expression::new(ExpressionData::Identifier(ident.clone()), origin));
     parser.advance();
-    return Some(Expression::new(ExpressionData::Identifier(ident), origin))
+    return result
   }
 
   unreachable!("Internal error, identifier expression parselet called on non-identifier token");
