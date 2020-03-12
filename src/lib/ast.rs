@@ -42,15 +42,19 @@ impl TypeExpression {
 pub enum ExpressionData {
   Identifier(Identifier),
   Number(Number),
+
   Unary {
     operand: Box<Expression>,
     operator: Operator,
   },
+  
   Binary {
     left: Box<Expression>,
     right: Box<Expression>,
     operator: Operator,
   },
+
+  Call { callee: Box<Expression>, arguments: Vec<Expression> },
 
   Block(Box<Block>),
   Conditional(Box<Conditional>),
