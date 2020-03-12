@@ -1,3 +1,5 @@
+#![feature(box_syntax)]
+
 use mod_language::{
   source::{ Source, SourceRegion, SourceLocation },
   lexer::Lexer,
@@ -73,6 +75,70 @@ fn main () -> std::io::Result<()> {
     } else {
       source.print_messages();
       panic!("Expected error, got {:#?}", none);
+    }
+  }
+
+  println!("\n-------------------------\n");
+
+
+  { // test expression
+    use mod_language::{ ast::*, parser::{ Parser, expression::expression }, token::{ Identifier, Operator, Number } };
+
+
+    let source = Source::load("./test_scripts/expression.ms".to_owned())?;
+
+    let mut lexer = Lexer::new(&source);
+
+    let stream = lexer.lex_stream();
+
+    println!("Lexing complete:\n{}", &stream);
+
+    let mut parser = Parser::new(&stream);
+
+    let expr = expression(&mut parser);
+
+    println!("Got expression: {:#?}", expr);
+    let zo = SourceLocation { index: 0, line: 0, column: 0 }.to_region();
+
+    assert_eq!(expr, Some(Expression::new(
+      ExpressionData::Call {
+        callee: box Expression::new(
+          ExpressionData::Identifier(Identifier::from("func")),
+          zo
+        ),
+        arguments: vec! [
+          Expression::new(
+            ExpressionData::Binary {
+              left: box Expression::new(
+                ExpressionData::Number(Number::Integer(1)),
+                zo
+              ),
+              right: box Expression::new(
+                ExpressionData::Binary {
+                  left: box Expression::new(
+                    ExpressionData::Number(Number::Integer(2)),
+                    zo
+                  ),
+                  right: box Expression::new(
+                    ExpressionData::Number(Number::Integer(3)),
+                    zo
+                  ),
+                  operator: Operator::Plus
+                },
+                zo
+              ),
+              operator: Operator::Asterisk
+            },
+            zo
+          )
+        ]
+      },
+      zo
+    )));
+
+    if source.messages.borrow().len() != 0 {
+      source.print_messages();
+      panic!("Parsing expression failed");
     }
   }
 

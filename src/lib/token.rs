@@ -111,6 +111,14 @@ impl AsRef<str> for Identifier {
   }
 }
 
+impl From<&str> for Identifier {
+  fn from (s: &str) -> Self {
+    let mut i = Self::new();
+    i.set(s);
+    i
+  }
+}
+
 
 /// An enum containing either an Integer or FloatingPoint numeric value
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -134,7 +142,7 @@ impl Keyword {
   /// Get the textual value of a Keyword
   pub fn value (self) -> &'static str {
     use Keyword::*;
-    
+
     match self {
       Let      => "let",
       Function => "fn",

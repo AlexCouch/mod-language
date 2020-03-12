@@ -82,7 +82,7 @@ impl<'a> Parser<'a> {
 
     self.locale.prev = self.locale.curr;
     self.locale.curr = self.locale.next;
-    self.locale.next = self.tokens.get(self.locale.index);
+    self.locale.next = self.tokens.get(self.locale.index + 1);
 
     self.locale.curr
   }
@@ -140,9 +140,13 @@ impl<'a> Parser<'a> {
 
   /// Get the Parser's current Token's starting SourceLocation
   /// 
-  /// Panics if there is no active Token
+  /// If there is no active Token, returns the end of the last Token
   pub fn curr_location (&self) -> SourceLocation {
-    self.locale.curr.unwrap().origin.start
+    if let Some(curr) = self.locale.curr {
+      curr.origin.start
+    } else {
+      self.locale.prev.unwrap().origin.start
+    }
   }
   
   /// Get the Parser's current Token's SourceRegion
@@ -236,10 +240,15 @@ impl<'a> Parser<'a> {
 
   /// Create a user-directed Message in the Source of the TokenStream of a Parser
   /// 
-  /// This will use the current Token's SourceRegion, and panics if one is not available
+  /// This will use the current Token's SourceRegion,
+  /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
   pub fn message (&mut self, kind: MessageKind, content: String) {
     self.stream.source.message(
-      Some(self.curr_region()),
+      Some(if let Some(curr) = self.curr_tok() {
+        curr.origin
+      } else {
+        self.prev_tok().unwrap().origin.end.to_region()
+      }),
       kind,
       content
     )
@@ -273,7 +282,8 @@ impl<'a> Parser<'a> {
 
   /// Create a user-directed Error Message in the Source of the TokenStream of a Parser
   /// 
-  /// This will use the current Token's SourceRegion, and panics if one is not available
+  /// This will use the current Token's SourceRegion,
+  /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
   pub fn error (&mut self, content: String) {
     self.message(
       MessageKind::Error,
@@ -301,7 +311,8 @@ impl<'a> Parser<'a> {
   
   /// Create a user-directed Warning Message in the Source of the TokenStream of a Parser
   /// 
-  /// This will use the current Token's SourceRegion, and panics if one is not available
+  /// This will use the current Token's SourceRegion,
+  /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
   pub fn warning (&mut self, content: String) {
     self.message(
       MessageKind::Warning,
@@ -329,7 +340,8 @@ impl<'a> Parser<'a> {
   
   /// Create a user-directed Notice Message in the Source of the TokenStream of a Parser
   /// 
-  /// This will use the current Token's SourceRegion, and panics if one is not available
+  /// This will use the current Token's SourceRegion,
+  /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
   pub fn notice (&mut self, content: String) {
     self.message(
       MessageKind::Notice,

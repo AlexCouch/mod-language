@@ -2,6 +2,8 @@
 
 #![warn(missing_docs)]
 
+#![feature(box_syntax)]
+
 extern crate self as mod_language;
 
 pub mod util;

@@ -12,7 +12,7 @@ use crate::{
 
 /// An enum containing the particular variant of an expression referencing a type
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TypeExpressionData {
   Identifier(Identifier),
 }
@@ -28,6 +28,10 @@ impl Debug for TypeExpression {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
 }
 
+impl PartialEq for TypeExpression {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
+}
+
 impl TypeExpression {
   /// Create a new TypeExpression
   pub fn new (data: TypeExpressionData, origin: SourceRegion) -> Self {
@@ -38,7 +42,7 @@ impl TypeExpression {
 
 /// An enum containing the particular variant of an expression
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ExpressionData {
   Identifier(Identifier),
   Number(Number),
@@ -47,7 +51,7 @@ pub enum ExpressionData {
     operand: Box<Expression>,
     operator: Operator,
   },
-  
+
   Binary {
     left: Box<Expression>,
     right: Box<Expression>,
@@ -60,6 +64,7 @@ pub enum ExpressionData {
   Conditional(Box<Conditional>),
 }
 
+
 /// A semantic element forming a sequence of actions or a reference
 #[allow(missing_docs)]
 pub struct Expression {
@@ -69,6 +74,10 @@ pub struct Expression {
 
 impl Debug for Expression {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+}
+
+impl PartialEq for Expression {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
 }
 
 impl Expression {
@@ -82,7 +91,7 @@ impl Expression {
 
 /// An enum containing the particular variant of a statement
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum StatementData {
   Expression(Expression),
   Return(Option<Expression>),
@@ -102,6 +111,10 @@ impl Debug for Statement {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
 }
 
+impl PartialEq for Statement {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
+}
+
 impl Statement {
   /// Create a new Statement
   pub fn new (data: StatementData, origin: SourceRegion) -> Self {
@@ -112,7 +125,7 @@ impl Statement {
 
 
 /// A series of statements and an optional trailing expression
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct Block {
   pub statements: Vec<Statement>,
@@ -120,7 +133,7 @@ pub struct Block {
 }
 
 /// An individual conditional block and its predicate expression
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct ConditionalBranch {
   pub condition: Expression,
@@ -128,7 +141,7 @@ pub struct ConditionalBranch {
 }
 
 /// A set of 1 or more sequenced conditional branches and an optional else block
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct Conditional {
   pub if_branch: ConditionalBranch,
@@ -139,7 +152,7 @@ pub struct Conditional {
 
 
 /// An enum containing the particular variant of an item
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
   Global { name: Identifier, explicit_type: Option<TypeExpression>, initializer: Option<Expression> },
@@ -155,6 +168,10 @@ pub struct Item {
 
 impl Debug for Item {
   #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+}
+
+impl PartialEq for Item {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
 }
 
 impl Item {
