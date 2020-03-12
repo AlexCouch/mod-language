@@ -72,11 +72,11 @@ fn pfx_number (parser: &mut Parser) -> Option<Expression> {
 }
 
 fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
-  if let Some(&Token { data: TokenData::Operator(LeftParenthesis), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Operator(LeftParen), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
     parser.advance();
     
     if let Some(expr) = expression(parser) {
-      if let Some(&Token { data: TokenData::Operator(RightParenthesis), origin: SourceRegion { end, .. } }) = parser.curr_tok() {
+      if let Some(&Token { data: TokenData::Operator(RightParen), origin: SourceRegion { end, .. } }) = parser.curr_tok() {
         parser.advance();
 
         return Some(Expression::new(expr.data, SourceRegion { start, end }))
@@ -87,7 +87,7 @@ fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
 
     // If we reach this point there was some sort of error and we need to try to synchronize to the end of the (sem group),
     // but there isnt much we can do beyond this since our inner value is probably invalid and we may as well discard it
-    parser.synchronize_unchecked(sync::close_pair(sync::operator(LeftParenthesis), sync::operator(RightParenthesis)));
+    parser.synchronize_unchecked(sync::close_pair(sync::operator(LeftParen), sync::operator(RightParen)));
 
     return None
   }
@@ -108,7 +108,7 @@ impl PrefixParselet {
     pfx! [
       |token| token.kind() == TokenKind::Identifier => pfx_identifier,
       |token| token.kind() == TokenKind::Number => pfx_number,
-      |token| token.is_operator(LeftParenthesis) => pfx_semantic_group,
+      |token| token.is_operator(LeftParen) => pfx_semantic_group,
     ]
   };
 
@@ -159,7 +159,7 @@ fn ifx_binary_operator (left: Expression, parser: &mut Parser) -> Option<Express
 
 
 fn ifx_call (left: Expression, parser: &mut Parser) -> Option<Expression> {
-  if let Some(&Token { data: TokenData::Operator(LeftParenthesis), .. }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Operator(LeftParen), .. }) = parser.curr_tok() {
     parser.advance();
 
     let mut arguments = Vec::new();
@@ -175,7 +175,7 @@ fn ifx_call (left: Expression, parser: &mut Parser) -> Option<Expression> {
         },
 
         // The end of the argument list
-        Some(&Token { data: TokenData::Operator(RightParenthesis), origin: SourceRegion { end, .. } }) => {
+        Some(&Token { data: TokenData::Operator(RightParen), origin: SourceRegion { end, .. } }) => {
           parser.advance();
           
           let origin = SourceRegion { start: left.origin.start, end };
@@ -207,7 +207,7 @@ fn ifx_call (left: Expression, parser: &mut Parser) -> Option<Expression> {
           // If we reach here there was some kind of error, either we didnt have a comma after the last expression, or our expression call had an error,
           // so we need to try and synchronize to the end of the call(expression) or the next comma
           
-          if parser.synchronize(sync::close_pair_or(sync::operator(LeftParenthesis), sync::operator(RightParenthesis), sync::operator(Comma))) {
+          if parser.synchronize(sync::close_pair_or(sync::operator(LeftParen), sync::operator(RightParen), sync::operator(Comma))) {
             if let Some(&Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
               parser.advance();
               expr_ok = true;
@@ -236,11 +236,12 @@ struct InfixParselet {
 impl InfixParselet {
   const BINARY_PRECEDENCES: &'static [(Operator, usize)] = {
     &[
-      (Plus, 50),
-      (Minus, 50),
+      (Add, 50),
+      (Sub, 50),
       
-      (Asterisk, 60),
-      (ForwardSlash, 60),
+      (Mul, 60),
+      (Div, 60),
+      (Rem, 60),
     ]
   };
 
@@ -261,9 +262,9 @@ impl InfixParselet {
     macro_rules! ifx { ($( [$precedence: expr] $predicate: expr => $function: expr ),* $(,)?) => { &[ $( InfixParselet { precedence: $precedence, predicate: $predicate, function: $function } ),* ] } }
 
     ifx! [
-      [10] |token| token.is_operator(LeftParenthesis) => ifx_call,
-      [50] |token| token.is_any_operator_of(&[ Plus, Minus ]).is_some() => ifx_binary_operator,
-      [60] |token| token.is_any_operator_of(&[ Asterisk, ForwardSlash ]).is_some() => ifx_binary_operator,
+      [10] |token| token.is_operator(LeftParen) => ifx_call,
+      [50] |token| token.is_any_operator_of(&[ Add, Sub ]).is_some() => ifx_binary_operator,
+      [60] |token| token.is_any_operator_of(&[ Mul, Div, Rem ]).is_some() => ifx_binary_operator,
     ]
   };
 

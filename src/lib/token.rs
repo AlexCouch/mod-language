@@ -149,17 +149,29 @@ pub enum Operator {
   Or,
   As,
 
+  AssignAdd,
+  AssignSub,
+  AssignMul,
+  AssignDiv,
+  AssignRem,
+
   Equal,
+
   Assign,
-  Plus,
-  Minus,
-  Asterisk,
-  ForwardSlash,
+
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Rem,
+
   Comma,
   Colon,
   SemiColon,
-  LeftParenthesis,
-  RightParenthesis,
+
+  LeftParen,
+  RightParen,
+
   LeftBracket,
   RightBracket,
 }
@@ -176,19 +188,31 @@ impl Operator {
       Or  => "or",
       As  => "as",
     
-      Equal            => "==",
-      Assign           => "=",
-      Plus             => "+",
-      Minus            => "-",
-      Asterisk         => "*",
-      ForwardSlash     => "/",
-      Comma            => ",",
-      Colon            => ":",
-      SemiColon        => ";",
-      LeftParenthesis  => "(",
-      RightParenthesis => ")",
-      LeftBracket      => "{",
-      RightBracket     => "}",
+      AssignAdd => "+=",
+      AssignSub => "-=",
+      AssignMul => "*=",
+      AssignDiv => "/=",
+      AssignRem => "%=",
+  
+      Equal => "==",
+  
+      Assign => "=", 
+  
+      Add => "+", 
+      Sub => "-", 
+      Mul => "*", 
+      Div => "/", 
+      Rem => "%", 
+  
+      Comma => ",", 
+      Colon => ":", 
+      SemiColon => ";", 
+  
+      LeftParen => "(", 
+      RightParen => ")", 
+      
+      LeftBracket => "{", 
+      RightBracket => "}", 
     }
   }
 }
@@ -218,17 +242,29 @@ pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
 pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
   use Operator::*;
   &[
+    ("+=", AssignAdd),
+    ("-=", AssignSub),
+    ("*=", AssignMul),
+    ("/=", AssignDiv),
+    ("%=", AssignRem),
+
     ("==", Equal),
+
     ("=",  Assign),
-    ("+",  Plus),
-    ("-",  Minus),
-    ("*",  Asterisk),
-    ("/",  ForwardSlash),
+
+    ("+",  Add),
+    ("-",  Sub),
+    ("*",  Mul),
+    ("/",  Div),
+    ("%",  Rem),
+
     (",",  Comma),
     (":",  Colon),
     (";",  SemiColon),
-    ("(",  LeftParenthesis),
-    (")",  RightParenthesis),
+
+    ("(",  LeftParen),
+    (")",  RightParen),
+
     ("{",  LeftBracket),
     ("}",  RightBracket),
   ]

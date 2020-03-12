@@ -118,10 +118,10 @@ fn main () -> std::io::Result<()> {
                   right: box Expression::no_src(
                     ExpressionData::Number(Number::Integer(3))
                   ),
-                  operator: Operator::Plus
+                  operator: Operator::Add
                 }
               ),
-              operator: Operator::Asterisk
+              operator: Operator::Mul
             }
           )
         ]
