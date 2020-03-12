@@ -48,7 +48,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test type_expression
-    use mod_language::{ ast::{ TypeExpression, TypeExpressionData, }, parser::{ Parser, type_expression::type_expression, }, };
+    use mod_language::{ ast::{ TypeExpression, TypeExpressionData, }, parser::{ Parser, type_expression, }, };
 
 
     let source = Source::load("./test_scripts/type_expression.ms".to_owned())?;
@@ -82,7 +82,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test expression
-    use mod_language::{ ast::{ Expression, ExpressionData, }, parser::{ Parser, expression::expression, }, token::{ Identifier, Operator, Number, }, };
+    use mod_language::{ ast::{ Expression, ExpressionData, }, parser::{ Parser, expression, }, token::{ Identifier, Operator, Number, }, };
 
 
     let source = Source::load("./test_scripts/expression.ms".to_owned())?;

@@ -7,11 +7,21 @@ use crate::{
 
 
 pub mod sync;
-pub mod type_expression;
-pub mod expression;
-pub mod statement;
-pub mod block;
-pub mod item;
+
+mod type_expression;
+pub use type_expression::*;
+
+mod expression;
+pub use expression::*;
+
+mod statement;
+pub use statement::*;
+
+mod block;
+pub use block::*;
+
+mod item;
+pub use item::*;
 
 use sync::SyncPredicate;
 
