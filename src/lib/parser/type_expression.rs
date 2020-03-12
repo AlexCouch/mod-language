@@ -9,9 +9,39 @@ use super::Parser;
 
 
 
+// Public API //
+
+
+/// Parse a single TypeExpression
+pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
+  if let Some(parselet) = TypeParselet::get(parser.curr_tok()?) {
+    parselet.parse(parser)
+  } else {
+    parser.error("No semantic match for this token in the context of a type expression".to_owned());
+
+    None
+  }
+}
+
+
+
+// Parselets //
+
+
+fn identifier (parser: &mut Parser) -> Option<TypeExpression> {
+  if let Some(Token { data: TokenData::Identifier(ident), origin }) = parser.curr_tok() {
+    let result = Some(TypeExpression::new(TypeExpressionData::Identifier(*ident), *origin));
+    parser.advance();
+    return result
+  }
+
+  unreachable!("Internal error, type expression identifier parselet called on non-identifier token");
+}
+
+
 struct TypeParselet {
   predicate: fn (&Token) -> bool,
-  parse: fn (&mut Parser) -> Option<TypeExpression>,
+  parser: fn (&mut Parser) -> Option<TypeExpression>,
 }
 
 impl TypeParselet {
@@ -19,41 +49,28 @@ impl TypeParselet {
   fn predicate (&self, token: &Token) -> bool {
     (self.predicate)(token)
   }
-
+  
   #[inline]
   fn parse (&self, parser: &mut Parser) -> Option<TypeExpression> {
-    (self.parse)(parser)
+    (self.parser)(parser)
   }
-}
+  
 
+  const PARSELETS: &'static [Self] = {
+    macro_rules! tpx { ($( $predicate: expr => $parser: expr ),* $(,)?) => { &[ $( TypeParselet { predicate: $predicate, parser: $parser } ),* ] } }
 
-/// Parse a single TypeExpression
-pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
-  let token = parser.curr_tok()?;
+    tpx! [
+      |token| token.kind() == TokenKind::Identifier => identifier,
+    ]
+  };
 
-  for parselet in TYPE_PARSELETS.iter() {
-    if parselet.predicate(token) {
-      return parselet.parse(parser)
+  fn get (token: &Token) -> Option<&'static TypeParselet> {
+    for parselet in Self::PARSELETS.iter() {
+      if parselet.predicate(token) {
+        return Some(parselet)
+      }
     }
-  }
-
-  parser.error("No semantic match for this token in the context of a type expression".to_owned());
-
-  None
-}
-
-
-fn identifier (parser: &mut Parser) -> Option<TypeExpression> {
-  if let Some(Token { data: TokenData::Identifier(ident), origin }) = parser.curr_tok() {
-    let result = Some(TypeExpression::new(TypeExpressionData::Identifier(*ident), *origin));
-    parser.advance();
-    result
-  } else {
+  
     None
   }
 }
-
-
-const TYPE_PARSELETS: &[TypeParselet] = &[
-  TypeParselet { predicate: |token| token.kind() == TokenKind::Identifier, parse: identifier },
-];
