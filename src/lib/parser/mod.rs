@@ -13,6 +13,8 @@ pub mod statement;
 pub mod block;
 pub mod item;
 
+use sync::SyncPredicate;
+
 
 /// Contains state information about the location of a Parser in a TokenStream
 #[derive(Debug, Clone, Copy)]
@@ -85,6 +87,11 @@ impl<'a> Parser<'a> {
     self.locale.curr
   }
 
+  /// Determine if the Parser is still capable of providing more Tokens to Parselets
+  pub fn valid (&self) -> bool {
+    self.locale.curr.is_some()
+  }
+
 
   /// Save the locale state of a Parser
   /// 
@@ -144,6 +151,87 @@ impl<'a> Parser<'a> {
   pub fn curr_region (&self) -> SourceRegion {
     self.locale.curr.unwrap().origin
   }
+
+
+  // TODO should synchronization leave a saved locale in the failure state?
+  // TODO should synchronization's returned bool be must_use?
+
+  
+  /// Synchronize a Parser after an error is encountered
+  /// 
+  /// Uses a SyncPredicate to determine when the Parser has advanced to a valid state
+  ///
+  /// + If no valid state is reached by the end of the Parser's TokenStream, `false` is returned
+  /// + Otherwise 'true` is returned and the Parser's locale remains on the Token that was accepted by the SyncPredicate
+  #[must_use]
+  pub fn synchronize (&mut self, mut predicate: impl SyncPredicate) -> bool {
+    while let Some(token) = self.curr_tok() {
+      if unsafe { predicate.sync(token) } {
+        return true
+      }
+    }
+
+    false
+  }
+
+
+  /// Synchronize a Parser after an error is encountered,
+  /// while staying within a maximum number of Tokens from the error's origin
+  /// 
+  /// Uses a SyncPredicate to determine when the Parser has advanced to a valid state
+  ///
+  /// + If no valid state is reached by the time the given offset is reached, the Parser's locale is reset and 'false' is returned
+  /// + If no valid state is reached by the end of the Parser's TokenStream, `false` is returned and the locale remains at the end of the Stream
+  /// + Otherwise 'true` is returned and the Parser's locale remains on the Token that was accepted by the SyncPredicate
+  #[must_use]
+  pub fn synchronize_max_offset (&mut self, max_offset: usize, mut predicate: impl SyncPredicate) -> bool {
+    let mut offset = 0;
+
+    self.save_locale();
+
+    while let Some(token) = self.curr_tok() {
+      if offset >= max_offset {
+        self.load_locale();
+        break
+      } else if unsafe { predicate.sync(token) } {
+        self.discard_saved_locale();
+        return true
+      } else {
+        offset += 1;
+      }
+    }
+
+    self.discard_saved_locale();
+
+    false
+  }
+
+
+  /// This is the same as the `synchronize` method,
+  /// but it advances past the Token that was accepted by the SyncPredicate,
+  /// and the caller is not required to know whether it was successful
+  /// 
+  /// This is useful for best-effort synchronization,
+  /// e.g. in expressions where there is only so much that can be done to recover state before the next `;`
+  pub fn synchronize_unchecked (&mut self, predicate: impl SyncPredicate) {
+    if self.synchronize(predicate) {
+      self.advance();
+    }
+  }
+
+  /// This is the same as the `synchronize_max_offset` method,
+  /// but it advances past the Token that was accepted by the SyncPredicate,
+  /// and the caller is not required to know whether it was successful
+  /// 
+  /// This is useful for best-effort synchronization,
+  /// e.g. in expressions where there is only so much that can be done to recover state before the next `;`
+  pub fn synchronize_max_offset_unchecked (&mut self, max_offset: usize, predicate: impl SyncPredicate) {
+    if self.synchronize_max_offset(max_offset, predicate) {
+      self.advance();
+    }
+  }
+  
+
 
 
   /// Create a user-directed Message in the Source of the TokenStream of a Parser
