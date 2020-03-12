@@ -327,11 +327,15 @@ impl TokenData {
 
 
 /// A single unit of language syntax, such as an identifier, a number, or an operator
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub struct Token {
   pub data: TokenData,
   pub origin: SourceRegion,
+}
+
+impl PartialEq for Token {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
 }
 
 impl Token {
