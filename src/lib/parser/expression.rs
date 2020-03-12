@@ -84,15 +84,16 @@ fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
       } else {
         parser.error("Expected ) to close semantic group".to_owned());
       }
-
     } // else { Do not need to give an error message here as one should have already been issued inside the `expression` call, but we do need to sync }
 
     // If we reach this point there was some sort of error and we need to try to synchronize to the end of the (sem group),
     // but there isnt much we can do beyond this since our inner value is probably invalid and we may as well discard it
     parser.synchronize_unchecked(sync::close_pair(sync::operator(LeftParenthesis), sync::operator(RightParenthesis)));
+
+    return None
   }
 
-  None
+  unreachable!("Internal error, semantic group expression parselet called on non-parenthesis token");
 }
 
 
@@ -158,12 +159,14 @@ fn ifx_binary_operator (left: Expression, parser: &mut Parser) -> Option<Express
         origin
       ))
     } // else { Do not need to give an error message here as one should have already been issued inside the `pratt` call }
+
+    // If we reached this point something was wrong with the right hand operand expression, or we ran out of tokens,
+    // but we don't have any contextual information to use in synchronization so it must be handled by the callee and/or caller
+
+    return None
   }
 
-  // If we reached this point something was wrong with the right hand operand expression, or we ran out of tokens,
-  // but we don't have any contextual information to use in synchronization so it must be handled by the callee and/or caller
-
-  None
+  unreachable!("Internal error, binary operator expression parselet called on non-operator token");
 }
 
 
@@ -230,7 +233,7 @@ fn ifx_call (left: Expression, parser: &mut Parser) -> Option<Expression> {
     }
   }
 
-  unreachable!("Internal error, unexpected call expression parselet state");
+  unreachable!("Internal error, call expression parselet called on non-parenthesis token");
 }
 
 
