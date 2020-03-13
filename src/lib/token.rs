@@ -3,6 +3,7 @@
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   str::from_utf8_unchecked as str_from_utf8_unchecked,
+  slice::Iter as SliceIter,
   ops::{ Deref, },
 };
 
@@ -107,7 +108,7 @@ impl Identifier {
   /// Get an iterator over the chars of an Identifier
   pub fn char_iter (&self) -> IdentifierChars<'_> {
     IdentifierChars { identifier: self, index: 0 }
-}
+  }
 
   /// Get an iterator over the bytes of an Identifier
   pub fn byte_iter (&self) -> SliceIter<u8> {
@@ -144,8 +145,10 @@ pub enum Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Keyword {
+  Else,
   Let,
   Function,
+  If,
 }
 
 impl Keyword {
@@ -154,8 +157,10 @@ impl Keyword {
     use Keyword::*;
 
     match self {
+      Else     => "else",
       Let      => "let",
       Function => "fn",
+      If       => "if",
     }
   }
 }
@@ -246,13 +251,15 @@ impl Operator {
 /// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
 pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
   &[
-    ("let", Either::A(Keyword::Let)),
-    ("not", Either::B(Operator::Not)),
-    ("and", Either::B(Operator::And)),
-    ("xor", Either::B(Operator::Xor)),
-    ("fn",  Either::A(Keyword::Function)),
-    ("or",  Either::B(Operator::Or)),
-    ("as",  Either::B(Operator::As)),
+    ("else", Either::A(Keyword::Else)),
+    ("let",  Either::A(Keyword::Let)),
+    ("not",  Either::B(Operator::Not)),
+    ("and",  Either::B(Operator::And)),
+    ("xor",  Either::B(Operator::Xor)),
+    ("fn",   Either::A(Keyword::Function)),
+    ("if",   Either::A(Keyword::If)),
+    ("or",   Either::B(Operator::Or)),
+    ("as",   Either::B(Operator::As)),
   ]
 };
 
