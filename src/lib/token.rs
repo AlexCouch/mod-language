@@ -193,6 +193,8 @@ pub enum Operator {
   Or,
   As,
 
+  RightArrow,
+
   AssignAdd,
   AssignSub,
   AssignMul,
@@ -231,6 +233,8 @@ impl Operator {
       Xor => "xor",
       Or  => "or",
       As  => "as",
+
+      RightArrow => "->",
     
       AssignAdd => "+=",
       AssignSub => "-=",
@@ -289,6 +293,8 @@ pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
 pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
   use Operator::*;
   &[
+    ("->", RightArrow),
+    
     ("+=", AssignAdd),
     ("-=", AssignSub),
     ("*=", AssignMul),
