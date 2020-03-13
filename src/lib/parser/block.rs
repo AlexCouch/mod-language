@@ -42,16 +42,17 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
                 parser.advance();
                 
                 statements.push(stmt);
-
-                stmt_ok = true;
               } else {
                 if let StatementData::Expression(expr) = stmt.data {
                   trailing_expression = Some(expr);
+                  stmt_ok = false;
                 } else {
+                  if stmt.requires_semi() {
+                    stmt_ok = false;
+                  }
+                  
                   statements.push(stmt);
                 }
-
-                stmt_ok = false;
               }
 
               continue

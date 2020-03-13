@@ -188,6 +188,19 @@ impl StatementData {
   pub fn is_expression (&self) -> bool {
     matches!(self, StatementData::Expression(_))
   }
+
+  /// Determine if a particular variant of StatementData requires a semicolon to separate it from other statements
+  pub fn requires_semi (&self) -> bool {
+    match self {
+      StatementData::Expression { .. } |
+      StatementData::Declaration { .. } |
+      StatementData::Assignment { .. } |
+      StatementData::ModAssignment { .. } |
+      StatementData::Return { .. }
+        => true,
+      _ => false
+    }
+  }
 }
 
 /// A semantic element forming a single action or control flow choice
