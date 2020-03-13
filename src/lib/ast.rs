@@ -38,6 +38,11 @@ impl Deref for TypeExpression {
   #[inline] fn deref (&self) -> &Self::Target { &self.data }
 }
 
+impl From<TypeExpressionData> for TypeExpression {
+  #[inline]
+  fn from (data: TypeExpressionData) -> Self { Self::no_src(data) }
+}
+
 impl TypeExpression {
   /// Create a new TypeExpression
   pub fn new (data: TypeExpressionData, origin: SourceRegion) -> Self {
@@ -94,6 +99,11 @@ impl PartialEq for Expression {
 impl Deref for Expression {
   type Target = ExpressionData;
   #[inline] fn deref (&self) -> &Self::Target { &self.data }
+}
+
+impl From<ExpressionData> for Expression {
+  #[inline]
+  fn from (data: ExpressionData) -> Self { Self::no_src(data) }
 }
 
 impl Expression {
@@ -160,6 +170,11 @@ impl From<Expression> for Statement {
   }
 }
 
+impl From<StatementData> for Statement {
+  #[inline]
+  fn from (data: StatementData) -> Self { Self::no_src(data) }
+}
+
 impl Statement {
   /// Create a new Statement
   pub fn new (data: StatementData, origin: SourceRegion) -> Self {
@@ -187,12 +202,20 @@ pub const STATEMENT_KEYWORDS: &[Keyword] = {
 
 
 /// A series of Statements and an optional trailing Expression
-#[derive(Debug)]
 #[allow(missing_docs)]
 pub struct Block {
   pub statements: Vec<Statement>,
   pub trailing_expression: Option<Expression>,
   pub origin: SourceRegion,
+}
+
+impl Debug for Block {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    f.debug_struct("Block")
+      .field("statements", &self.statements)
+      .field("trailing_expression", &self.trailing_expression)
+      .finish()
+  }
 }
 
 impl PartialEq for Block {
@@ -217,12 +240,20 @@ impl Block {
 }
 
 /// An individual conditional Block and its predicate Expression
-#[derive(Debug)]
 #[allow(missing_docs)]
 pub struct ConditionalBranch {
   pub condition: Expression,
   pub body: Block,
   pub origin: SourceRegion,
+}
+
+impl Debug for ConditionalBranch {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    f.debug_struct("ConditionalBranch")
+      .field("condition", &self.condition)
+      .field("body", &self.body)
+      .finish()
+  }
 }
 
 impl PartialEq for ConditionalBranch {
@@ -247,13 +278,22 @@ impl ConditionalBranch {
 }
 
 /// A set of 1 or more sequenced ConditionalBranches and an optional else Block
-#[derive(Debug)]
 #[allow(missing_docs)]
 pub struct Conditional {
   pub if_branch: ConditionalBranch,
   pub else_if_branches: Vec<ConditionalBranch>,
   pub else_block: Option<Block>,
   pub origin: SourceRegion,
+}
+
+impl Debug for Conditional {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    f.debug_struct("Conditional")
+      .field("if_branch", &self.if_branch)
+      .field("else_if_branches", &self.else_if_branches)
+      .field("else_block", &self.else_block)
+      .finish()
+  }
 }
 
 impl PartialEq for Conditional {
@@ -305,6 +345,11 @@ impl PartialEq for Item {
 impl Deref for Item {
   type Target = ItemData;
   #[inline] fn deref (&self) -> &Self::Target { &self.data }
+}
+
+impl From<ItemData> for Item {
+  #[inline]
+  fn from (data: ItemData) -> Self { Self::no_src(data) }
 }
 
 impl Item {

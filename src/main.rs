@@ -82,7 +82,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test expression
-    use mod_language::{ ast::{ Expression, ExpressionData, }, parser::{ Parser, expression, }, token::{ Identifier, Operator, Number, }, };
+    use mod_language::{ ast::{ ExpressionData, }, parser::{ Parser, expression, }, token::{ Identifier, Operator, Number, }, };
 
 
     let source = Source::load("./test_scripts/expression.ms".to_owned())?;
@@ -99,34 +99,20 @@ fn main () -> std::io::Result<()> {
 
     println!("Got expression: {:#?}", expr);
 
-    assert_eq!(expr, Some(Expression::no_src(
-      ExpressionData::Call {
-        callee: box Expression::no_src(
-          ExpressionData::Identifier(Identifier::from("func"))
-        ),
-        arguments: vec! [
-          Expression::no_src(
-            ExpressionData::Binary {
-              left: box Expression::no_src(
-                ExpressionData::Number(Number::Integer(1))
-              ),
-              right: box Expression::no_src(
-                ExpressionData::Binary {
-                  left: box Expression::no_src(
-                    ExpressionData::Number(Number::Integer(2))
-                  ),
-                  right: box Expression::no_src(
-                    ExpressionData::Number(Number::Integer(3))
-                  ),
-                  operator: Operator::Add
-                }
-              ),
-              operator: Operator::Mul
-            }
-          )
-        ]
-      }
-    )));
+    assert_eq!(expr, Some(ExpressionData::Call {
+      callee: box ExpressionData::Identifier(Identifier::from("func")).into(),
+      arguments: vec! [
+        ExpressionData::Binary {
+          left: box ExpressionData::Number(Number::Integer(1)).into(),
+          right: box ExpressionData::Binary {
+            left: box ExpressionData::Number(Number::Integer(2)).into(),
+            right: box ExpressionData::Number(Number::Integer(3)).into(),
+            operator: Operator::Add
+          }.into(),
+          operator: Operator::Mul
+        }.into()
+      ]
+    }.into()));
 
     if source.messages.borrow().len() != 0 {
       source.print_messages();
@@ -139,7 +125,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test statements
-    use mod_language::{ parser::{ Parser, block, }, ast::{ Statement, StatementData, Expression, ExpressionData, TypeExpression, TypeExpressionData, Block }, token::{ Identifier, Number, Operator, } };
+    use mod_language::{ parser::{ Parser, block, }, ast::{ StatementData, ExpressionData, TypeExpressionData, Block }, token::{ Identifier, Number, Operator, } };
 
 
     let source = Source::load("./test_scripts/block.ms".to_owned())?;
@@ -158,34 +144,18 @@ fn main () -> std::io::Result<()> {
 
     assert_eq!(block, Some(Block::no_src(
       vec! [
-        Statement::no_src(
-          StatementData::Declaration {
-            identifier: Identifier::from("variable"),
-            explicit_type: Some(TypeExpression::no_src(
-              TypeExpressionData::Identifier(Identifier::from("u32"))
-            )),
-            initializer: Some(Expression::no_src(
-              ExpressionData::Number(Number::Integer(64))
-            ))
-          }
-        ),
-        Statement::no_src(
-          StatementData::ModAssignment {
-            target: Expression::no_src(
-              ExpressionData::Identifier(Identifier::from("variable"))
-            ),
-            value: Expression::no_src(
-              ExpressionData::Number(Number::Integer(99))
-            ),
-            operator: Operator::AssignAdd
-          }
-        ),
+        StatementData::Declaration {
+          identifier: Identifier::from("variable"),
+          explicit_type: Some(TypeExpressionData::Identifier(Identifier::from("u32")).into()),
+          initializer: Some(ExpressionData::Number(Number::Integer(64)).into())
+        }.into(),
+        StatementData::ModAssignment {
+          target: ExpressionData::Identifier(Identifier::from("variable")).into(),
+          value: ExpressionData::Number(Number::Integer(99)).into(),
+          operator: Operator::AssignAdd
+        }.into(),
       ],
-      Some(
-        Expression::no_src(
-          ExpressionData::Identifier(Identifier::from("variable"))
-        )
-      )
+      Some(ExpressionData::Identifier(Identifier::from("variable")).into())
     )));
 
     if source.messages.borrow().len() != 0 {
