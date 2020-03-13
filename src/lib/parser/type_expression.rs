@@ -14,7 +14,7 @@ use super::{ Parser, ParseletPredicate, ParseletFunction, };
 
 /// Parse a single TypeExpression
 pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
-  if let Some(parselet_function) = TypeParselet::get_function(parser.curr_tok()?) {
+  if let Some(parselet_function) = TypeExpressionParselet::get_function(parser.curr_tok()?) {
     parselet_function(parser)
   } else {
     parser.error("No semantic match for this token in the context of a type expression".to_owned());
@@ -39,14 +39,14 @@ fn tpx_identifier (parser: &mut Parser) -> Option<TypeExpression> {
 }
 
 
-struct TypeParselet {
+struct TypeExpressionParselet {
   predicate: ParseletPredicate,
-  parser: ParseletFunction<TypeExpression>,
+  function: ParseletFunction<TypeExpression>,
 }
 
-impl TypeParselet {
+impl TypeExpressionParselet {
   const PARSELETS: &'static [Self] = {
-    macro_rules! tpx { ($( $predicate: expr => $parser: expr ),* $(,)?) => { &[ $( TypeParselet { predicate: $predicate, parser: $parser } ),* ] } }
+    macro_rules! tpx { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( TypeExpressionParselet { predicate: $predicate, function: $function } ),* ] } }
 
     tpx! [
       |token| token.kind() == TokenKind::Identifier => tpx_identifier,
@@ -56,7 +56,7 @@ impl TypeParselet {
   fn get_function (token: &Token) -> Option<ParseletFunction<TypeExpression>> {
     for parselet in Self::PARSELETS.iter() {
       if (parselet.predicate)(token) {
-        return Some(parselet.parser)
+        return Some(parselet.function)
       }
     }
   
