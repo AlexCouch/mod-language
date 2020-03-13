@@ -135,5 +135,65 @@ fn main () -> std::io::Result<()> {
   }
 
 
+  println!("\n-------------------------\n");
+
+
+  { // test statements
+    use mod_language::{ parser::{ Parser, block, }, ast::{ Statement, StatementData, Expression, ExpressionData, TypeExpression, TypeExpressionData, Block }, token::{ Identifier, Number, Operator, } };
+
+
+    let source = Source::load("./test_scripts/block.ms".to_owned())?;
+
+    let mut lexer = Lexer::new(&source);
+
+    let stream = lexer.lex_stream();
+
+    println!("Lexing complete:\n{}", &stream);
+
+    let mut parser = Parser::new(&stream);
+
+    let block = block(&mut parser);
+
+    println!("Got block: {:#?}", block);
+
+    assert_eq!(block, Some(Block::no_src(
+      vec! [
+        Statement::no_src(
+          StatementData::Declaration {
+            identifier: Identifier::from("variable"),
+            explicit_type: Some(TypeExpression::no_src(
+              TypeExpressionData::Identifier(Identifier::from("u32"))
+            )),
+            initializer: Some(Expression::no_src(
+              ExpressionData::Number(Number::Integer(64))
+            ))
+          }
+        ),
+        Statement::no_src(
+          StatementData::ModAssignment {
+            target: Expression::no_src(
+              ExpressionData::Identifier(Identifier::from("variable"))
+            ),
+            value: Expression::no_src(
+              ExpressionData::Number(Number::Integer(99))
+            ),
+            operator: Operator::AssignAdd
+          }
+        ),
+      ],
+      Some(
+        Expression::no_src(
+          ExpressionData::Identifier(Identifier::from("variable"))
+        )
+      )
+    )));
+
+    if source.messages.borrow().len() != 0 {
+      source.print_messages();
+      panic!("Parsing block failed");
+    }
+  }
+
+
   Ok(())
 }

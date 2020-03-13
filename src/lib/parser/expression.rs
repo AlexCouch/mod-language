@@ -2,11 +2,11 @@
 
 use crate::{
   source::{ SourceRegion, },
-  token::{ Token, TokenData, TokenKind, Operator, Operator::*, },
+  token::{ Token, TokenData, TokenKind, Operator, Operator::*, Keyword::*, },
   ast::{ Expression, ExpressionData, },
 };
 
-use super::{ Parser, ParseletPredicate, ParseletFunction, sync, };
+use super::{ Parser, ParseletPredicate, ParseletFunction, sync, block, conditional, };
 
 
 
@@ -95,6 +95,34 @@ fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
   unreachable!("Internal error, semantic group expression parselet called on non-parenthesis token");
 }
 
+fn pfx_block (parser: &mut Parser) -> Option<Expression> {
+  let block = box block(parser)?;
+  
+  let origin = block.origin;
+
+  if block.is_expression() {
+    Some(Expression::new(ExpressionData::Block(block), origin))
+  } else {
+    parser.error_at(origin, "Block is not a valid expression".to_owned());
+
+    None
+  }
+}
+
+fn pfx_conditional (parser: &mut Parser) -> Option<Expression> {
+  let conditional = box conditional(parser)?;
+  
+  let origin = conditional.origin;
+
+  if conditional.is_expression() {
+    Some(Expression::new(ExpressionData::Conditional(conditional), origin))
+  } else {
+    parser.error_at(origin, "Conditional is not a valid expression".to_owned());
+    
+    None
+  }
+}
+
 
 struct PrefixParselet {
   predicate: ParseletPredicate,
@@ -109,6 +137,8 @@ impl PrefixParselet {
       |token| token.kind() == TokenKind::Identifier => pfx_identifier,
       |token| token.kind() == TokenKind::Number => pfx_number,
       |token| token.is_operator(LeftParen) => pfx_semantic_group,
+      |token| token.is_operator(LeftBracket) => pfx_block,
+      |token| token.is_keyword(If) => pfx_conditional,
     ]
   };
 

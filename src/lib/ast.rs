@@ -187,7 +187,7 @@ pub const STATEMENT_KEYWORDS: &[Keyword] = {
 
 
 /// A series of Statements and an optional trailing Expression
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 #[allow(missing_docs)]
 pub struct Block {
   pub statements: Vec<Statement>,
@@ -195,7 +195,21 @@ pub struct Block {
   pub origin: SourceRegion,
 }
 
+impl PartialEq for Block {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.statements == other.statements && self.trailing_expression == other.trailing_expression }
+}
+
 impl Block {
+  /// Create a new Block
+  pub fn new (statements: Vec<Statement>, trailing_expression: Option<Expression>, origin: SourceRegion) -> Self {
+    Self { statements, trailing_expression, origin }
+  }
+
+  /// Create a new Block with no SourceRegion
+  pub fn no_src (statements: Vec<Statement>, trailing_expression: Option<Expression>) -> Self {
+    Self { statements, trailing_expression, origin: SourceLocation::ZERO.to_region() }
+  }
+
   /// Determine if a Block has a trailing Expression, making the Block itself an Expression
   pub fn is_expression (&self) -> bool {
     self.trailing_expression.is_some()
@@ -203,7 +217,7 @@ impl Block {
 }
 
 /// An individual conditional Block and its predicate Expression
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 #[allow(missing_docs)]
 pub struct ConditionalBranch {
   pub condition: Expression,
@@ -211,7 +225,21 @@ pub struct ConditionalBranch {
   pub origin: SourceRegion,
 }
 
+impl PartialEq for ConditionalBranch {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.condition == other.condition && self.body == other.body }
+}
+
 impl ConditionalBranch {
+  /// Create a new ConditionalBranch
+  pub fn new (condition: Expression, body: Block, origin: SourceRegion) -> Self {
+    Self { condition, body, origin }
+  }
+
+  /// Create a new ConditionalBranch with no SourceRegion
+  pub fn no_src (condition: Expression, body: Block) -> Self {
+    Self { condition, body, origin: SourceLocation::ZERO.to_region() }
+  }
+
   /// Determine if the Block of a ConditionalBranch has a trailing Expression, making the ConditionalBranch itself an Expression
   pub fn is_expression (&self) -> bool {
     self.body.is_expression()
@@ -219,7 +247,7 @@ impl ConditionalBranch {
 }
 
 /// A set of 1 or more sequenced ConditionalBranches and an optional else Block
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 #[allow(missing_docs)]
 pub struct Conditional {
   pub if_branch: ConditionalBranch,
@@ -228,7 +256,21 @@ pub struct Conditional {
   pub origin: SourceRegion,
 }
 
+impl PartialEq for Conditional {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.if_branch == other.if_branch && self.else_if_branches == other.else_if_branches && self.else_block == other.else_block }
+}
+
 impl Conditional {
+  /// Create a new Condtional
+  pub fn new (if_branch: ConditionalBranch, else_if_branches: Vec<ConditionalBranch>, else_block: Option<Block>, origin: SourceRegion) -> Self {
+    Self { if_branch, else_if_branches, else_block, origin }
+  }
+
+  /// Create a new Condtional with no SourceRegion
+  pub fn no_src (if_branch: ConditionalBranch, else_if_branches: Vec<ConditionalBranch>, else_block: Option<Block>) -> Self {
+    Self { if_branch, else_if_branches, else_block, origin: SourceLocation::ZERO.to_region() }
+  }
+
   /// Determine if a Conditional's if Branch Block has a trailing Expression, making the Conditional itself an Expression
   pub fn is_expression (&self) -> bool {
     self.if_branch.is_expression()
