@@ -31,10 +31,23 @@ impl Debug for Identifier {
   }
 }
 
-
-
 impl Default for Identifier {
   #[inline] fn default () -> Self { Self::new() }
+}
+
+/// An iterator over the bytes of an Identifier as chars
+pub struct IdentifierChars<'a> {
+  identifier: &'a Identifier,
+  index: usize,
+}
+
+impl<'a> Iterator for IdentifierChars<'a> {
+  type Item = char;
+  fn next (&mut self) -> Option<Self::Item> {
+    let ch = self.identifier.get(self.index);
+    if ch.is_some() { self.index += 1 }
+    ch
+  }
 }
 
 impl Identifier {
@@ -89,6 +102,16 @@ impl Identifier {
   /// Get a specific byte at an index in an Identifier and convert it to `char`
   pub fn get (&self, index: usize) -> Option<char> {
     self.vec.get(index).map(|ch| *ch as _)
+  }
+
+  /// Get an iterator over the chars of an Identifier
+  pub fn char_iter (&self) -> IdentifierChars<'_> {
+    IdentifierChars { identifier: self, index: 0 }
+}
+
+  /// Get an iterator over the bytes of an Identifier
+  pub fn byte_iter (&self) -> SliceIter<u8> {
+    self.vec.iter()
   }
 }
 
