@@ -1,5 +1,7 @@
 #![feature(box_syntax)]
 
+extern crate mod_language;
+
 use mod_language::{
   source::{ Source, SourceRegion, SourceLocation, },
   lexer::Lexer,
