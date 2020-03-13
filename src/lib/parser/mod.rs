@@ -186,7 +186,7 @@ impl<'a> Parser<'a> {
   /// Uses a SyncPredicate to determine when the Parser has advanced to a valid state
   ///
   /// + If no valid state is reached by the end of the Parser's TokenStream, `false` is returned
-  /// + Otherwise 'true` is returned and the Parser's locale remains on the Token that was accepted by the SyncPredicate
+  /// + Otherwise `true` is returned and the Parser's locale remains on the Token that was accepted by the SyncPredicate
   #[must_use]
   pub fn synchronize (&mut self, mut predicate: impl SyncPredicate) -> bool {
     while let Some(token) = self.curr_tok() {
@@ -206,7 +206,7 @@ impl<'a> Parser<'a> {
   ///
   /// + If no valid state is reached by the time the given offset is reached, the Parser's locale is reset and 'false' is returned
   /// + If no valid state is reached by the end of the Parser's TokenStream, `false` is returned and the locale remains at the end of the Stream
-  /// + Otherwise 'true` is returned and the Parser's locale remains on the Token that was accepted by the SyncPredicate
+  /// + Otherwise `true` is returned and the Parser's locale remains on the Token that was accepted by the SyncPredicate
   #[must_use]
   pub fn synchronize_max_offset (&mut self, max_offset: usize, mut predicate: impl SyncPredicate) -> bool {
     let mut offset = 0;
