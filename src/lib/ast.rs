@@ -2,11 +2,12 @@
 
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
+  ops::{ Deref, },
 };
 
 use crate::{
   source::{ SourceRegion, SourceLocation, },
-  token::{ TokenStream, Number, Identifier, Operator, },
+  token::{ TokenStream, Number, Identifier, Operator, Keyword, },
 };
 
 
@@ -30,6 +31,11 @@ impl Debug for TypeExpression {
 
 impl PartialEq for TypeExpression {
   #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
+}
+
+impl Deref for TypeExpression {
+  type Target = TypeExpressionData;
+  #[inline] fn deref (&self) -> &Self::Target { &self.data }
 }
 
 impl TypeExpression {
@@ -85,6 +91,11 @@ impl PartialEq for Expression {
   #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
 }
 
+impl Deref for Expression {
+  type Target = ExpressionData;
+  #[inline] fn deref (&self) -> &Self::Target { &self.data }
+}
+
 impl Expression {
   /// Create a new Expression
   pub fn new (data: ExpressionData, origin: SourceRegion) -> Self {
@@ -104,10 +115,21 @@ impl Expression {
 #[derive(Debug, PartialEq)]
 pub enum StatementData {
   Expression(Expression),
+  Declaration { identifier: Identifier, explicit_type: Option<TypeExpression>, initializer: Option<Expression> },
+  Assignment { target: Expression, value: Expression },
+  ModAssignment { target: Expression, value: Expression, operator: Operator },
+
   Return(Option<Expression>),
 
   Block(Box<Block>),
   Conditional(Box<Conditional>),
+}
+
+impl StatementData {
+  /// Determine if StatementData can be converted to ExpressionData
+  pub fn is_expression (&self) -> bool {
+    matches!(self, StatementData::Expression(_))
+  }
 }
 
 /// A semantic element forming a single action or control flow choice
@@ -125,6 +147,19 @@ impl PartialEq for Statement {
   #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
 }
 
+impl Deref for Statement {
+  type Target = StatementData;
+  #[inline] fn deref (&self) -> &Self::Target { &self.data }
+}
+
+impl From<Expression> for Statement {
+  #[inline]
+  fn from (e: Expression) -> Self {
+    let origin = e.origin;
+    Self::new(StatementData::Expression(e), origin)
+  }
+}
+
 impl Statement {
   /// Create a new Statement
   pub fn new (data: StatementData, origin: SourceRegion) -> Self {
@@ -138,35 +173,71 @@ impl Statement {
 }
 
 
+// TODO relocate this
+/// Keywords that define the start of a Statement
+pub const STATEMENT_KEYWORDS: &[Keyword] = {
+  use Keyword::*;
 
-/// A series of statements and an optional trailing expression
+  &[
+    Let,
+    If,
+  ]
+};
+
+
+
+/// A series of Statements and an optional trailing Expression
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct Block {
   pub statements: Vec<Statement>,
   pub trailing_expression: Option<Expression>,
+  pub origin: SourceRegion,
 }
 
-/// An individual conditional block and its predicate expression
+impl Block {
+  /// Determine if a Block has a trailing Expression, making the Block itself an Expression
+  pub fn is_expression (&self) -> bool {
+    self.trailing_expression.is_some()
+  }
+}
+
+/// An individual conditional Block and its predicate Expression
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct ConditionalBranch {
   pub condition: Expression,
   pub body: Block,
+  pub origin: SourceRegion,
 }
 
-/// A set of 1 or more sequenced conditional branches and an optional else block
+impl ConditionalBranch {
+  /// Determine if the Block of a ConditionalBranch has a trailing Expression, making the ConditionalBranch itself an Expression
+  pub fn is_expression (&self) -> bool {
+    self.body.is_expression()
+  }
+}
+
+/// A set of 1 or more sequenced ConditionalBranches and an optional else Block
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct Conditional {
   pub if_branch: ConditionalBranch,
   pub else_if_branches: Vec<ConditionalBranch>,
-  pub else_block: Option<Block>
+  pub else_block: Option<Block>,
+  pub origin: SourceRegion,
+}
+
+impl Conditional {
+  /// Determine if a Conditional's if Branch Block has a trailing Expression, making the Conditional itself an Expression
+  pub fn is_expression (&self) -> bool {
+    self.if_branch.is_expression()
+  }
 }
 
 
 
-/// An enum containing the particular variant of an item
+/// An enum containing the particular variant of an Item
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
@@ -187,6 +258,11 @@ impl Debug for Item {
 
 impl PartialEq for Item {
   #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
+}
+
+impl Deref for Item {
+  type Target = ItemData;
+  #[inline] fn deref (&self) -> &Self::Target { &self.data }
 }
 
 impl Item {
