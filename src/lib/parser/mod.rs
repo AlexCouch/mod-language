@@ -192,6 +192,8 @@ impl<'a> Parser<'a> {
     while let Some(token) = self.curr_tok() {
       if unsafe { predicate.sync(token) } {
         return true
+      } else {
+        self.advance();
       }
     }
 
@@ -222,6 +224,7 @@ impl<'a> Parser<'a> {
         return true
       } else {
         offset += 1;
+        self.advance();
       }
     }
 
