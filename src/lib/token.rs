@@ -139,6 +139,20 @@ pub enum Number {
   FloatingPoint(f64),
 }
 
+impl From<u64> for Number {
+  #[inline]
+  fn from (i: u64) -> Self {
+    Number::Integer(i)
+  }
+}
+
+impl From<f64> for Number {
+  #[inline]
+  fn from (f: f64) -> Self {
+    Number::FloatingPoint(f)
+  }
+}
+
 
 /// An enum representing a language control word such as `fn` or `let`
 #[repr(u8)]

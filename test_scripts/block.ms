@@ -3,5 +3,9 @@
 
   variable += 99;
 
-  variable
+  if condition {
+    variable
+  } else {
+    200
+  }
 }

@@ -18,6 +18,20 @@ pub enum TypeExpressionData {
   Identifier(Identifier),
 }
 
+impl From<Identifier> for TypeExpressionData {
+  #[inline]
+  fn from (ident: Identifier) -> Self {
+    Self::Identifier(ident)
+  }
+}
+
+impl From<&str> for TypeExpressionData {
+  #[inline]
+  fn from (ident: &str) -> Self {
+    Self::Identifier(ident.into())
+  }
+}
+
 /// A semantic element referencing or describing a type
 #[allow(missing_docs)]
 pub struct TypeExpression {
@@ -38,9 +52,9 @@ impl Deref for TypeExpression {
   #[inline] fn deref (&self) -> &Self::Target { &self.data }
 }
 
-impl From<TypeExpressionData> for TypeExpression {
+impl<T: Into<TypeExpressionData>> From<T> for TypeExpression {
   #[inline]
-  fn from (data: TypeExpressionData) -> Self { Self::no_src(data) }
+  fn from (value: T) -> Self { Self::no_src(value.into()) }
 }
 
 impl TypeExpression {
@@ -80,6 +94,40 @@ pub enum ExpressionData {
   Conditional(Box<Conditional>),
 }
 
+impl From<Identifier> for ExpressionData {
+  #[inline]
+  fn from (ident: Identifier) -> Self {
+    Self::Identifier(ident)
+  }
+}
+
+impl From<&str> for ExpressionData {
+  #[inline]
+  fn from (ident: &str) -> Self {
+    Self::Identifier(ident.into())
+  }
+}
+
+impl From<Number> for ExpressionData {
+  #[inline]
+  fn from (num: Number) -> Self {
+    Self::Number(num)
+  }
+}
+
+impl From<u64> for ExpressionData {
+  #[inline]
+  fn from (num: u64) -> Self {
+    Self::Number(num.into())
+  }
+}
+
+impl From<f64> for ExpressionData {
+  #[inline]
+  fn from (num: f64) -> Self {
+    Self::Number(num.into())
+  }
+}
 
 /// A semantic element forming a sequence of actions or a reference
 #[allow(missing_docs)]
@@ -101,9 +149,9 @@ impl Deref for Expression {
   #[inline] fn deref (&self) -> &Self::Target { &self.data }
 }
 
-impl From<ExpressionData> for Expression {
+impl<T: Into<ExpressionData>> From<T> for Expression {
   #[inline]
-  fn from (data: ExpressionData) -> Self { Self::no_src(data) }
+  fn from (data: T) -> Self { Self::no_src(data.into()) }
 }
 
 impl Expression {
@@ -170,9 +218,9 @@ impl From<Expression> for Statement {
   }
 }
 
-impl From<StatementData> for Statement {
+impl<T: Into<StatementData>> From<T> for Statement {
   #[inline]
-  fn from (data: StatementData) -> Self { Self::no_src(data) }
+  fn from (data: T) -> Self { Self::no_src(data.into()) }
 }
 
 impl Statement {
@@ -347,9 +395,9 @@ impl Deref for Item {
   #[inline] fn deref (&self) -> &Self::Target { &self.data }
 }
 
-impl From<ItemData> for Item {
+impl<T: Into<ItemData>> From<T> for Item {
   #[inline]
-  fn from (data: ItemData) -> Self { Self::no_src(data) }
+  fn from (data: T) -> Self { Self::no_src(data.into()) }
 }
 
 impl Item {

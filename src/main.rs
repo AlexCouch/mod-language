@@ -82,7 +82,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test expression
-    use mod_language::{ ast::{ ExpressionData, }, parser::{ Parser, expression, }, token::{ Identifier, Operator, Number, }, };
+    use mod_language::{ ast::{ ExpressionData, }, parser::{ Parser, expression, }, token::{ Operator, }, };
 
 
     let source = Source::load("./test_scripts/expression.ms".to_owned())?;
@@ -100,13 +100,13 @@ fn main () -> std::io::Result<()> {
     println!("Got expression: {:#?}", expr);
 
     assert_eq!(expr, Some(ExpressionData::Call {
-      callee: box ExpressionData::Identifier(Identifier::from("func")).into(),
+      callee: box "func".into(),
       arguments: vec! [
         ExpressionData::Binary {
-          left: box ExpressionData::Number(Number::Integer(1)).into(),
+          left: box 1.into(),
           right: box ExpressionData::Binary {
-            left: box ExpressionData::Number(Number::Integer(2)).into(),
-            right: box ExpressionData::Number(Number::Integer(3)).into(),
+            left: box 2.into(),
+            right: box 3.into(),
             operator: Operator::Add
           }.into(),
           operator: Operator::Mul
@@ -125,7 +125,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test statements
-    use mod_language::{ parser::{ Parser, block, }, ast::{ StatementData, ExpressionData, TypeExpressionData, Block }, token::{ Identifier, Number, Operator, } };
+    use mod_language::{ parser::{ Parser, block, }, ast::{ StatementData, ExpressionData, Block, Conditional, ConditionalBranch, }, token::{ Operator, } };
 
 
     let source = Source::load("./test_scripts/block.ms".to_owned())?;
@@ -145,17 +145,30 @@ fn main () -> std::io::Result<()> {
     assert_eq!(block, Some(Block::no_src(
       vec! [
         StatementData::Declaration {
-          identifier: Identifier::from("variable"),
-          explicit_type: Some(TypeExpressionData::Identifier(Identifier::from("u32")).into()),
-          initializer: Some(ExpressionData::Number(Number::Integer(64)).into())
+          identifier: "variable".into(),
+          explicit_type: Some("u32".into()),
+          initializer: Some(64.into())
         }.into(),
         StatementData::ModAssignment {
-          target: ExpressionData::Identifier(Identifier::from("variable")).into(),
-          value: ExpressionData::Number(Number::Integer(99)).into(),
+          target: "variable".into(),
+          value: 99.into(),
           operator: Operator::AssignAdd
         }.into(),
       ],
-      Some(ExpressionData::Identifier(Identifier::from("variable")).into())
+      Some(ExpressionData::Conditional(box Conditional::no_src(
+        ConditionalBranch::no_src(
+          "condition".into(),
+          Block::no_src(
+            vec![],
+            Some("variable".into())
+          )
+        ),
+        vec![],
+        Some(Block::no_src(
+          vec![],
+          Some(200.into())
+        ))
+      )).into())
     )));
 
     if source.messages.borrow().len() != 0 {
