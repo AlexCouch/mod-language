@@ -190,7 +190,7 @@ pub enum Operator {
 
   Comma,
   Colon,
-  SemiColon,
+  Semi,
 
   LeftParen,
   RightParen,
@@ -229,7 +229,7 @@ impl Operator {
   
       Comma => ",", 
       Colon => ":", 
-      SemiColon => ";", 
+      Semi => ";", 
   
       LeftParen => "(", 
       RightParen => ")", 
@@ -283,7 +283,7 @@ pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
 
     (",",  Comma),
     (":",  Colon),
-    (";",  SemiColon),
+    (";",  Semi),
 
     ("(",  LeftParen),
     (")",  RightParen),
