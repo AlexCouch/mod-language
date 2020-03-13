@@ -159,6 +159,7 @@ impl From<f64> for Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Keyword {
+  Global,
   Else,
   Let,
   Function,
@@ -171,6 +172,7 @@ impl Keyword {
     use Keyword::*;
 
     match self {
+      Global   => "global",
       Else     => "else",
       Let      => "let",
       Function => "fn",
@@ -265,15 +267,16 @@ impl Operator {
 /// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
 pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
   &[
-    ("else", Either::A(Keyword::Else)),
-    ("let",  Either::A(Keyword::Let)),
-    ("not",  Either::B(Operator::Not)),
-    ("and",  Either::B(Operator::And)),
-    ("xor",  Either::B(Operator::Xor)),
-    ("fn",   Either::A(Keyword::Function)),
-    ("if",   Either::A(Keyword::If)),
-    ("or",   Either::B(Operator::Or)),
-    ("as",   Either::B(Operator::As)),
+    ("global", Either::A(Keyword::Global)),
+    ("else",   Either::A(Keyword::Else)),
+    ("let",    Either::A(Keyword::Let)),
+    ("not",    Either::B(Operator::Not)),
+    ("and",    Either::B(Operator::And)),
+    ("xor",    Either::B(Operator::Xor)),
+    ("fn",     Either::A(Keyword::Function)),
+    ("if",     Either::A(Keyword::If)),
+    ("or",     Either::B(Operator::Or)),
+    ("as",     Either::B(Operator::As)),
   ]
 };
 
