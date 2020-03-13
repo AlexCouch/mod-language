@@ -189,7 +189,8 @@ impl StatementData {
     matches!(self, StatementData::Expression(_))
   }
 
-  /// Determine if a particular variant of StatementData requires a semicolon to separate it from other statements
+  /// Determine if a particular variant of StatementData
+  /// requires a semicolon to separate it from other Statements
   pub fn requires_semi (&self) -> bool {
     match self {
       StatementData::Expression { .. } |
@@ -384,8 +385,20 @@ impl Conditional {
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
-  Global { name: Identifier, explicit_type: Option<TypeExpression>, initializer: Option<Expression> },
-  Function { name: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: TypeExpression, body: Option<Block> },
+  Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
+  Function { identifier: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: TypeExpression, body: Option<Block> },
+}
+
+impl ItemData {
+  /// Determine if a particular variant of ItemData
+  /// requires a semicolon to separate it from other Items
+  pub fn requires_semi (&self) -> bool {
+    match self {
+      ItemData::Global { .. }
+        => true,
+      _ => false
+    }
+  }
 }
 
 /// A semantic element forming a single top-level entity such as a function or global variable
