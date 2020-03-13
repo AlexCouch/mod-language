@@ -86,6 +86,8 @@ fn lex_identifier (lexer: &mut Lexer) -> LexletResult {
       }
 
       'id_loop: for (substr, either) in IDENTIFIER_VALUES {
+        if ident.len() != substr.len() { continue }
+        
         for (i, op_char) in substr.chars().enumerate() {  
           if ident.get(i) != Some(op_char) {
             continue 'id_loop;
