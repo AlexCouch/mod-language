@@ -156,6 +156,23 @@ fn main () -> std::io::Result<()> {
           value: 99.into(),
           operator: Operator::AssignAdd
         }.into(),
+        StatementData::Conditional(box Conditional::no_src(
+          ConditionalBranch::no_src(
+            "test".into(),
+            Block::no_src(
+              vec![
+                StatementData::ModAssignment {
+                  target: "variable".into(),
+                  value: 10.into(),
+                  operator: Operator::AssignAdd
+                }.into()
+              ],
+              None
+            )
+          ),
+          vec![],
+          None
+        )).into(),
       ],
       Some(ExpressionData::Conditional(box Conditional::no_src(
         ConditionalBranch::no_src(
