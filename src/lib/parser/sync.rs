@@ -46,6 +46,12 @@ pub fn operator (op: Operator) -> impl SyncPredicate {
   token_data(TokenData::Operator(op))
 }
 
+/// Construct a SyncPredicate that looks for any Keyword
+#[must_use = "sync_predicate::* functions return a synchronization predicate that must be passed to the Parser in a synchronization call, and do not perform the synchronization themselves"]
+pub fn any_operator () -> impl SyncPredicate {
+  move |token: &Token| matches!(token, Token { data: TokenData::Operator(_), .. })
+}
+
 /// Construct a SyncPredicate that looks for any Operator from a set
 #[must_use = "sync_predicate::* functions return a synchronization predicate that must be passed to the Parser in a synchronization call, and do not perform the synchronization themselves"]
 pub fn any_operator_of (operators: &'static [Operator]) -> impl SyncPredicate {
@@ -59,10 +65,35 @@ pub fn keyword (kw: Keyword) -> impl SyncPredicate {
   token_data(TokenData::Keyword(kw))
 }
 
+/// Construct a SyncPredicate that looks for any Keyword
+#[must_use = "sync_predicate::* functions return a synchronization predicate that must be passed to the Parser in a synchronization call, and do not perform the synchronization themselves"]
+pub fn any_keyword () -> impl SyncPredicate {
+  move |token: &Token| matches!(token, Token { data: TokenData::Keyword(_), .. })
+}
+
 /// Construct a SyncPredicate that looks for any Keyword from a set
 #[must_use = "sync_predicate::* functions return a synchronization predicate that must be passed to the Parser in a synchronization call, and do not perform the synchronization themselves"]
 pub fn any_keyword_of (keywords: &'static [Keyword]) -> impl SyncPredicate {
   move |token: &Token| token.is_any_keyword_of(keywords).is_some()
+}
+
+
+/// Construct a SyncPredicate that implements the logical or of two subordinate SyncPredicates
+#[must_use = "sync_predicate::* functions return a synchronization predicate that must be passed to the Parser in a synchronization call, and do not perform the synchronization themselves"]
+pub fn or<Pl, Pr> (mut left: Pl, mut right: Pr) -> impl SyncPredicate 
+where Pl: SyncPredicate,
+      Pr: SyncPredicate,
+{
+  move |token: &Token| unsafe { left.sync(token) || right.sync(token) }
+}
+
+/// Construct a SyncPredicate that implements the logical and of two subordinate SyncPredicates
+#[must_use = "sync_predicate::* functions return a synchronization predicate that must be passed to the Parser in a synchronization call, and do not perform the synchronization themselves"]
+pub fn and<Pl, Pr> (mut left: Pl, mut right: Pr) -> impl SyncPredicate 
+where Pl: SyncPredicate,
+      Pr: SyncPredicate,
+{
+  move |token: &Token| unsafe { left.sync(token) && right.sync(token) }
 }
 
 
