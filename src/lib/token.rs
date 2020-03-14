@@ -202,6 +202,11 @@ pub enum Operator {
   AssignRem,
 
   Equal,
+  NotEqual,
+  GreaterOrEqual,
+  LesserOrEqual,
+  Greater,
+  Lesser,
 
   Assign,
 
@@ -243,6 +248,11 @@ impl Operator {
       AssignRem => "%=",
   
       Equal => "==",
+      NotEqual => "!=",
+      GreaterOrEqual => ">=",
+      LesserOrEqual => "<=",
+      Greater => ">",
+      Lesser => "<",
   
       Assign => "=", 
   
@@ -302,6 +312,11 @@ pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
     ("%=", AssignRem),
 
     ("==", Equal),
+    ("!=", NotEqual),
+    (">=", GreaterOrEqual),
+    ("<=", LesserOrEqual),
+    (">", Greater),
+    ("<", Lesser),
 
     ("=",  Assign),
 

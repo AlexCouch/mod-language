@@ -266,6 +266,17 @@ struct InfixParselet {
 impl InfixParselet {
   const BINARY_PRECEDENCES: &'static [(Operator, usize)] = {
     &[
+      (And, 20),
+      (Or, 20),
+      (Xor, 20),
+      
+      (Equal, 30),
+      (NotEqual, 30),
+      (Lesser, 30),
+      (Greater, 30),
+      (LesserOrEqual, 30),
+      (GreaterOrEqual, 30),
+
       (Add, 50),
       (Sub, 50),
       
@@ -293,6 +304,7 @@ impl InfixParselet {
 
     ifx! [
       [10] |token| token.is_operator(LeftParen) => ifx_call,
+      [30] |token| token.is_any_operator_of(&[ Equal, NotEqual, Lesser, Greater, LesserOrEqual, GreaterOrEqual ]).is_some() => ifx_binary_operator,
       [50] |token| token.is_any_operator_of(&[ Add, Sub ]).is_some() => ifx_binary_operator,
       [60] |token| token.is_any_operator_of(&[ Mul, Div, Rem ]).is_some() => ifx_binary_operator,
     ]
