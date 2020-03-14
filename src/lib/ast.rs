@@ -438,6 +438,17 @@ impl Item {
   }
 }
 
+// TODO relocate this
+/// Keywords that define the start of an Item
+pub const ITEM_KEYWORDS: &[Keyword] = {
+  use Keyword::*;
+
+  &[
+    Global,
+    Function,
+  ]
+};
+
 
 
 /// A set of top level items and a reference to the TokenStream they originated from
