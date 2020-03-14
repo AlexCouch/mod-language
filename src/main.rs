@@ -3,8 +3,9 @@
 extern crate mod_language;
 
 use mod_language::{
-  source::{ Source, SourceRegion, SourceLocation, },
+  source::Source,
   lexer::Lexer,
+  parser::Parser,
   ansi,
 };
 
@@ -13,213 +14,25 @@ use mod_language::{
 fn main () -> std::io::Result<()> {
   if !ansi::enable() { println!("Failed to enable ansi coloring for terminal") }
   else { println!("\n{}Ansi coloring enabled for terminal{}\n", ansi::Foreground::Green, ansi::Foreground::Reset) }
+ 
   
-  { // test lexer
-    let source = Source::load("./test_scripts/min.ms".to_owned())?;
+  let source = Source::load("./test_scripts/item.ms".to_owned())?;
 
-    let mut lexer = Lexer::new(&source);
+  let mut lexer = Lexer::new(&source);
 
-    let stream = lexer.lex_stream();
+  let stream = lexer.lex_stream();
 
-    println!("Lexing complete:\n{}", stream);
+  println!("Lexing complete:\n{}", &stream);
 
-    source.notice(None, format!("Test {}", 123));
-    source.warning(None, format!("Test {}", 456));
+  let mut parser = Parser::new(&stream);
 
-    let region = SourceRegion {
-      start: SourceLocation {
-        index: source.line_and_column_to_index(17, 11).unwrap(),
-        line: 17,
-        column: 11,
-      },
-      end: SourceLocation {
-        index: source.line_and_column_to_index(19, 11).unwrap(),
-        line: 19,
-        column: 11,
-      },
-    };
+  let ast = parser.parse_ast();
 
-    source.warning(Some(region), "Theres a problem or whatever".to_string());
+  println!("Got ast: {}", ast);
 
-    source.print_notices();
-    source.print_warnings();
-    source.print_errors();
-  }
-
-  println!("\n-------------------------\n");
-
-
-  { // test type_expression
-    use mod_language::{ ast::{ TypeExpression, TypeExpressionData, }, parser::{ Parser, type_expression, }, };
-
-
-    let source = Source::load("./test_scripts/type_expression.ms".to_owned())?;
-
-    let mut lexer = Lexer::new(&source);
-
-    let stream = lexer.lex_stream();
-
-    let mut parser = Parser::new(&stream);
-
-    let ident = type_expression(&mut parser);
-
-    if let Some(TypeExpression { data: TypeExpressionData::Identifier(ident), .. }) = ident {
-      println!("Got type identifier {}", ident);
-    } else {
-      panic!("Expected type identifier, got {:#?}", ident);
-    }
-
-    let none = type_expression(&mut parser);
-
-    if none.is_none() && source.messages.borrow().len() == 1 {
-      println!("Got expected error instead of type expression");
-      source.print_errors();
-    } else {
-      source.print_messages();
-      panic!("Expected error, got {:#?}", none);
-    }
-  }
-
-  println!("\n-------------------------\n");
-
-
-  { // test expression
-    use mod_language::{ ast::{ ExpressionData, }, parser::{ Parser, expression, }, common::{ Operator, }, };
-
-
-    let source = Source::load("./test_scripts/expression.ms".to_owned())?;
-
-    let mut lexer = Lexer::new(&source);
-
-    let stream = lexer.lex_stream();
-
-    println!("Lexing complete:\n{}", &stream);
-
-    let mut parser = Parser::new(&stream);
-
-    let expr = expression(&mut parser);
-
-    println!("Got expression: {:#?}", expr);
-
-    if source.messages.borrow().len() != 0 {
-      source.print_messages();
-    }
-
-    assert_eq!(expr, Some(ExpressionData::Call {
-      callee: box "func".into(),
-      arguments: vec! [
-        ExpressionData::Binary {
-          left: box 1.into(),
-          right: box ExpressionData::Binary {
-            left: box 2.into(),
-            right: box 3.into(),
-            operator: Operator::Add
-          }.into(),
-          operator: Operator::Mul
-        }.into()
-      ]
-    }.into()));
-  }
-
-
-  println!("\n-------------------------\n");
-
-
-  { // test statements
-    use mod_language::{ parser::{ Parser, block, }, ast::{ StatementData, ExpressionData, Block, Conditional, ConditionalBranch, }, common::{ Operator, } };
-
-
-    let source = Source::load("./test_scripts/block.ms".to_owned())?;
-
-    let mut lexer = Lexer::new(&source);
-
-    let stream = lexer.lex_stream();
-
-    println!("Lexing complete:\n{}", &stream);
-
-    let mut parser = Parser::new(&stream);
-
-    let block = block(&mut parser);
-
-    println!("Got block: {:#?}", block);
-
-    if source.messages.borrow().len() != 0 {
-      source.print_messages();
-    }
-
-    assert_eq!(block, Some(Block::no_src(
-      vec! [
-        StatementData::Declaration {
-          identifier: "variable".into(),
-          explicit_type: Some("u32".into()),
-          initializer: Some(64.into())
-        }.into(),
-        StatementData::ModAssignment {
-          target: "variable".into(),
-          value: 99.into(),
-          operator: Operator::AssignAdd
-        }.into(),
-        StatementData::Conditional(box Conditional::no_src(
-          ConditionalBranch::no_src(
-            "test".into(),
-            Block::no_src(
-              vec![
-                StatementData::ModAssignment {
-                  target: "variable".into(),
-                  value: 10.into(),
-                  operator: Operator::AssignAdd
-                }.into()
-              ],
-              None
-            )
-          ),
-          vec![],
-          None
-        )).into(),
-      ],
-      Some(ExpressionData::Conditional(box Conditional::no_src(
-        ConditionalBranch::no_src(
-          "condition".into(),
-          Block::no_src(
-            vec![],
-            Some("variable".into())
-          )
-        ),
-        vec![],
-        Some(Block::no_src(
-          vec![],
-          Some(200.into())
-        ))
-      )).into())
-    )));
-  }
-
-
-  println!("\n-------------------------\n");
-
-
-  { // test items
-    use mod_language::{ parser::{ Parser, }, };
-
-
-    let source = Source::load("./test_scripts/item.ms".to_owned())?;
-
-    let mut lexer = Lexer::new(&source);
-
-    let stream = lexer.lex_stream();
-
-    println!("Lexing complete:\n{}", &stream);
-
-    let mut parser = Parser::new(&stream);
-
-    let ast = parser.parse_ast();
-
-    println!("Got ast: {}", ast);
-
-    if source.messages.borrow().len() != 0 {
-      source.print_messages();
-      panic!("Error parsing items");
-    }
+  if source.messages.borrow().len() != 0 {
+    source.print_messages();
+    panic!("Error parsing items");
   }
 
 
