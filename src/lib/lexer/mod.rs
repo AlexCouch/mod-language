@@ -2,7 +2,7 @@
 
 use crate::{
   source::{ Source, SourceLocation, SourceRegion, MessageKind, },
-  token::{ Token, TokenStream, },
+  token::{ Token, TokenData, TokenStream, },
   util::{ DerefWrapper, },
 };
 
@@ -316,8 +316,15 @@ impl<'a> Lexer<'a> {
   
     loop {
       match self.lex_token() {
-        Ok(tok_or_eof) => if let Some(token) = tok_or_eof { tokens.push(token) } else { break TokenStream::new(tokens, self.source) },
-        Err(InvalidLexicalSymbol { symbol, origin }) => self.error_at(origin, format!("Unexpected lexical symbol {:?}", symbol))
+        Ok(tok_or_eof) => if let Some(token) = tok_or_eof {
+          tokens.push(token)
+        } else {
+          break TokenStream::new(tokens, self.source)
+        },
+        Err(InvalidLexicalSymbol { symbol, origin }) => {
+          tokens.push(Token::new(TokenData::Invalid, origin));
+          self.error_at(origin, format!("Unexpected lexical symbol {:?}", symbol))
+        }
       }
     }
   }

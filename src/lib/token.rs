@@ -328,6 +328,7 @@ pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum TokenKind {
+  Invalid,
   Identifier,
   Number,
   String,
@@ -340,6 +341,8 @@ pub enum TokenKind {
 #[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum TokenData {
+  Invalid,
+
   Identifier(Identifier),
   Number(Number),
   String(String),
@@ -351,6 +354,7 @@ impl TokenData {
   /// Get the TokenKind of a TokenData
   pub fn kind (&self) -> TokenKind {
     match self {
+      TokenData::Invalid => TokenKind::Invalid,
       TokenData::Identifier(_) => TokenKind::Identifier,
       TokenData::Number(_) => TokenKind::Number,
       TokenData::String(_) => TokenKind::String,
