@@ -101,6 +101,10 @@ fn main () -> std::io::Result<()> {
 
     println!("Got expression: {:#?}", expr);
 
+    if source.messages.borrow().len() != 0 {
+      source.print_messages();
+    }
+
     assert_eq!(expr, Some(ExpressionData::Call {
       callee: box "func".into(),
       arguments: vec! [
@@ -115,11 +119,6 @@ fn main () -> std::io::Result<()> {
         }.into()
       ]
     }.into()));
-
-    if source.messages.borrow().len() != 0 {
-      source.print_messages();
-      panic!("Parsing expression failed");
-    }
   }
 
 
@@ -143,6 +142,10 @@ fn main () -> std::io::Result<()> {
     let block = block(&mut parser);
 
     println!("Got block: {:#?}", block);
+
+    if source.messages.borrow().len() != 0 {
+      source.print_messages();
+    }
 
     assert_eq!(block, Some(Block::no_src(
       vec! [
@@ -189,10 +192,33 @@ fn main () -> std::io::Result<()> {
         ))
       )).into())
     )));
+  }
+
+
+  println!("\n-------------------------\n");
+
+
+  { // test items
+    use mod_language::{ parser::{ Parser, }, };
+
+
+    let source = Source::load("./test_scripts/item.ms".to_owned())?;
+
+    let mut lexer = Lexer::new(&source);
+
+    let stream = lexer.lex_stream();
+
+    println!("Lexing complete:\n{}", &stream);
+
+    let mut parser = Parser::new(&stream);
+
+    let ast = parser.parse_ast();
+
+    println!("Got ast: {}", ast);
 
     if source.messages.borrow().len() != 0 {
       source.print_messages();
-      panic!("Parsing block failed");
+      panic!("Error parsing items");
     }
   }
 

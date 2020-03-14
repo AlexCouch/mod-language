@@ -1,8 +1,9 @@
 //! Contains Parser and supporting structures and functions
 
 use crate::{
-  token::{ Token, TokenStream, },
-  source::{ SourceLocation, SourceRegion, MessageKind, }
+  token::{ Token, TokenData, TokenStream, Operator::*, },
+  source::{ SourceLocation, SourceRegion, MessageKind, },
+  ast::{ AST, Item, ITEM_KEYWORDS, },
 };
 
 
@@ -387,5 +388,72 @@ impl<'a> Parser<'a> {
   /// with a custom line and column origin
   pub fn notice_at (&self, origin: SourceRegion, content: String) {
     self.message_at(origin, MessageKind::Notice, content)
+  }
+
+
+
+  /// Parse a single Item from a Parser's TokenStream
+  pub fn parse_item (&mut self) -> Option<Item> {
+    item(self)
+  }
+
+
+  /// Parse all available Items from a Parser's TokenStream and yield an AST
+  pub fn parse_ast (&mut self) -> AST {
+    let mut items = Vec::new();
+
+    let mut itm_ok = true;
+
+    loop {
+      match self.curr_tok() {
+        // The end of the block
+        None => {
+          return AST::new(items, self.stream)
+        },
+
+        // Items
+        _ => {
+          if itm_ok {
+            if let Some(item) = item(self) {
+              if item.requires_semi() {
+                if let Some(&Token { data: TokenData::Operator(Semi), .. }) = self.curr_tok() {
+                  self.advance();
+                  itm_ok = true;
+                } else {
+                  itm_ok = false;
+                }
+              }
+              
+              items.push(item);
+
+              continue
+            } else {
+              self.error("Expected an item or end of input".to_owned());
+            }
+          } else {
+            self.error("Expected a ; to separate items or end of input".to_owned());
+          }
+
+          // If we reach here there was some kind of error, either we didnt have a semi after the last item, or our item call had an error,
+          // so we need to try and synchronize to the end of the stream or the next semi or keyword
+          
+          if self.synchronize(sync::external(sync::any_operator_of(&[LeftParen, LeftBracket]), sync::any_operator_of(&[RightParen, RightBracket]), sync::or(sync::operator(Semi), sync::any_keyword_of(ITEM_KEYWORDS)))) {
+            match self.curr_tok().unwrap() {
+              &Token { data: TokenData::Operator(Semi), .. } => {
+                self.advance();
+                itm_ok = true;
+              },
+              &Token { data: TokenData::Keyword(_), .. } => {
+                itm_ok = true;
+              },
+              _ => unreachable!("Internal error, unexpected parser state post synchronization")
+            }
+          } else {
+            // Cannot recover state
+            return AST::new(items, self.stream)
+          }
+        }
+      }
+    }
   }
 }
