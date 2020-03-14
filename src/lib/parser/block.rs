@@ -39,25 +39,25 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
           if stmt_ok {
             if let Some(stmt) = statement(parser) {
               if stmt.requires_semi() {
-              if let Some(&Token { data: TokenData::Operator(Semi), .. }) = parser.curr_tok() {
-                parser.advance();
-                statements.push(stmt);
-              } else {
-                if let StatementData::Expression(expr) = stmt.data {
-                  trailing_expression = Some(expr);
-                  stmt_ok = false;
+                if let Some(&Token { data: TokenData::Operator(Semi), .. }) = parser.curr_tok() {
+                  parser.advance();
+                  statements.push(stmt);
                 } else {
+                  if let StatementData::Expression(expr) = stmt.data {
+                    trailing_expression = Some(expr);
+                    stmt_ok = false;
+                  } else {
                     statements.push(stmt);
                     stmt_ok = false;
                   }
                 }
               } else {
-                  statements.push(stmt);
-                }
+                statements.push(stmt);
+              }
 
               continue
             } // else { Error message already provided by statement }
-            } else {
+          } else {
             parser.error("Expected a ; to separate statements or } to end block".to_owned());
           }
 
@@ -100,14 +100,19 @@ pub fn conditional_branch (parser: &mut Parser) -> Option<ConditionalBranch> {
     // If we try to synchronize on the next { we could really go off in the weeds
     let condition = expression(parser)?;
 
-    let body = block(parser)?;
+    if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+      let body = block(parser)?;
 
-    let origin = SourceRegion {
-      start,
-      end: body.origin.end
-    };
+      let origin = SourceRegion {
+        start,
+        end: body.origin.end
+      };
 
-    return Some(ConditionalBranch::new(condition, body, origin))
+      return Some(ConditionalBranch::new(condition, body, origin))
+    } else {
+      parser.error("Expected body block for condtional branch".to_owned());
+      return None
+    }
   }
 
   unreachable!("Internal error, conditional branch parselet called on non-if token");
