@@ -386,7 +386,7 @@ impl Conditional {
 #[allow(missing_docs)]
 pub enum ItemData {
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
-  Function { identifier: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: TypeExpression, body: Option<Block> },
+  Function { identifier: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: Option<TypeExpression>, body: Option<Block> },
 }
 
 impl ItemData {
