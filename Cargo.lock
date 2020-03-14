@@ -2,5 +2,15 @@
 # It is not intended for manual editing.
 [[package]]
 name = "mod_language"
-version = "0.1.0"
+version = "0.1.1"
+dependencies = [
+ "mod_utilities 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
+[[package]]
+name = "mod_utilities"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum mod_utilities 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d54821a39abbb2f1640648d699c7f4084085174e52d7bb4e6d8cfef5cda49310"

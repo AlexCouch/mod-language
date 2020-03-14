@@ -8,7 +8,10 @@
 
 extern crate self as mod_language;
 
-pub mod util;
+pub extern crate mod_utilities;
+pub use mod_utilities as util;
+pub use util::collections as collections;
+
 pub mod ansi;
 pub mod source;
 pub mod common;

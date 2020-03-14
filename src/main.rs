@@ -10,12 +10,11 @@ use mod_language::{
 };
 
 
-
 fn main () -> std::io::Result<()> {
   if !ansi::enable() { println!("Failed to enable ansi coloring for terminal") }
   else { println!("\n{}Ansi coloring enabled for terminal{}\n", ansi::Foreground::Green, ansi::Foreground::Reset) }
  
-  
+
   let source = Source::load("./test_scripts/item.ms".to_owned())?;
 
   let mut lexer = Lexer::new(&source);
@@ -28,7 +27,7 @@ fn main () -> std::io::Result<()> {
 
   let ast = parser.parse_ast();
 
-  println!("Got ast: {}", ast);
+  println!("Got ast: {}", &ast);
 
   if source.messages.borrow().len() != 0 {
     source.print_messages();

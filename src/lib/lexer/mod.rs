@@ -3,7 +3,7 @@
 use crate::{
   source::{ Source, SourceLocation, SourceRegion, MessageKind, },
   token::{ Token, TokenData, TokenStream, },
-  util::{ DerefWrapper, },
+  util::{ Unref, },
 };
 
 mod lexlets;
@@ -37,8 +37,8 @@ impl<'a> Lexer<'a> {
   pub fn new (source: &'a Source) -> Self {
     let chars = source.chars();
     let length = chars.len();
-    let curr = chars.get(0).deref_wrapper();
-    let next = chars.get(1).deref_wrapper();
+    let curr = chars.get(0).unref();
+    let next = chars.get(1).unref();
 
     Self {
       source,
@@ -86,7 +86,7 @@ impl<'a> Lexer<'a> {
 
     self.locale.prev = self.locale.curr;
     self.locale.curr = self.locale.next;
-    self.locale.next = self.chars.get(self.locale.location.index + 1).deref_wrapper();
+    self.locale.next = self.chars.get(self.locale.location.index + 1).unref();
 
     self.locale.curr
   }
@@ -145,7 +145,7 @@ impl<'a> Lexer<'a> {
   /// and the top marker on the stack if one exists
   pub fn curr_region (&self) -> SourceRegion {
     SourceRegion {
-      start: self.markers.last().deref_wrapper().unwrap_or(self.locale.location),
+      start: self.markers.last().unref().unwrap_or(self.locale.location),
       end: self.locale.location
     }
   }
