@@ -142,3 +142,29 @@ where Pl: SyncPredicate,
     open_pair_count == 0 || (open_pair_count == 1 && unsafe { interior.sync(token) })
   }
 }
+
+
+/// Construct a SyncPredicate that combines two other SyncPredicates,
+/// in order to produce an interior region where a third SyncPredicate will not be used
+/// 
+/// This is the opposite of `close_pair_or` in that it's internal pair counter starts at 0,
+/// and the third exterior SyncPredicate is only called while it is at 0
+/// 
+/// This is useful for e.g. synchronizing on symbols while not inside a pair, where
+/// you do not want symbols inside subsequent pairs to be accepted
+/// `we are here: (and dont want to synchronize here: ,) but do want to synchronize here: ,`
+#[must_use = "sync_predicate::* functions return a synchronization predicate that must be passed to the Parser in a synchronization call, and do not perform the synchronization themselves"]
+pub fn external<Pl, Pr, Pe> (mut left: Pl, mut right: Pr, mut interior: Pe) -> impl SyncPredicate
+where Pl: SyncPredicate,
+      Pr: SyncPredicate,
+      Pe: SyncPredicate,
+{
+  let mut open_pair_count = 0;
+
+  move |token: &Token| {
+    if unsafe { left.sync(token) } { open_pair_count += 1 }
+    else if unsafe { right.sync(token) } { open_pair_count -= 1 }
+
+    open_pair_count == 0 && unsafe { interior.sync(token) }
+  }
+}
