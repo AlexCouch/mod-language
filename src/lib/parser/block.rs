@@ -43,14 +43,12 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
                 if let Some(&Token { data: TokenData::Operator(Semi), .. }) = parser.curr_tok() {
                   parser.advance();
                   statements.push(stmt);
+                } else if let StatementData::Expression(expr) = stmt.data {
+                  trailing_expression = Some(expr);
+                  stmt_ok = false;
                 } else {
-                  if let StatementData::Expression(expr) = stmt.data {
-                    trailing_expression = Some(expr);
-                    stmt_ok = false;
-                  } else {
-                    statements.push(stmt);
-                    stmt_ok = false;
-                  }
+                  statements.push(stmt);
+                  stmt_ok = false;
                 }
               } else {
                 statements.push(stmt);
@@ -67,16 +65,16 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
           
           if parser.synchronize(sync::close_pair_or(sync::operator(LeftParen), sync::operator(RightParen), sync::or(sync::operator(Semi), sync::any_keyword_of(STATEMENT_KEYWORDS)))) {
             match parser.curr_tok().unwrap() {
-              &Token { data: TokenData::Operator(Semi), .. } => {
+              Token { data: TokenData::Operator(Semi), .. } => {
                 parser.advance();
                 trailing_expression = None;
                 stmt_ok = true;
               },
-              &Token { data: TokenData::Keyword(_), .. } => {
+              Token { data: TokenData::Keyword(_), .. } => {
                 trailing_expression = None;
                 stmt_ok = true;
               },
-              &Token { data: TokenData::Operator(RightBracket), .. } => continue, // The next iteration will handle the closing bracket
+              Token { data: TokenData::Operator(RightBracket), .. } => continue, // The next iteration will handle the closing bracket
               _ => unreachable!("Internal error, unexpected block parselet state post-synchronization")
             }
           } else {

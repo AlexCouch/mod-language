@@ -1,6 +1,7 @@
 //! WIP wasm scripting language
 
 #![warn(missing_docs)]
+#![warn(clippy::all)]
 
 #![feature(box_syntax)]
 #![feature(track_caller)]

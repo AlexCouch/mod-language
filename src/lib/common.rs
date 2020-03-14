@@ -354,7 +354,7 @@ pub const ITEM_KEYWORDS: &[Keyword] = {
 };
 
 /// A lookup table for Pratt operator precedences of binary operators
-pub const BINARY_PRECEDENCES: &'static [(Operator, usize)] = {
+pub const BINARY_PRECEDENCES: &[(Operator, usize)] = {
   use Operator::*;
   
   &[

@@ -440,11 +440,11 @@ impl<'a> Parser<'a> {
           
           if self.synchronize(sync::external(sync::any_operator_of(&[LeftParen, LeftBracket]), sync::any_operator_of(&[RightParen, RightBracket]), sync::or(sync::operator(Semi), sync::any_keyword_of(ITEM_KEYWORDS)))) {
             match self.curr_tok().unwrap() {
-              &Token { data: TokenData::Operator(Semi), .. } => {
+              Token { data: TokenData::Operator(Semi), .. } => {
                 self.advance();
                 itm_ok = true;
               },
-              &Token { data: TokenData::Keyword(_), .. } => {
+              Token { data: TokenData::Keyword(_), .. } => {
                 itm_ok = true;
               },
               _ => unreachable!("Internal error, unexpected parser state post synchronization")
