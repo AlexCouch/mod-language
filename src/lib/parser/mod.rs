@@ -1,9 +1,10 @@
 //! Contains Parser and supporting structures and functions
 
 use crate::{
-  token::{ Token, TokenData, TokenStream, Operator::*, },
   source::{ SourceLocation, SourceRegion, MessageKind, },
-  ast::{ AST, Item, ITEM_KEYWORDS, },
+  common::{ Operator::*, ITEM_KEYWORDS, },
+  token::{ Token, TokenData, TokenStream, },
+  ast::{ AST, Item, },
 };
 
 

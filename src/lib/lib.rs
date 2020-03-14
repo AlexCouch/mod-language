@@ -10,6 +10,7 @@ extern crate self as mod_language;
 pub mod util;
 pub mod ansi;
 pub mod source;
+pub mod common;
 pub mod token;
 pub mod lexer;
 pub mod ast;

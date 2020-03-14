@@ -84,7 +84,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test expression
-    use mod_language::{ ast::{ ExpressionData, }, parser::{ Parser, expression, }, token::{ Operator, }, };
+    use mod_language::{ ast::{ ExpressionData, }, parser::{ Parser, expression, }, common::{ Operator, }, };
 
 
     let source = Source::load("./test_scripts/expression.ms".to_owned())?;
@@ -126,7 +126,7 @@ fn main () -> std::io::Result<()> {
 
 
   { // test statements
-    use mod_language::{ parser::{ Parser, block, }, ast::{ StatementData, ExpressionData, Block, Conditional, ConditionalBranch, }, token::{ Operator, } };
+    use mod_language::{ parser::{ Parser, block, }, ast::{ StatementData, ExpressionData, Block, Conditional, ConditionalBranch, }, common::{ Operator, } };
 
 
     let source = Source::load("./test_scripts/block.ms".to_owned())?;

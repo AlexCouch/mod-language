@@ -7,7 +7,8 @@ use std::{
 
 use crate::{
   source::{ SourceRegion, SourceLocation, },
-  token::{ TokenStream, Number, Identifier, Operator, Keyword, },
+  common::{ Number, Identifier, Operator, },
+  token::{ TokenStream, },
 };
 
 
@@ -250,19 +251,6 @@ impl Statement {
 }
 
 
-// TODO relocate this
-/// Keywords that define the start of a Statement
-pub const STATEMENT_KEYWORDS: &[Keyword] = {
-  use Keyword::*;
-
-  &[
-    Let,
-    If,
-  ]
-};
-
-
-
 /// A series of Statements and an optional trailing Expression
 #[allow(missing_docs)]
 pub struct Block {
@@ -437,18 +425,6 @@ impl Item {
     Self { data, origin: SourceLocation::ZERO.to_region() }
   }
 }
-
-// TODO relocate this
-/// Keywords that define the start of an Item
-pub const ITEM_KEYWORDS: &[Keyword] = {
-  use Keyword::*;
-
-  &[
-    Global,
-    Function,
-  ]
-};
-
 
 
 /// A set of top level items and a reference to the TokenStream they originated from

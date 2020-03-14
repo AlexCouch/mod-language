@@ -2,8 +2,9 @@
 
 use crate::{
   source::{ SourceRegion, },
-  token::{ Token, TokenData, Operator::*, Keyword::*, },
-  ast::{ Block, StatementData, STATEMENT_KEYWORDS, ConditionalBranch, Conditional, },
+  common::{ Operator::*, Keyword::*, STATEMENT_KEYWORDS, },
+  token::{ Token, TokenData, },
+  ast::{ Block, StatementData,  ConditionalBranch, Conditional, },
 };
 
 use super::{ Parser, statement, expression, sync };

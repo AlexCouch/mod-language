@@ -1,8 +1,11 @@
-use crate::source::SourceRegion;
-use crate::token::{ Token, TokenData, Identifier, Number, IDENTIFIER_VALUES, SYM_OPERATOR_VALUES, };
-use crate::util::{ Either, };
+use crate::{
+  source::{ SourceRegion, },
+  common::{ Identifier, Number, IDENTIFIER_VALUES, SYM_OPERATOR_VALUES, },
+  token::{ Token, TokenData, },
+  util::{ Either, },
+};
 
-use super::Lexer;
+use super::{ Lexer, };
 
 
 /// An unrecognized lexical symbol

@@ -2,7 +2,8 @@
 
 use crate::{
   source::{ SourceRegion, },
-  token::{ Token, TokenData, TokenKind, Operator, Operator::*, Keyword::*, },
+  common::{ Operator::*, Keyword::*, get_binary_precedence },
+  token::{ Token, TokenData, TokenKind, },
   ast::{ Expression, ExpressionData, },
 };
 
@@ -162,7 +163,7 @@ fn ifx_binary_operator (left: Expression, parser: &mut Parser) -> Option<Express
   if let Some(&Token { data: TokenData::Operator(operator), .. }) = parser.curr_tok() {
     parser.advance();
 
-    if let Some(right) = pratt(InfixParselet::get_binary_precedence(operator), parser) {
+    if let Some(right) = pratt(get_binary_precedence(operator), parser) {
       let origin = SourceRegion {
         start: left.origin.start,
         end: right.origin.end
@@ -264,41 +265,6 @@ struct InfixParselet {
 }
 
 impl InfixParselet {
-  const BINARY_PRECEDENCES: &'static [(Operator, usize)] = {
-    &[
-      (And, 20),
-      (Or, 20),
-      (Xor, 20),
-      
-      (Equal, 30),
-      (NotEqual, 30),
-      (Lesser, 30),
-      (Greater, 30),
-      (LesserOrEqual, 30),
-      (GreaterOrEqual, 30),
-
-      (Add, 50),
-      (Sub, 50),
-      
-      (Mul, 60),
-      (Div, 60),
-      (Rem, 60),
-    ]
-  };
-
-  fn get_binary_precedence (operator: Operator) -> usize {
-    let mut iter = Self::BINARY_PRECEDENCES.iter();
-    
-    loop {
-      let (precedent_op, precedence) = iter.next().unwrap();
-      
-      if *precedent_op == operator {
-        break *precedence
-      }
-    }
-  }
-  
-
   const PARSELETS: &'static [Self] = {
     macro_rules! ifx { ($( [$precedence: expr] $predicate: expr => $function: expr ),* $(,)?) => { &[ $( InfixParselet { precedence: $precedence, predicate: $predicate, function: $function } ),* ] } }
 

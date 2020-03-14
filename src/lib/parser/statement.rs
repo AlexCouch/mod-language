@@ -2,7 +2,8 @@
 
 use crate::{
   source::{ SourceRegion, },
-  token::{ Token, TokenData, Operator, Operator::*, Keyword::*, },
+  common::{ Operator, Operator::*, Keyword::*, },
+  token::{ Token, TokenData, },
   ast::{ Statement, StatementData, Expression, ExpressionData, },
 };
 
