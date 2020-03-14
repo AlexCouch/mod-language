@@ -38,28 +38,26 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
         _ => {
           if stmt_ok {
             if let Some(stmt) = statement(parser) {
+              if stmt.requires_semi() {
               if let Some(&Token { data: TokenData::Operator(Semi), .. }) = parser.curr_tok() {
                 parser.advance();
-                
                 statements.push(stmt);
               } else {
                 if let StatementData::Expression(expr) = stmt.data {
                   trailing_expression = Some(expr);
                   stmt_ok = false;
                 } else {
-                  if stmt.requires_semi() {
+                    statements.push(stmt);
                     stmt_ok = false;
                   }
-                  
+                }
+              } else {
                   statements.push(stmt);
                 }
-              }
 
               continue
+            } // else { Error message already provided by statement }
             } else {
-              parser.error("Expected a statement or } to end block".to_owned());
-            }
-          } else {
             parser.error("Expected a ; to separate statements or } to end block".to_owned());
           }
 
@@ -67,17 +65,18 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
           // so we need to try and synchronize to the end of the {block} or the next semi or keyword
           
           if parser.synchronize(sync::close_pair_or(sync::operator(LeftParen), sync::operator(RightParen), sync::or(sync::operator(Semi), sync::any_keyword_of(STATEMENT_KEYWORDS)))) {
-            match parser.curr_tok() {
-              Some(&Token { data: TokenData::Operator(Semi), .. }) => {
+            match parser.curr_tok().unwrap() {
+              &Token { data: TokenData::Operator(Semi), .. } => {
                 parser.advance();
                 trailing_expression = None;
                 stmt_ok = true;
               },
-              Some(&Token { data: TokenData::Keyword(_), .. }) => {
+              &Token { data: TokenData::Keyword(_), .. } => {
                 trailing_expression = None;
                 stmt_ok = true;
               },
-              _ => { } // The next iteration will handle the closing bracket, so no need to do anything here 
+              &Token { data: TokenData::Operator(RightBracket), .. } => continue, // The next iteration will handle the closing bracket
+              _ => unreachable!("Internal error, unexpected block parselet state post-synchronization")
             }
           } else {
             // Cannot recover state locally
