@@ -178,7 +178,7 @@ impl Message {
       let line_num = origin.start.line + 1;
       let line_num_digits = count_digits(line_num as _, 10);
       
-      print!("{}|\n|{} {} {}|{}  ", self.kind.get_ansi(), ansi::Foreground::Cyan, line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack);
+      print!("{}│\n│{} {} {}│{}  ", self.kind.get_ansi(), ansi::Foreground::Cyan, line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack);
 
       for (i, ch) in slice.iter().enumerate() {
         if i == origin.start.column as _ { print!("{}", ansi::Foreground::Reset); }
@@ -186,10 +186,10 @@ impl Message {
         print!("{}", ch);
       }
 
-      print!("\n{}{}|--", padding((line_num_digits + 3) as _), self.kind.get_ansi());
+      print!("\n{}{}└──", padding((line_num_digits + 3) as _), self.kind.get_ansi());
 
       for i in 0..slice.len() as _ {
-        if i < origin.start.column { print!("-") }
+        if i < origin.start.column { print!("─") }
         else if i < origin.end.column { print!("^") }
         else { break }
       }
@@ -200,15 +200,15 @@ impl Message {
       let last_line_num_digits = count_digits(last_line_num as _, 10);
       let gap_pad = padding((last_line_num_digits + 2) as _);
 
-      print!("{}|\n|{}|", self.kind.get_ansi(), gap_pad,);
+      print!("{}│\n│{}┌", self.kind.get_ansi(), gap_pad,);
       
       for _ in 0..origin.start.column + 2 {
-        print!("-");
+        print!("─");
       }
       
       let first_line_num = origin.start.line + 1;
       let first_line_num_digits = count_digits(first_line_num as _, 10);
-      print!("v\n| {}{}{}{} |{}  ", padding((last_line_num_digits - first_line_num_digits) as _), ansi::Foreground::Cyan, first_line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack);
+      print!("v\n│ {}{}{}{} │{}  ", padding((last_line_num_digits - first_line_num_digits) as _), ansi::Foreground::Cyan, first_line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack);
 
       let mut line_num = first_line_num;
       let mut column = 0;
@@ -223,15 +223,15 @@ impl Message {
           column = 0;
           line_num += 1;
           let line_num_digits = count_digits(line_num as _, 10);
-          print!("\n{}| {}{}{}{} |  ", self.kind.get_ansi(), padding((last_line_num_digits - line_num_digits) as _), ansi::Foreground::Cyan, line_num, self.kind.get_ansi());
+          print!("\n{}│ {}{}{}{} │  ", self.kind.get_ansi(), padding((last_line_num_digits - line_num_digits) as _), ansi::Foreground::Cyan, line_num, self.kind.get_ansi());
           if line_num > first_line_num { print!("{}", ansi::Foreground::Reset); }
         }
       }
 
-      print!("\n {}{}|", gap_pad, self.kind.get_ansi());
+      print!("\n {}{}└", gap_pad, self.kind.get_ansi());
 
       for _ in 0..origin.end.column + 1 {
-        print!("-")
+        print!("─")
       }
       
       println!("^{}", ansi::Foreground::Reset);
@@ -244,7 +244,7 @@ impl Message {
   pub fn print (&self, source: &Source) {
     println!("\n{}: {}", self.kind, self.content);
 
-    print!("{}|{} {}at: {}{}", self.kind.get_ansi(), ansi::Foreground::Reset, self.kind.get_whitespace(4), ansi::Foreground::Cyan, source.path);
+    print!("{}│{} {}at: {}{}", self.kind.get_ansi(), ansi::Foreground::Reset, self.kind.get_whitespace(4), ansi::Foreground::Cyan, source.path);
 
     if let Some(origin) = self.origin {
       print!(":{:?}{}", origin.start, ansi::Foreground::Reset);
