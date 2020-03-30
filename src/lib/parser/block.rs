@@ -63,7 +63,7 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
           // If we reach here there was some kind of error, either we didnt have a semi after the last statement, or our statement call had an error,
           // so we need to try and synchronize to the end of the {block} or the next semi or keyword
           
-          if parser.synchronize(sync::close_pair_or(sync::operator(LeftParen), sync::operator(RightParen), sync::or(sync::operator(Semi), sync::any_keyword_of(STATEMENT_KEYWORDS)))) {
+          if parser.synchronize(sync::close_pair_or(sync::operator(LeftBracket), sync::operator(RightBracket), sync::or(sync::operator(Semi), sync::any_keyword_of(STATEMENT_KEYWORDS)))) {
             match parser.curr_tok().unwrap() {
               Token { data: TokenData::Operator(Semi), .. } => {
                 parser.advance();
