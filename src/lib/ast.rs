@@ -33,7 +33,7 @@ impl From<&str> for TypeExpressionData {
   }
 }
 
-/// A semantic element referencing or describing a type
+/// A syntactic element referencing or describing a type
 #[allow(missing_docs)]
 pub struct TypeExpression {
   pub data: TypeExpressionData,
@@ -130,7 +130,7 @@ impl From<f64> for ExpressionData {
   }
 }
 
-/// A semantic element forming a sequence of actions or a reference
+/// A syntactic element forming a sequence of actions or a reference
 #[allow(missing_docs)]
 pub struct Expression {
   pub data: ExpressionData,
@@ -205,7 +205,7 @@ impl StatementData {
   }
 }
 
-/// A semantic element forming a single action or control flow choice
+/// A syntactic element forming a single action or control flow choice
 #[allow(missing_docs)]
 pub struct Statement {
   pub data: StatementData,
@@ -389,7 +389,7 @@ impl ItemData {
   }
 }
 
-/// A semantic element forming a single top-level entity such as a function or global variable
+/// A syntactic element forming a single top-level entity such as a function or global variable
 #[allow(missing_docs)]
 pub struct Item {
   pub data: ItemData,

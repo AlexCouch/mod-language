@@ -17,7 +17,7 @@ pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
   if let Some(parselet_function) = TypeExpressionParselet::get_function(parser.curr_tok()?) {
     parselet_function(parser)
   } else {
-    parser.error("No semantic match for this token in the context of a type expression".to_owned());
+    parser.error("No syntactic match for this token in the context of a type expression".to_owned());
 
     None
   }

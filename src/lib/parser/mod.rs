@@ -42,7 +42,7 @@ pub struct ParserLocale<'a> {
   next: Option<&'a Token>,
 }
 
-/// State information for a semantic analysis session
+/// State information for a syntactic analysis session
 pub struct Parser<'a> {
   stream: &'a TokenStream<'a>,
   tokens: &'a [Token],

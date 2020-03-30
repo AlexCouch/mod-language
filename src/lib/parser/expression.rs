@@ -36,7 +36,7 @@ pub fn pratt (precedence: usize, parser: &mut Parser) -> Option<Expression> {
   if let Some(parselet_function) = PrefixParselet::get_function(parser.curr_tok()?) {
     complete_partial_expression(precedence, parselet_function(parser)?, parser)
   } else {
-    parser.error("No semantic match for this token in the context of an expression".to_owned());
+    parser.error("No syntactic match for this token in the context of an expression".to_owned());
 
     None
   }
@@ -72,7 +72,7 @@ fn pfx_number (parser: &mut Parser) -> Option<Expression> {
   unreachable!("Internal error, number expression parselet called on non-number token");
 }
 
-fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
+fn pfx_syntactic_group (parser: &mut Parser) -> Option<Expression> {
   if let Some(&Token { data: TokenData::Operator(LeftParen), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
     parser.advance();
     
@@ -82,7 +82,7 @@ fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
 
         return Some(Expression::new(expr.data, SourceRegion { start, end }))
       } else {
-        parser.error("Expected ) to close semantic group".to_owned());
+        parser.error("Expected ) to close syntactic group".to_owned());
       }
     } // else { Do not need to give an error message here as one should have already been issued inside the `expression` call, but we do need to sync }
 
@@ -93,7 +93,7 @@ fn pfx_semantic_group (parser: &mut Parser) -> Option<Expression> {
     return None
   }
 
-  unreachable!("Internal error, semantic group expression parselet called on non-parenthesis token");
+  unreachable!("Internal error, syntactic group expression parselet called on non-parenthesis token");
 }
 
 fn pfx_block (parser: &mut Parser) -> Option<Expression> {
@@ -137,7 +137,7 @@ impl PrefixParselet {
     pfx! [
       |token| token.kind() == TokenKind::Identifier => pfx_identifier,
       |token| token.kind() == TokenKind::Number => pfx_number,
-      |token| token.is_operator(LeftParen) => pfx_semantic_group,
+      |token| token.is_operator(LeftParen) => pfx_syntactic_group,
       |token| token.is_operator(LeftBracket) => pfx_block,
       |token| token.is_keyword(If) => pfx_conditional,
     ]

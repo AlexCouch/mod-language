@@ -15,7 +15,7 @@ pub fn item (parser: &mut Parser) -> Option<Item> {
   if let Some(parselet_function) = ItemParselet::get_function(parser.curr_tok()?) {
     parselet_function(parser)
   } else {
-    parser.error("No semantic match for this token in the context of a top level item".to_owned());
+    parser.error("No syntactic match for this token in the context of a top level item".to_owned());
 
     None
   }
