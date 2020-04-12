@@ -35,12 +35,16 @@ static mut ANSI_ENABLED: bool = false;
 /// Always returns true on non-windows platforms
 pub fn enable () -> bool {
   unsafe {
-    ANSI_ENABLED = if cfg!(windows) {
-      windows::enable_ansi_colors()
-    } else {
-      true
-    };
-
+    #[cfg(windows)]
+    {
+      ANSI_ENABLED = windows::enable_ansi_colors();
+    }
+    
+    #[cfg(not(windows))]
+    {
+      ANSI_ENABLED = true;
+    }
+    
     ANSI_ENABLED
   }
 }
