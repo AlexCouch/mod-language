@@ -231,18 +231,20 @@ fn lex_operator (lexer: &mut Lexer) -> LexletResult {
 }
 
 
-pub const LEXLETS: &[fn (&mut Lexer) -> LexletResult] = &[
-  lex_whitespace,
-  lex_identifier,
-  lex_decimal_number,
-  lex_operator,
-  |lexer: &mut Lexer| -> LexletResult {
-    if let Some(ch) = lexer.curr_char() {
-      lexer.push_marker();
-      lexer.advance();
-      LexletResult::Err(InvalidLexicalSymbol { symbol: ch, origin: lexer.pop_marker_region().unwrap() })
-    } else {
-      LexletResult::None
+impl<'a> Lexer<'a> {
+  pub(super) const LEXLETS: &'static [fn (&mut Lexer) -> LexletResult] = &[
+    lex_whitespace,
+    lex_identifier,
+    lex_decimal_number,
+    lex_operator,
+    |lexer: &mut Lexer| -> LexletResult {
+      if let Some(ch) = lexer.curr_char() {
+        lexer.push_marker();
+        lexer.advance();
+        LexletResult::Err(InvalidLexicalSymbol { symbol: ch, origin: lexer.pop_marker_region().unwrap() })
+      } else {
+        LexletResult::None
+      }
     }
-  }
-];
+  ];
+}

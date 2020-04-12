@@ -407,7 +407,7 @@ impl<'a> Parser<'a> {
 
     loop {
       match self.curr_tok() {
-        // The end of the block
+        // The end of the stream
         None => {
           return AST::new(items, self.stream)
         },

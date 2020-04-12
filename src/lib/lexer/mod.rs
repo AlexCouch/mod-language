@@ -7,7 +7,7 @@ use crate::{
 };
 
 mod lexlets;
-use lexlets::{ LEXLETS, LexletResult, };
+use lexlets::LexletResult;
 
 pub use lexlets::InvalidLexicalSymbol;
 
@@ -299,7 +299,7 @@ impl<'a> Lexer<'a> {
   pub fn lex_token (&mut self) -> Result<Option<Token>, InvalidLexicalSymbol> {
     if self.curr_char().is_none() { return Ok(None) }
     
-    for lexlet in LEXLETS.iter() {
+    for lexlet in Self::LEXLETS.iter() {
       match lexlet(self) {
         LexletResult::Some(token) => return Ok(Some(token)),
         LexletResult::Err(sym) => return Err(sym),

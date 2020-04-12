@@ -14,9 +14,10 @@ use crate::{
 
 /// An enum containing the particular variant of an expression referencing a type
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpressionData {
   Identifier(Identifier),
+  Function { parameter_types: Vec<TypeExpression>, return_type: Box<Option<TypeExpression>> },
 }
 
 impl From<Identifier> for TypeExpressionData {
@@ -35,6 +36,7 @@ impl From<&str> for TypeExpressionData {
 
 /// A syntactic element referencing or describing a type
 #[allow(missing_docs)]
+#[derive(Clone)]
 pub struct TypeExpression {
   pub data: TypeExpressionData,
   pub origin: SourceRegion,
