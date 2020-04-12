@@ -2,23 +2,20 @@
 
 use std::{
   collections::{ HashMap, },
+  ops::{ Deref, DerefMut, },
 };
 
 use super::{
-  types::{ TypeKey, },
-  values::{ GlobalKey, FunctionKey, },
-  // modules::{ ModuleKey, },
+  AnalysisKey,
 };
+
 
 
 /// A recursive table used to associate identifiers with specific items during semantic analysis
 #[allow(missing_docs)]
-pub struct Namespace {
-  // pub modules:   HashMap<String, ModuleKey>,
-  pub types:     HashMap<String, TypeKey>,
-  pub globals:   HashMap<String, GlobalKey>,
-  pub functions: HashMap<String, FunctionKey>,
-}
+#[derive(Debug, PartialEq)]
+pub struct Namespace (HashMap<String, AnalysisKey>);
+
 
 impl Default for Namespace {
   #[inline] fn default () -> Self { Self::new() }
@@ -27,11 +24,15 @@ impl Default for Namespace {
 impl Namespace {
   /// Create a new Namespace
   pub fn new () -> Self {
-    Self {
-      // modules: HashMap::new(),
-      types: HashMap::new(),
-      globals: HashMap::new(),
-      functions: HashMap::new(),
-    }
+    Self(HashMap::default())
   }
+}
+
+impl Deref for Namespace {
+  type Target = HashMap<String, AnalysisKey>;
+  fn deref (&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for Namespace {
+  fn deref_mut (&mut self) -> &mut Self::Target { &mut self.0 }
 }

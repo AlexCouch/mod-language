@@ -6,9 +6,7 @@ use std::{
   ops::{ Deref, },
 };
 
-use crate::{
-  util::{ make_key_type, },
-};
+use super::AnalysisKey;
 
 
 /// A representation for the type of a primitive value
@@ -24,10 +22,11 @@ pub enum PrimitiveType {
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq, Hash)]
 pub enum TypeData {
-  Alias(TypeKey),
+  Undefined,
+  Alias(AnalysisKey),
   Primitive(PrimitiveType),
-  Pointer(TypeKey),
-  Function { parameter_types: Vec<TypeKey>, return_type: Option<TypeKey> },
+  Pointer(AnalysisKey),
+  Function { parameter_types: Vec<AnalysisKey>, return_type: Option<AnalysisKey> },
 }
 
 /// The structure used by the semantic analyser to represent a type
@@ -71,9 +70,4 @@ impl PartialEq for Type {
   fn eq (&self, other: &Self) -> bool {
     self.hash == other.hash && self.data == other.data
   }
-}
-
-make_key_type! {
-  /// A SlotMap Key representing a Type
-  pub struct TypeKey;
 }

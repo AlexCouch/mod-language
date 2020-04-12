@@ -15,6 +15,7 @@ use super::{
 
 /// The structure used by the semantic analyser to represent a module
 #[allow(missing_docs)]
+#[derive(Debug, PartialEq)]
 pub struct Module {
   pub parent: Option<ModuleKey>,
   pub namespace: Namespace,
