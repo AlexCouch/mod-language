@@ -56,7 +56,7 @@ impl Pass for ItemPrePass {
         ItemData::Global { identifier, explicit_type, .. } => {
           let ty = some!(explicit_type.eval_type(analyzer));
 
-          analyzer.create_item(identifier, Global { ty }, item.origin);
+          analyzer.create_item(identifier, None, Global { ty }, item.origin);
         },
         ItemData::Function { identifier, parameters, return_type, .. } => {
           let ty_expr = TypeExpression::new(
@@ -69,7 +69,7 @@ impl Pass for ItemPrePass {
 
           let ty = some!(ty_expr.eval_type(analyzer));
 
-          analyzer.create_item(identifier, Function { ty }, item.origin);
+          analyzer.create_item(identifier, None, Function { ty }, item.origin);
         },
       }
     }

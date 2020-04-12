@@ -1,56 +1,48 @@
 //! Structures containing module hierarchy for semantic analysis
 
 use std::{
+  collections::{ HashMap, },
   ops::{ Deref, DerefMut, },
 };
 
-use crate::{
-  util::{ make_key_type },
-};
-
 use super::{
-  namespaces::{ Namespace, },
+  items::{ AnalysisKey, },
 };
 
+
+/// A wrapper for an Item in a Module, binding an AnalysisKey with an optional import source key
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct ModuleItem {
+  pub import: Option<AnalysisKey>,
+  pub key: AnalysisKey,
+}
 
 /// The structure used by the semantic analyser to represent a module
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq)]
 pub struct Module {
-  pub parent: Option<ModuleKey>,
-  pub namespace: Namespace,
-}
-
-impl Default for Module {
-  fn default () -> Self {
-    Self {
-      parent: None,
-      namespace: Namespace::default(),
-    }
-  }
+  pub parent: Option<AnalysisKey>,
+  pub name: String,
+  pub items: HashMap<String, ModuleItem>,
 }
 
 impl Module {
   /// Create a new Module
-  pub fn new (parent: Option<ModuleKey>) -> Self {
+  pub fn new (parent: Option<AnalysisKey>, name: String) -> Self {
     Self {
       parent,
-      namespace: Namespace::new(),
+      name,
+      items: HashMap::new(),
     }
   }
 }
 
 impl Deref for Module {
-  type Target = Namespace;
-  #[inline] fn deref (&self) -> &Self::Target { &self.namespace }
+  type Target = HashMap<String, ModuleItem>;
+  #[inline] fn deref (&self) -> &Self::Target { &self.items }
 }
 
 impl DerefMut for Module {
-  #[inline] fn deref_mut (&mut self) -> &mut Self::Target { &mut self.namespace }
-}
-
-
-make_key_type! {
-  /// A SlotMap Key represetning a Module
-  pub struct ModuleKey;
+  #[inline] fn deref_mut (&mut self) -> &mut Self::Target { &mut self.items }
 }
