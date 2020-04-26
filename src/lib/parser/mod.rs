@@ -427,9 +427,7 @@ impl<'a> Parser<'a> {
               items.push(item);
 
               continue
-            } else {
-              self.error("Expected an item or end of input".to_owned());
-            }
+            } // else { Error message already provided by item }
           } else {
             self.error("Expected a ; to separate items or end of input".to_owned());
           }
