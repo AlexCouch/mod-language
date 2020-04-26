@@ -34,7 +34,7 @@ trait ResolveTypeError {
   fn prebuild_type_impl (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Result<TypeKey, TypeKey> {
     match &texpr.data {
       TypeExpressionData::Identifier(identifier) => {
-        if let Some(existing_binding) = analyzer.lookup_ident(identifier) {
+        if let Some(existing_binding) = analyzer.lookup_ident(identifier, true) {
           if let NamespaceKey::Type(tk) = existing_binding {
             analyzer.add_reference(tk, texpr.origin);
             Ok(tk)
@@ -45,7 +45,7 @@ trait ResolveTypeError {
           }
         } else {
           let key = analyzer.context.types.insert(None);
-          analyzer.bind_ident(identifier, key);
+          analyzer.bind_item_ident(identifier, key, None);
           analyzer.add_reference(key, texpr.origin);
           Ok(key)
         }
@@ -93,7 +93,7 @@ fn prepass (analyzer: &mut Analyzer) {
           let module_key = breakable_block! {
             let module = Module::new(Some(analyzer.get_active_module_key()), Some(item.origin));
 
-            if let Some(existing_binding) = analyzer.lookup_user_ident(identifier) {
+            if let Some(existing_binding) = analyzer.lookup_ident(identifier, false) {
               if let Some(&existing_key) = analyzer.get_active_module().modules.get(identifier.as_ref()) {
                 let existing_module = unsafe { analyzer.context.modules.get_unchecked_mut(existing_key) };
 
@@ -108,18 +108,20 @@ fn prepass (analyzer: &mut Analyzer) {
                 } else {
                   existing_module.replace(module);
                   analyzer.add_reference(existing_key, item.origin);
+                  analyzer.bind_item_namespace_origin(existing_key, item.origin);
                   break existing_key;
                 }
-              } else if let NamespaceKey::Module(_) = existing_binding {
-                analyzer.error(item.origin, format!("Module `{}` shadows an imported module", identifier.as_ref()));
+              // TODO: need some way of deferring errors because the item may be imported later
+              } else if let Some(import_origin) = analyzer.get_item_namespace_origin(existing_binding) {
+                analyzer.error(item.origin, format!("Module definition `{}` shadows an {} item imported at [{}]", identifier.as_ref(), existing_binding.kind(), import_origin));
               } else {
-                analyzer.error(item.origin, format!("Module `{}` shadows an item of a different kind", identifier.as_ref()));
+                analyzer.error(item.origin, format!("Module definition `{}` shadows an imported {} item", identifier.as_ref(), existing_binding.kind()));
               }
             }
 
             let key = analyzer.context.modules.insert(Some(module));
             analyzer.get_active_module_mut().modules.insert(identifier.into(), key);
-            analyzer.bind_ident(identifier, key);
+            analyzer.bind_item_ident(identifier, key, Some(item.origin));
             analyzer.add_reference(key, item.origin);
             break key;
           };
@@ -133,7 +135,7 @@ fn prepass (analyzer: &mut Analyzer) {
           let ty = prebuild_type(analyzer, explicit_type);
           let global = Global { ty, origin: Some(item.origin) };
 
-          if let Some(existing_binding) = analyzer.lookup_user_ident(identifier) {
+          if let Some(existing_binding) = analyzer.lookup_ident(identifier, false) {
             if let Some(&existing_key) = analyzer.get_active_module().globals.get(identifier.as_ref()) {
               let existing_global = unsafe { analyzer.context.globals.get_unchecked_mut(existing_key) };
               
@@ -148,19 +150,20 @@ fn prepass (analyzer: &mut Analyzer) {
               } else {
                 existing_global.replace(global);
                 analyzer.add_reference(existing_key, item.origin);
+                analyzer.bind_item_namespace_origin(existing_key, item.origin);
                 continue
               }
-            // TODO: need some way of finding where the shadowed item was imported
-            } else if let NamespaceKey::Global(_) = existing_binding {
-              analyzer.error(item.origin, format!("Global variable definition `{}` shadows an imported global", identifier.as_ref()));
+            // TODO: need some way of deferring errors because the item may be imported later
+            } else if let Some(import_origin) = analyzer.get_item_namespace_origin(existing_binding) {
+              analyzer.error(item.origin, format!("Global variable definition `{}` shadows an {} item imported at [{}]", identifier.as_ref(), existing_binding.kind(), import_origin));
             } else {
-              analyzer.error(item.origin, format!("Global variable definition `{}` shadows an item of a different kind", identifier.as_ref()));
+              analyzer.error(item.origin, format!("Global variable definition `{}` shadows an imported {} item", identifier.as_ref(), existing_binding.kind()));
             }
           }
 
           let key = analyzer.context.globals.insert(Some(global));
           analyzer.get_active_module_mut().globals.insert(identifier.into(), key);
-          analyzer.bind_ident(identifier, key);
+          analyzer.bind_item_ident(identifier, key, Some(item.origin));
           analyzer.add_reference(key, item.origin);
         },
         
@@ -172,7 +175,7 @@ fn prepass (analyzer: &mut Analyzer) {
 
           let function = Function { ty, origin: Some(item.origin) };
 
-          if let Some(existing_binding) = analyzer.lookup_user_ident(identifier) {
+          if let Some(existing_binding) = analyzer.lookup_ident(identifier, false) {
             if let Some(&existing_key) = analyzer.get_active_module().functions.get(identifier.as_ref()) {
               let existing_function = unsafe { analyzer.context.functions.get_unchecked_mut(existing_key) };
 
@@ -187,19 +190,20 @@ fn prepass (analyzer: &mut Analyzer) {
               } else {
                 existing_function.replace(function);
                 analyzer.add_reference(existing_key, item.origin);
+                analyzer.bind_item_namespace_origin(existing_key, item.origin);
                 continue
               }
-            // TODO: need some way of finding where the shadowed item was imported
-            } else if let NamespaceKey::Function(_) = existing_binding {
-              analyzer.error(item.origin, format!("Function definition `{}` shadows an imported function", identifier.as_ref()));
+            // TODO: need some way of deferring errors because the item may be imported later
+            } else if let Some(import_origin) = analyzer.get_item_namespace_origin(existing_binding) {
+              analyzer.error(item.origin, format!("Function definition `{}` shadows an {} item imported at [{}]", identifier.as_ref(), existing_binding.kind(), import_origin));
             } else {
-              analyzer.error(item.origin, format!("Function definition `{}` shadows an item of a different kind", identifier.as_ref()));
+              analyzer.error(item.origin, format!("Function definition `{}` shadows an imported {} item", identifier.as_ref(), existing_binding.kind()));
             }
           }
         
           let key = analyzer.context.functions.insert(Some(function));
           analyzer.get_active_module_mut().functions.insert(identifier.into(), key);
-          analyzer.bind_ident(identifier, key);
+          analyzer.bind_item_ident(identifier, key, Some(item.origin));
           analyzer.add_reference(key, item.origin);
         },
       }

@@ -2,11 +2,11 @@
 
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
-  collections::{ HashMap, },
+  collections::{ HashMap, hash_map::{ Iter as HashMapIter, IterMut as HashMapIterMut, }, },
 };
 
 use crate::{
-  util::{ make_key_type, },
+  util::{ make_key_type, Unref, },
   source::{ SourceRegion, },
   collections::{ SlotMap, },
 };
@@ -76,18 +76,18 @@ impl Context {
       let key = types.insert(Some(ty.clone().into()));
       let ns_key = NamespaceKey::Type(key);
 
-      core_ns.insert(name.to_owned(), ns_key);
-      core_mod.types.insert(name.to_owned(), key);
-      core_mod.exports.insert(name.to_owned(), ns_key);
+      core_ns.add_entry(name, ns_key);
+      core_mod.types.insert(name.to_string(), key);
+      core_mod.exports.insert(name.to_string(), ns_key);
     }
 
     let mut modules = SlotMap::default();
     let core_key = modules.insert(Some(core_mod));
-    core_ns.insert("core".to_owned(), NamespaceKey::Module(core_key));
+    core_ns.add_entry("core", NamespaceKey::Module(core_key));
 
     let lib_mod = Module::default();
     let lib_key = modules.insert(Some(lib_mod));
-    core_ns.insert("lib".to_owned(), NamespaceKey::Module(lib_key));
+    core_ns.add_entry("lib", NamespaceKey::Module(lib_key));
 
     let err_ty = types.insert(Some(TypeData::Alias(TypeKey::default()).into()));
 
@@ -183,7 +183,77 @@ impl From<LocalKey> for NamespaceKey { #[inline] fn from (key: LocalKey) -> Self
 
 
 /// A layer of semantic distinction for identifiers in a compilation context
-pub type Namespace = HashMap<String, NamespaceKey>;
+#[derive(Debug, Clone, Default)]
+pub struct Namespace {
+  entries: HashMap<String, NamespaceKey>,
+  bind_locations: HashMap<NamespaceKey, SourceRegion>,
+}
+
+impl Namespace {
+  /// Get the location, if any, a Namespace entry was bound at
+  pub fn get_bind_location (&self, key: NamespaceKey) -> Option<SourceRegion> {
+    self.bind_locations.get(&key).unref()
+  }
+
+  /// Determine if a Namespace entry has a binding location
+  pub fn has_bind_location (&self, key: NamespaceKey) -> bool {
+    self.bind_locations.contains_key(&key)
+  }
+
+  /// Register a binding location for a Namespace entry
+  /// 
+  /// Panics if the Namespace entry is already bound
+  pub fn set_bind_location (&mut self, key: NamespaceKey, location: SourceRegion) {
+    assert!(!self.has_bind_location(key), "Internal error: Namespace entry bound to multiple source locations");
+
+    self.bind_locations.insert(key, location);
+  }
+  
+  /// Get the entry, if any, associated with an identifier in a Namespace
+  pub fn get_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> Option<NamespaceKey> {
+    self.entries.get(ident.as_ref()).unref()
+  }
+
+  /// Determine if a namespace entry has a binding location
+  pub fn has_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> bool {
+    self.entries.contains_key(ident.as_ref())
+  }
+
+  
+  /// Get the identifier associated with an entry, if any
+  pub fn get_entry_ident (&self, key: NamespaceKey) -> Option<&str> {
+    for (i, k) in self.entries.iter() {
+      if k == &key { return Some(i.as_str()) }
+    }
+
+    None
+  }
+
+  /// Determine if a Namespace contains a given key
+  pub fn has_entry_key (&self, key: NamespaceKey) -> bool {
+    self.get_entry_ident(key).is_some()
+  }
+
+  /// Register a new namespace entry
+  ///
+  /// Panics if the namespace entry is already bound
+  pub fn add_entry<I: Into<String> + AsRef<str>> (&mut self, ident: I, key: NamespaceKey) {
+    assert!(!self.has_entry(&ident), "Internal error: Namespace entry already exists");
+
+    self.entries.insert(ident.into(), key);
+  }
+
+  /// Get a key/value iterator over the entry pairs in a namespace
+  pub fn entry_iter (&self) -> HashMapIter<String, NamespaceKey> {
+    self.entries.iter()
+  }
+
+  /// Get a mutable key/value iterator over the entry pairs in a namespace
+  pub fn entry_iter_mut (&mut self) -> HashMapIterMut<String, NamespaceKey> {
+    self.entries.iter_mut()
+  }
+}
+
 
 /// The basic unit of source for a semantic analyzer,
 /// serves as a container for types, values, and other modules
@@ -203,7 +273,7 @@ pub struct Module {
   pub functions: HashMap<String, FunctionKey>,
 
   /// A list of all items publicly accessable from outside a module
-  pub exports: Namespace,
+  pub exports: HashMap<String, NamespaceKey>,
 
   /// The source location at which a Module was defined
   pub origin: Option<SourceRegion>,
@@ -224,7 +294,7 @@ impl Module {
       globals: HashMap::default(),
       functions: HashMap::default(),
       
-      exports: Namespace::default(),
+      exports: HashMap::default(),
 
       origin,
     }

@@ -1,9 +1,5 @@
 //! The semantic analyzer
 
-use std::{
-  collections::{ HashMap, },
-};
-
 use crate::{
   util::{ UnwrapUnchecked, Unref, },
   extras::{ AllowIf, },
@@ -60,27 +56,6 @@ impl<'a> Analyzer<'a> {
   }
 
 
-  /// Traverse the user defined namespace stack of an Analyzer,
-  /// looking for a key binding matching an identifier
-  /// 
-  /// Returns a NamespaceKey if one is found
-  /// 
-  /// This is different from `lookup_ident` in that it does not traverse the core namespace;
-  /// see `lookup_ident` docs for more information on traversal
-  pub fn lookup_user_ident<S: AsRef<str>> (&self, ident: &S) -> Option<NamespaceKey> {
-    let ident = ident.as_ref();
-
-    for lns in self.local_namespaces.iter().rev() {
-      let key = lns.get(ident);
-
-      if key.is_some() { return key.unref() }
-    }
-
-    self.item_namespaces
-      .last()
-      .and_then(|ins| ins.get(ident).unref())
-  }
-
   /// Traverse the namespace stack of an Analyzer,
   /// looking for a key binding matching an identifier
   /// 
@@ -91,28 +66,106 @@ impl<'a> Analyzer<'a> {
   /// `local_namespace N -> ... -> local_namespace 0 -> item_namespace N -> core`
   /// 
   /// When looking for an identifier, the local namespace stack is traversed in descending order.
-  /// If the local namespace stack does not contain the identifier, the namespace top of the item namespace stack is traversed,
-  /// after that the core namespace is tried, (if you want to skip the core namespace use `lookup_user_ident`),
-  /// finally if no entry is found in core then None is returned
-  pub fn lookup_ident<S: AsRef<str>> (&self, ident: &S) -> Option<NamespaceKey> {
-    self.lookup_user_ident(ident).or_else(|| self.context.core.get(ident.as_ref()).unref())
+  /// If the local namespace stack does not contain the identifier, the top namespace of the item namespace stack is traversed,
+  /// after that if `traverse_core` is `true`, the core namespace is tried,
+  /// and finally if no entry is found then None is returned
+  pub fn lookup_ident<S: AsRef<str>> (&self, ident: &S, traverse_core: bool) -> Option<NamespaceKey> {
+    let ident = ident.as_ref();
+
+    for lns in self.local_namespaces.iter().rev() {
+      let key = lns.get_entry(ident);
+
+      if key.is_some() { return key }
+    }
+
+    let res = self.item_namespaces.last().and_then(|ins| ins.get_entry(ident));
+
+    if traverse_core {
+      res.or_else(|| self.context.core.get_entry(ident))
+    } else {
+      res
+    }
   }
 
-  /// Insert a new identifier binding into the namespace stack
+  /// Insert a new identifier binding into the item namespace stack
   /// 
   /// If there is already a binding for the given identifier
   /// in the top frame of the namespace stack, a new namespace stack frame is generated
-  pub fn bind_ident<I: Into<String>, K: Into<NamespaceKey>> (&mut self, ident: I, key: K) {
+  pub fn bind_item_ident<I: Into<String>, K: Into<NamespaceKey>> (&mut self, ident: I, key: K, origin: Option<SourceRegion>) {
     let ident = ident.into();
     let key = key.into();
     
-    if let Some(tns) = self.item_namespaces.last_mut().allow_if_not(|tns| tns.contains_key(&ident)) {
-      tns.insert(ident, key);
+    let tns = if let Some(tns) = self.item_namespaces.last_mut().allow_if_not(|tns| tns.has_entry(&ident)) {
+      tns
     } else {
-      let mut nns = HashMap::default();
-      nns.insert(ident, key);
-      self.item_namespaces.push(nns);
+      self.item_namespaces.push(Namespace::default());
+      self.item_namespaces.last_mut().unwrap()
+    };
+    
+    tns.add_entry(ident, key);
+
+    if let Some(origin) = origin {
+      tns.set_bind_location(key, origin);
     }
+  }
+
+  /// Find the identifier associated with a given namespace key, if any
+  pub fn find_ident_from_key<K: Into<NamespaceKey>> (&self, key: K, traverse_core: bool) -> Option<&str> {
+    let key = &key.into();
+
+    for lns in self.local_namespaces.iter() {
+      for (i, k) in lns.entry_iter() {
+        if k == key { return Some(i) }
+      }
+    }
+
+    if let Some(ins) = self.item_namespaces.last() {
+      for (i, k) in ins.entry_iter() {
+        if k == key { return Some(i) }
+      }
+    }
+
+    if traverse_core {
+      for (i, k) in self.context.core.entry_iter() {
+        if k == key { return Some(i) }
+      }
+    }
+
+    None
+  }
+
+  /// Get the SourceRegion bound as the origin of an item in the active namespace, if there is any
+  pub fn get_item_namespace_origin<K: Into<NamespaceKey>> (&self, key: K) -> Option<SourceRegion> {
+    let key = key.into();
+
+    for ins in self.item_namespaces.iter() {
+      let loc = ins.get_bind_location(key);
+
+      if loc.is_some() { return loc }
+    }
+
+    None
+  }
+
+  
+  /// Determine if there is any SourceRegion bound as the origin of an item in the active namespace
+  pub fn has_item_namespace_origin<K: Into<NamespaceKey>> (&self, key: K) -> bool {
+    self.get_item_namespace_origin(key).is_some()
+  }
+
+  /// Bind an origin SourceRegion to an item in the active namespaces
+  /// 
+  /// Panics if there is no namespace entry for the given key, or if the entry already has an origin bound
+  pub fn bind_item_namespace_origin<K: Into<NamespaceKey>> (&mut self, key: K, origin: SourceRegion) {
+    let key = key.into();
+
+    for ins in self.item_namespaces.iter_mut() {
+      if ins.has_entry_key(key) {
+        return ins.set_bind_location(key, origin)
+      }
+    }
+
+    panic!("Internal error: Tried to bind origin for invalid namespace entry");
   }
 
   /// Add a SourceRegion referencing an Item in an Analyzer's Context
