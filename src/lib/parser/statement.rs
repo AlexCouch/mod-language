@@ -38,10 +38,7 @@ pub fn complete_assignment_statement (target: Statement, parser: &mut Parser) ->
       // Synchronization in the event of an error in expression will be taken care of by higher level parselet
       let value = expression(parser)?;
 
-      let origin = SourceRegion {
-        start: target.origin.start,
-        end: value.origin.end
-      };
+      let origin = SourceRegion::merge(target.origin, value.origin);
       
       Some(Statement::new(
         if operator == Assign {
@@ -84,10 +81,10 @@ fn stm_block (parser: &mut Parser) -> Option<Statement> {
 fn stm_declaration (parser: &mut Parser) -> Option<Statement> {
   // Synchronization should be handled by higher level parselet
 
-  if let Some(&Token { data: TokenData::Keyword(Let), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Keyword(Let), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
-    if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: SourceRegion { mut end, .. } }) = parser.curr_tok() {
+    if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: mut end_region }) = parser.curr_tok() {
       let identifier = identifier.clone();
 
       parser.advance();
@@ -97,7 +94,7 @@ fn stm_declaration (parser: &mut Parser) -> Option<Statement> {
 
         let texpr = type_expression(parser)?;
 
-        end = texpr.origin.end;
+        end_region = texpr.origin;
 
         Some(texpr)
       } else {
@@ -109,7 +106,7 @@ fn stm_declaration (parser: &mut Parser) -> Option<Statement> {
 
         let expr = expression(parser)?;
 
-        end = expr.origin.end;
+        end_region = expr.origin;
 
         Some(expr)
       } else {
@@ -118,7 +115,7 @@ fn stm_declaration (parser: &mut Parser) -> Option<Statement> {
 
       return Some(Statement::new(
         StatementData::Declaration { identifier, explicit_type, initializer },
-        SourceRegion { start, end }
+        SourceRegion::merge(start_region, end_region)
       ))
     } else {
       parser.error("Expected identifier for variable to follow let keyword".to_owned());

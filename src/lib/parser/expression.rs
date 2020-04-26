@@ -73,14 +73,14 @@ fn pfx_number (parser: &mut Parser) -> Option<Expression> {
 }
 
 fn pfx_syntactic_group (parser: &mut Parser) -> Option<Expression> {
-  if let Some(&Token { data: TokenData::Operator(LeftParen), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Operator(LeftParen), origin: start_region }) = parser.curr_tok() {
     parser.advance();
     
     if let Some(expr) = expression(parser) {
-      if let Some(&Token { data: TokenData::Operator(RightParen), origin: SourceRegion { end, .. } }) = parser.curr_tok() {
+      if let Some(&Token { data: TokenData::Operator(RightParen), origin: end_region }) = parser.curr_tok() {
         parser.advance();
 
-        return Some(Expression::new(expr.data, SourceRegion { start, end }))
+        return Some(Expression::new(expr.data, SourceRegion::merge(start_region, end_region)))
       } else {
         parser.error("Expected ) to close syntactic group".to_owned());
       }
@@ -164,10 +164,7 @@ fn ifx_binary_operator (left: Expression, parser: &mut Parser) -> Option<Express
     parser.advance();
 
     if let Some(right) = pratt(get_binary_precedence(operator), parser) {
-      let origin = SourceRegion {
-        start: left.origin.start,
-        end: right.origin.end
-      };
+      let origin = SourceRegion::merge(left.origin, right.origin);
 
       return Some(Expression::new(
         ExpressionData::Binary {
@@ -201,15 +198,15 @@ fn ifx_call (left: Expression, parser: &mut Parser) -> Option<Expression> {
       match parser.curr_tok() {
         // Unexpected end of input
         None => {
-          parser.error_at(SourceRegion { start: left.origin.start, end: parser.curr_location() }, "Unexpected end of input, expected ) to close call expression".to_owned());
+          parser.error_at(SourceRegion::merge(left.origin, parser.curr_region()), "Unexpected end of input, expected ) to close call expression".to_owned());
           return None
         },
 
         // The end of the argument list
-        Some(&Token { data: TokenData::Operator(RightParen), origin: SourceRegion { end, .. } }) => {
+        Some(&Token { data: TokenData::Operator(RightParen), origin: end_region }) => {
           parser.advance();
           
-          let origin = SourceRegion { start: left.origin.start, end };
+          let origin = SourceRegion::merge(left.origin, end_region);
 
           return Some(Expression::new(ExpressionData::Call { callee: box left, arguments }, origin))
         },

@@ -167,6 +167,7 @@ impl From<f64> for Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Keyword {
+  Module,
   Global,
   Else,
   Let,
@@ -180,6 +181,7 @@ impl Keyword {
     use Keyword::*;
 
     match self {
+      Module   => "mod",
       Global   => "global",
       Else     => "else",
       Let      => "let",

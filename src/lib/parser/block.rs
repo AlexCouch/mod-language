@@ -12,7 +12,7 @@ use super::{ Parser, statement, expression, sync };
 
 /// Parse a single Block
 pub fn block (parser: &mut Parser) -> Option<Block> {
-  if let Some(&Token { data: TokenData::Operator(LeftBracket), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Operator(LeftBracket), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
     let mut statements = Vec::new();
@@ -24,15 +24,15 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
       match parser.curr_tok() {
         // Unexpected end of input
         None => {
-          parser.error_at(SourceRegion { start, end: parser.curr_location() }, "Unexpected end of input, expected } to close block".to_owned());
+          parser.error_at(SourceRegion::merge(start_region, parser.curr_region()), "Unexpected end of input, expected } to close block".to_owned());
           return None
         },
 
         // The end of the block
-        Some(&Token { data: TokenData::Operator(RightBracket), origin: SourceRegion { end, .. } }) => {
+        Some(&Token { data: TokenData::Operator(RightBracket), origin: end_region }) => {
           parser.advance();
 
-          return Some(Block::new(statements, trailing_expression, SourceRegion { start, end }))
+          return Some(Block::new(statements, trailing_expression, SourceRegion::merge(start_region, end_region)))
         },
 
         // Statements/Expressions
@@ -92,7 +92,7 @@ pub fn block (parser: &mut Parser) -> Option<Block> {
 
 /// Parse a single ConditionalBranch
 pub fn conditional_branch (parser: &mut Parser) -> Option<ConditionalBranch> {
-  if let Some(&Token { data: TokenData::Keyword(If), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Keyword(If), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
     // Synchronization must be handled by higher level parselet
@@ -102,10 +102,7 @@ pub fn conditional_branch (parser: &mut Parser) -> Option<ConditionalBranch> {
     if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
       let body = block(parser)?;
 
-      let origin = SourceRegion {
-        start,
-        end: body.origin.end
-      };
+      let origin = SourceRegion::merge(start_region, body.origin);
 
       return Some(ConditionalBranch::new(condition, body, origin))
     } else {
@@ -124,8 +121,8 @@ pub fn conditional (parser: &mut Parser) -> Option<Conditional> {
 
   let if_branch = conditional_branch(parser)?;
 
-  let start = if_branch.origin.start;
-  let mut end = if_branch.origin.end;
+  let start_region = if_branch.origin;
+  let mut end_region = if_branch.origin;
 
   let mut else_if_branches = Vec::new();
   let mut else_block = None;
@@ -136,7 +133,7 @@ pub fn conditional (parser: &mut Parser) -> Option<Conditional> {
     match parser.curr_tok() {
       // Unexpected end of input
       None => {
-        parser.error_at(SourceRegion { start, end: parser.curr_location() }, "Unexpected end of input, expected if or { to continue else conditional branch".to_owned());
+        parser.error_at(SourceRegion::merge(start_region, parser.curr_region()), "Unexpected end of input, expected if or { to continue else conditional branch".to_owned());
 
         return None
       },
@@ -153,7 +150,7 @@ pub fn conditional (parser: &mut Parser) -> Option<Conditional> {
           ));
         }
 
-        end = branch.origin.end;
+        end_region = branch.origin;
 
         else_if_branches.push(branch);
       },
@@ -162,7 +159,7 @@ pub fn conditional (parser: &mut Parser) -> Option<Conditional> {
       Some(&Token { data: TokenData::Operator(LeftBracket), .. }) => {
         let block = block(parser)?;
 
-        end = block.origin.end;
+        end_region = block.origin;
 
         if if_branch.is_expression() != block.is_expression() {
           parser.error_at(block.origin, format!(
@@ -185,5 +182,5 @@ pub fn conditional (parser: &mut Parser) -> Option<Conditional> {
     }
   }
 
-  Some(Conditional::new(if_branch, else_if_branches, else_block, SourceRegion { start, end }))
+  Some(Conditional::new(if_branch, else_if_branches, else_block, SourceRegion::merge(start_region, end_region)))
 }

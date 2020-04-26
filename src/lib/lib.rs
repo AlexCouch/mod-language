@@ -6,6 +6,7 @@
 #![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(track_caller)]
+#![feature(stmt_expr_attributes)]
 
 extern crate self as mod_language;
 
@@ -16,6 +17,7 @@ pub use util::collections as collections;
 mod extras;
 pub mod ansi;
 pub mod source;
+pub mod session;
 pub mod common;
 pub mod token;
 pub mod lexer;

@@ -1,8 +1,9 @@
 //! Contains Lexer and supporting structures and functions
 
 use crate::{
-  source::{ Source, SourceLocation, SourceRegion, MessageKind, },
-  token::{ Token, TokenData, TokenStream, },
+  session::{ SESSION, MessageKind, },
+  source::{ SOURCE_MANAGER, SourceLocation, SourceRegion, SourceKey, },
+  token::{ Token, TokenData, },
   util::{ Unref, },
 };
 
@@ -24,7 +25,7 @@ pub struct LexerLocale {
 
 /// State information for a lexical analysis session
 pub struct Lexer<'a> {
-  source: &'a Source,
+  source_key: SourceKey,
   chars: &'a [char],
   length: usize,
   stored_locale: Option<LexerLocale>,
@@ -34,14 +35,15 @@ pub struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
   /// Create a new Lexer for a given Source
-  pub fn new (source: &'a Source) -> Self {
+  pub fn new (source_key: SourceKey) -> Self {
+    let source = SOURCE_MANAGER.get(source_key).expect("Internal error, invalid SourceKey passed to Lexer");
     let chars = source.chars();
     let length = chars.len();
     let curr = chars.get(0).unref();
     let next = chars.get(1).unref();
 
     Self {
-      source,
+      source_key,
       chars,
       length,
       stored_locale: None,
@@ -133,7 +135,7 @@ impl<'a> Lexer<'a> {
   /// Get a SourceRegion by popping a SourceLocation marker off of the Lexer's stack
   /// and combine it with the Lexer's current SourceLocation
   pub fn pop_marker_region (&mut self) -> Option<SourceRegion> {
-    self.pop_marker().map(|start| SourceRegion { start, end: self.locale.location })
+    self.pop_marker().map(|start| SourceRegion { source: Some(self.source_key), start, end: self.locale.location })
   }
 
   /// Get the current SourceLocation of a Lexer
@@ -145,6 +147,7 @@ impl<'a> Lexer<'a> {
   /// and the top marker on the stack if one exists
   pub fn curr_region (&self) -> SourceRegion {
     SourceRegion {
+      source: Some(self.source_key),
       start: self.markers.last().unref().unwrap_or(self.locale.location),
       end: self.locale.location
     }
@@ -160,7 +163,7 @@ impl<'a> Lexer<'a> {
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
   pub fn message (&mut self, kind: MessageKind, content: String) {
-    self.source.message(
+    SESSION.message(
       Some(self.curr_region()),
       kind,
       content
@@ -176,8 +179,9 @@ impl<'a> Lexer<'a> {
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
   pub fn message_pop (&mut self, kind: MessageKind, content: String) {
-    self.source.message(
+    SESSION.message(
      Some(SourceRegion {
+        source: Some(self.source_key),
         start: self.pop_marker().unwrap_or(self.locale.location),
         end: self.locale.location
       }),
@@ -188,7 +192,7 @@ impl<'a> Lexer<'a> {
 
   /// Create a user-directed Message in the Source of a Lexer, with a custom line and column origin
   pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) {
-    self.source.message(
+    SESSION.message(
       Some(origin),
       kind,
       content
@@ -311,7 +315,7 @@ impl<'a> Lexer<'a> {
   }
 
   /// Convert an entire Source's content into a TokenStream
-  pub fn lex_stream (&mut self) -> TokenStream {
+  pub fn lex_stream (&mut self) -> Vec<Token> {
     let mut tokens = Vec::new();
   
     loop {
@@ -319,7 +323,7 @@ impl<'a> Lexer<'a> {
         Ok(tok_or_eof) => if let Some(token) = tok_or_eof {
           tokens.push(token)
         } else {
-          break TokenStream::new(tokens, self.source)
+          break tokens
         },
         Err(InvalidLexicalSymbol { symbol, origin }) => {
           tokens.push(Token::new(TokenData::Invalid, origin));

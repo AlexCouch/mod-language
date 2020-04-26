@@ -7,8 +7,9 @@ use std::{
 use crate::{
   util::{ UnwrapUnchecked, Unref, },
   extras::{ AllowIf, },
-  source::{ SourceRegion, MessageKind, },
-  ast::{ AST, },
+  session::{ SESSION, MessageKind, },
+  source::{ SourceRegion, },
+  ast::{ Item, },
   ctx::{ Context, LocalContext, Namespace, Module, TypeData, ModuleKey, TypeKey, NamespaceKey, },
 };
 
@@ -21,7 +22,7 @@ mod passes;
 /// The core interface structure for semantic analysis
 pub struct Analyzer<'a> {
   /// The AST being analyzed
-  pub ast: &'a AST<'a>,
+  pub ast: &'a [Item],
 
   /// All contextual information used by a semantic analyzer
   pub context: Context,
@@ -40,7 +41,7 @@ pub struct Analyzer<'a> {
 
 impl<'a> Analyzer<'a> {
   /// Create a new semantic analyzer
-  pub fn new (ast: &'a AST) -> Self {
+  pub fn new (ast: &'a [Item]) -> Self {
     let context = Context::default();
     let active_module = context.lib;
 
@@ -157,7 +158,7 @@ impl<'a> Analyzer<'a> {
 
   /// Create a Message in the Source of the AST of an Analyzer
   pub fn message (&self, origin: SourceRegion, kind: MessageKind, message: String) {
-    self.ast.stream.source.message(Some(origin), kind, message)
+    SESSION.message(Some(origin), kind, message)
   }
 
   /// Create a notice in the Source of the AST of an Analyzer

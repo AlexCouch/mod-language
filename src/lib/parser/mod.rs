@@ -1,10 +1,11 @@
 //! Contains Parser and supporting structures and functions
 
 use crate::{
-  source::{ SourceLocation, SourceRegion, MessageKind, },
+  session::{ SESSION, MessageKind, },
+  source::{ SourceLocation, SourceRegion, },
   common::{ Operator::*, ITEM_KEYWORDS, },
-  token::{ Token, TokenData, TokenStream, },
-  ast::{ AST, Item, },
+  token::{ Token, TokenData, },
+  ast::{ Item, },
 };
 
 
@@ -29,7 +30,7 @@ use sync::SyncPredicate;
 
 /// The type of predicate functions for determining if a particular parselet is valid for a Token
 pub type ParseletPredicate = fn (&Token) -> bool;
-/// Type type of function used by a parselet to handle a segment of an input stream
+/// Type type of function used by a parselet to handle a segment of an input tokens
 pub type ParseletFunction<T> = fn (&mut Parser) -> Option<T>;
 
 
@@ -44,24 +45,21 @@ pub struct ParserLocale<'a> {
 
 /// State information for a syntactic analysis session
 pub struct Parser<'a> {
-  stream: &'a TokenStream<'a>,
   tokens: &'a [Token],
   length: usize,
   stored_locale: Option<ParserLocale<'a>>,
   locale: ParserLocale<'a>,
-  markers: Vec<SourceLocation>,
+  markers: Vec<SourceRegion>,
 }
 
 impl<'a> Parser<'a> {
   /// Create a new Parser for a given TokenStream
-  pub fn new (stream: &'a TokenStream) -> Self {
-    let tokens = stream.tokens();
+  pub fn new (tokens: &'a [Token]) -> Self {
     let length = tokens.len();
     let curr = tokens.get(0);
     let next = tokens.get(1);
 
     Self {
-      stream,
       tokens,
       length,
       stored_locale: None,
@@ -136,27 +134,27 @@ impl<'a> Parser<'a> {
   }
 
 
-  /// Create a SourceLocation bookmark in a Parser
+  /// Create a SourceRegion bookmark in a Parser
   /// 
   /// Panics if there is no active Token
   #[track_caller]
   pub fn push_marker (&mut self) {
-    self.markers.push(self.locale.curr.unwrap().origin.start);
+    self.markers.push(self.locale.curr.unwrap().origin);
   }
 
-  /// Get a SourceLocation marker saved onto the Parser's internal stack
+  /// Get a SourceRegion marker saved onto the Parser's internal stack
   /// 
-  /// Returns None if there was no SourceLocation marker on the stack
-  pub fn pop_marker (&mut self) -> Option<SourceLocation> {
+  /// Returns None if there was no SourceRegion marker on the stack
+  pub fn pop_marker (&mut self) -> Option<SourceRegion> {
     self.markers.pop()
   }
 
-  /// Get a SourceRegion by popping a SourceLocation marker off of the Parser's stack
+  /// Get a SourceRegion by popping a SourceRegion marker off of the Parser's stack
   /// and combine it with the Parser's previous Token's end SourceLocation
   /// 
-  /// Panics if there is no previous Token
+  /// Panics if there is no previous Token, or if the SourceRegions do not have the same source
   pub fn pop_marker_region (&mut self) -> Option<SourceRegion> {
-    self.pop_marker().map(|start| SourceRegion { start, end: self.locale.prev.unwrap().origin.end })
+    self.pop_marker().map(|start| SourceRegion::merge(start, self.locale.prev.unwrap().origin))
   }
 
   /// Get the Parser's current Token's starting SourceLocation
@@ -268,11 +266,12 @@ impl<'a> Parser<'a> {
   /// This will use the current Token's SourceRegion,
   /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
   pub fn message (&mut self, kind: MessageKind, content: String) {
-    self.stream.source.message(
+    SESSION.message(
       Some(if let Some(curr) = self.curr_tok() {
         curr.origin
       } else {
-        self.prev_tok().unwrap().origin.end.to_region()
+        let origin = self.prev_tok().unwrap().origin;
+        origin.end.to_region(origin.source)
       }),
       kind,
       content
@@ -287,7 +286,7 @@ impl<'a> Parser<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be taken from Parser's current Token
   pub fn message_pop (&mut self, kind: MessageKind, content: String) {
-    self.stream.source.message(
+    SESSION.message(
       Some(self.pop_marker_region().or_else(|| Some(self.curr_region())).unwrap()),
       kind,
       content
@@ -297,7 +296,7 @@ impl<'a> Parser<'a> {
   /// Create a user-directed Message in the Source of the TokenStream of a Parser,
   /// with a custom line and column origin
   pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) {
-    self.stream.source.message(
+    SESSION.message(
       Some(origin),
       kind,
       content
@@ -400,16 +399,16 @@ impl<'a> Parser<'a> {
 
 
   /// Parse all available Items from a Parser's TokenStream and yield an AST
-  pub fn parse_ast (&mut self) -> AST {
+  pub fn parse_ast (&mut self) -> Vec<Item> {
     let mut items = Vec::new();
 
     let mut itm_ok = true;
 
     loop {
       match self.curr_tok() {
-        // The end of the stream
+        // The end of the tokens
         None => {
-          return AST::new(items, self.stream)
+          return items
         },
 
         // Items
@@ -436,7 +435,7 @@ impl<'a> Parser<'a> {
           }
 
           // If we reach here there was some kind of error, either we didnt have a semi after the last item, or our item call had an error,
-          // so we need to try and synchronize to the end of the stream or the next semi or keyword
+          // so we need to try and synchronize to the end of the tokens or the next semi or keyword
           
           if self.synchronize(sync::external(sync::any_operator_of(&[LeftParen, LeftBracket]), sync::any_operator_of(&[RightParen, RightBracket]), sync::or(sync::operator(Semi), sync::any_keyword_of(ITEM_KEYWORDS)))) {
             match self.curr_tok().unwrap() {
@@ -451,7 +450,7 @@ impl<'a> Parser<'a> {
             }
           } else {
             // Cannot recover state
-            return AST::new(items, self.stream)
+            return items
           }
         }
       }

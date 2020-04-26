@@ -1,14 +1,13 @@
 //! Contains the AST structure and its subordinate structures
 
 use std::{
-  fmt::{ Display, Debug, Formatter, Result as FMTResult, },
+  fmt::{ Debug, Formatter, Result as FMTResult, },
   ops::{ Deref, },
 };
 
 use crate::{
   source::{ SourceRegion, SourceLocation, },
   common::{ Number, Identifier, Operator, },
-  token::{ TokenStream, },
 };
 
 
@@ -68,7 +67,7 @@ impl TypeExpression {
 
   /// Create a new TypeExpression with no SourceRegion origin
   pub fn no_src (data: TypeExpressionData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region() }
+    Self { data, origin: SourceLocation::ZERO.to_region(None) }
   }
 }
 
@@ -165,7 +164,7 @@ impl Expression {
 
   /// Create a new Expression with no SourceRegion origin
   pub fn no_src (data: ExpressionData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region() }
+    Self { data, origin: SourceLocation::ZERO.to_region(None) }
   }
 }
 
@@ -248,7 +247,7 @@ impl Statement {
 
   /// Create a new Statement with no SourceRegion origin
   pub fn no_src (data: StatementData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region() }
+    Self { data, origin: SourceLocation::ZERO.to_region(None) }
   }
 }
 
@@ -282,7 +281,7 @@ impl Block {
 
   /// Create a new Block with no SourceRegion
   pub fn no_src (statements: Vec<Statement>, trailing_expression: Option<Expression>) -> Self {
-    Self { statements, trailing_expression, origin: SourceLocation::ZERO.to_region() }
+    Self { statements, trailing_expression, origin: SourceLocation::ZERO.to_region(None) }
   }
 
   /// Determine if a Block has a trailing Expression, making the Block itself an Expression
@@ -320,7 +319,7 @@ impl ConditionalBranch {
 
   /// Create a new ConditionalBranch with no SourceRegion
   pub fn no_src (condition: Expression, body: Block) -> Self {
-    Self { condition, body, origin: SourceLocation::ZERO.to_region() }
+    Self { condition, body, origin: SourceLocation::ZERO.to_region(None) }
   }
 
   /// Determine if the Block of a ConditionalBranch has a trailing Expression, making the ConditionalBranch itself an Expression
@@ -360,7 +359,7 @@ impl Conditional {
 
   /// Create a new Condtional with no SourceRegion
   pub fn no_src (if_branch: ConditionalBranch, else_if_branches: Vec<ConditionalBranch>, else_block: Option<Block>) -> Self {
-    Self { if_branch, else_if_branches, else_block, origin: SourceLocation::ZERO.to_region() }
+    Self { if_branch, else_if_branches, else_block, origin: SourceLocation::ZERO.to_region(None) }
   }
 
   /// Determine if a Conditional's if Branch Block has a trailing Expression, making the Conditional itself an Expression
@@ -375,6 +374,7 @@ impl Conditional {
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
+  Module { identifier: Identifier, items: Vec<Item> },
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
   Function { identifier: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: Option<TypeExpression>, body: Option<Block> },
 }
@@ -424,41 +424,6 @@ impl Item {
 
   /// Create a new Item with no SourceRegion origin
   pub fn no_src (data: ItemData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region() }
-  }
-}
-
-
-/// A set of top level items and a reference to the TokenStream they originated from
-#[allow(missing_docs)]
-pub struct AST<'a> {
-  items: Vec<Item>,
-  pub stream: &'a TokenStream<'a>,
-}
-
-impl<'a> AST<'a> {
-  /// Create a new AST
-  pub fn new (items: Vec<Item>, stream: &'a TokenStream<'a>) -> Self {
-    Self {
-      items,
-      stream,
-    }
-  }
-
-  /// Get a slice of the Items in an AST
-  pub fn items (&self) -> &[Item] {
-    self.items.as_slice()
-  }
-}
-
-impl<'a> Display for AST<'a> {
-  fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    writeln!(f, "AST [")?;
-
-    for item in self.items.iter() {
-      writeln!(f, "{:#?}", item)?;
-    }
-
-    writeln!(f, "]")
+    Self { data, origin: SourceLocation::ZERO.to_region(None) }
   }
 }

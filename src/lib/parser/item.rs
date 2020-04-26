@@ -2,7 +2,7 @@
 
 use crate::{
   source::{ SourceRegion, },
-  common::{ Keyword::*, Operator::*, },
+  common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, },
   token::{ Token, TokenData, },
   ast::{ Item, ItemData, },
 };
@@ -22,13 +22,95 @@ pub fn item (parser: &mut Parser) -> Option<Item> {
 }
 
 
+fn itm_module (parser: &mut Parser) -> Option<Item> {
+  if let Some(&Token { data: TokenData::Keyword(Module), origin: start_region }) = parser.curr_tok() {
+    parser.advance();
+
+    if let Some(&Token { data: TokenData::Identifier(ref identifier), .. }) = parser.curr_tok() {
+      let identifier = identifier.clone();
+
+      parser.advance();
+
+      // TODO: multiple source files
+      if let Some(&Token { data: TokenData::Operator(Semi), origin: end_region }) = parser.curr_tok() {
+        parser.error_at(SourceRegion::merge(start_region, end_region), format!("Cannot import source module file `{}`, multiple source files NYI", identifier.as_ref()));
+        return None
+      } else if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+        let mut items = Vec::new();
+
+        let mut itm_ok = true;
+
+        loop {
+          match parser.curr_tok() {
+            // The end of the stream
+            None => {
+              parser.error("Unexpected end of input while parsing module".to_owned());
+            },
+
+            // The end of the block
+            Some(&Token { data: TokenData::Operator(RightBracket), origin: end_region }) => {
+              return Some(Item::new(ItemData::Module { identifier, items }, SourceRegion::merge(start_region, end_region)));
+            },
+
+            // Items
+            _ => {
+              if itm_ok {
+                if let Some(item) = item(parser) {
+                  if item.requires_semi() {
+                    if let Some(&Token { data: TokenData::Operator(Semi), .. }) = parser.curr_tok() {
+                      parser.advance();
+                      itm_ok = true;
+                    } else {
+                      itm_ok = false;
+                    }
+                  }
+                  
+                  items.push(item);
+
+                  continue
+                } else {
+                  parser.error("Expected an item or end of input".to_owned());
+                }
+              } else {
+                parser.error("Expected a ; to separate items or end of input".to_owned());
+              }
+
+              // If we reach here there was some kind of error, either we didnt have a semi after the last item, or our item call had an error,
+              // so we need to try and synchronize to the end of the block or the next semi or keyword
+              
+              if parser.synchronize(sync::close_pair_or(sync::operator(LeftBracket), sync::operator(RightBracket), sync::or(sync::operator(Semi), sync::any_keyword_of(ITEM_KEYWORDS)))) {
+                match parser.curr_tok().unwrap() {
+                  Token { data: TokenData::Operator(Semi), .. } => {
+                    parser.advance();
+                    itm_ok = true;
+                  },
+                  Token { data: TokenData::Keyword(_), .. } => {
+                    itm_ok = true;
+                  },
+                  _ => unreachable!("Internal error, unexpected parser state post synchronization")
+                }
+              } else {
+                // Cannot recover state locally
+                return None
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  None
+}
+
+
 fn itm_global (parser: &mut Parser) -> Option<Item> {
   // Synchronization should be handled by higher level parselet
 
-  if let Some(&Token { data: TokenData::Keyword(Global), origin: SourceRegion { start, .. } }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Keyword(Global), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
-    if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: SourceRegion { mut end, .. } }) = parser.curr_tok() {
+    if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: mut end_region }) = parser.curr_tok() {
       let identifier = identifier.clone();
 
       parser.advance();
@@ -38,7 +120,7 @@ fn itm_global (parser: &mut Parser) -> Option<Item> {
 
         let texpr = type_expression(parser)?;
 
-        end = texpr.origin.end;
+        end_region = texpr.origin;
 
         texpr
       } else {
@@ -51,7 +133,7 @@ fn itm_global (parser: &mut Parser) -> Option<Item> {
 
         let expr = expression(parser)?;
 
-        end = expr.origin.end;
+        end_region = expr.origin;
 
         Some(expr)
       } else {
@@ -60,7 +142,7 @@ fn itm_global (parser: &mut Parser) -> Option<Item> {
 
       return Some(Item::new(
         ItemData::Global { identifier, explicit_type, initializer },
-        SourceRegion { start, end }
+        SourceRegion::merge(start_region, end_region)
       ))
     } else {
       parser.error("Expected identifier for variable to follow let keyword".to_owned());
@@ -69,10 +151,13 @@ fn itm_global (parser: &mut Parser) -> Option<Item> {
   unreachable!("Internal error, global item parselet called on non-global token");
 }
 
+
 fn itm_function (parser: &mut Parser) -> Option<Item> {
   // Synchronization should be handled by higher level parselet
 
-  if let Some(&Token { data: TokenData::Keyword(Function), origin: SourceRegion { start, mut end } }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Keyword(Function), origin: start_region }) = parser.curr_tok() {
+    let mut end_region = start_region;
+
     parser.advance();
 
     if let Some(&Token { data: TokenData::Identifier(ref identifier), .. }) = parser.curr_tok() {
@@ -95,7 +180,7 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
               parser.advance();
 
               if let Some(parameter_type) = type_expression(parser) {
-                if let Some(&Token { data: TokenData::Operator(op), origin: SourceRegion { end: params_end, .. } }) = parser.curr_tok() {
+                if let Some(&Token { data: TokenData::Operator(op), origin: params_end }) = parser.curr_tok() {
                   if op == Comma {
                     parser.advance();
                     
@@ -107,7 +192,7 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
 
                     parameters.push((parameter_name, parameter_type));
 
-                    end = params_end;
+                    end_region = params_end;
 
                     break;
                   }
@@ -140,7 +225,7 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
           parser.advance();
 
           if let Some(texpr) = type_expression(parser) {
-            end = texpr.origin.end;
+            end_region = texpr.origin;
             Some(texpr)
           } else {
             // type_expression should have already provided an error message
@@ -153,7 +238,7 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
 
         let body = if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
           if let Some(blk) = block(parser) {
-            end = blk.origin.end;
+            end_region = blk.origin;
             Some(blk)
           } else {
             // block should have already provided an error message
@@ -166,7 +251,7 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
 
         return Some(Item::new(
           ItemData::Function { identifier, parameters, return_type, body },
-          SourceRegion { start, end }
+          SourceRegion::merge(start_region, end_region)
         ))
       } else {
         parser.error("Expected parameter list to follow identifier in function declaration".to_owned());
@@ -192,6 +277,7 @@ impl ItemParselet {
     macro_rules! itm { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( ItemParselet { predicate: $predicate, function: $function } ),* ] } }
 
     itm! [
+      |token| token.is_keyword(Module) => itm_module,
       |token| token.is_keyword(Global) => itm_global,
       |token| token.is_keyword(Function) => itm_function,
     ]
