@@ -267,11 +267,19 @@ impl Session {
 
   /// Add a Message to the list of Messages associated with a Session
   pub fn message (&self, origin: Option<SourceRegion>, kind: MessageKind, content: String) {
-    self.vec().push(Message::new(
+    let msg = Message::new(
       origin,
       kind,
       content
-    ))
+    );
+
+    #[cfg(debug_assertions)] {
+      let bt = backtrace::Backtrace::new();
+
+      println!("New session message caught:\n{}\nat {:?}", &msg, bt);
+    }
+
+    self.vec().push(msg)
   }
 
   
