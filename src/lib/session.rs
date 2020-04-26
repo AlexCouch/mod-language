@@ -89,10 +89,8 @@ impl Message {
   /// Requires a reference to source chars
   #[allow(clippy::cognitive_complexity)] // Some functions are just complicated ok?
   pub fn excerpt (&self, f: &mut Formatter) -> FMTResult {
-    const ERR: FMTResult = Err(std::fmt::Error);
-
-    let origin = some!(self.origin; ERR);
-    let source = SOURCE_MANAGER.get(some!(origin.source; ERR)).expect("Internal error, invalid SourceKey");
+    let origin = some!(self.origin; Ok(()));
+    let source = SOURCE_MANAGER.get(some!(origin.source; Ok(()))).expect("Internal error, invalid SourceKey");
     let chars = source.chars();
 
     let mut start_index = origin.start.index.min(chars.len() - 1);
