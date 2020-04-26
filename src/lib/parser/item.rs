@@ -69,7 +69,7 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
 
                   continue
                 } // else { Error message already provided by item }
-                } else {
+              } else {
                 parser.error("Expected a ; to separate items or end of input".to_owned());
               }
 
@@ -128,7 +128,7 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
               "Expected a file at either [{}] or [{}], but neither exists",
               sub_dir_mod_path.display(), sub_file_mod_path.display()
             ))
-      }
+          }
 
           return None
         };
@@ -146,10 +146,10 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
                 "Unexpected error loading file [{}] from disk: {}",
                 sub_mod_path.display(), e
               ))
-    }
+            }
 
             return None
-  }
+          }
         };
 
         let mut sub_lexer = Lexer::new(sub_source_key);
@@ -214,117 +214,113 @@ fn itm_global (parser: &mut Parser) -> Option<Item> {
 
 
 fn itm_function (parser: &mut Parser) -> Option<Item> {
-  // Synchronization should be handled by higher level parselet
+  let (start_region, mut end_region) = if let Some(&Token { data: TokenData::Keyword(Function), origin }) = parser.curr_tok() {
+    parser.advance();
+    (origin, origin)
+  } else {
+    unreachable!("Internal error, function parselet called on non-fn token");
+  };
 
-  if let Some(&Token { data: TokenData::Keyword(Function), origin: start_region }) = parser.curr_tok() {
-    let mut end_region = start_region;
+  let identifier = if let Some(&Token { data: TokenData::Identifier(ref identifier), .. }) = parser.curr_tok() {
+    let identifier = identifier.clone();
 
     parser.advance();
 
-    if let Some(&Token { data: TokenData::Identifier(ref identifier), .. }) = parser.curr_tok() {
-      let identifier = identifier.clone();
+    identifier
+  } else {
+    parser.error("Expected identifier for function to follow fn keyword".to_owned());
+    return None;
+  };
 
-      parser.advance();
+  let mut parameters = Vec::new();
 
-      if let Some(&Token { data: TokenData::Operator(LeftParen), .. }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Operator(LeftParen), .. }) = parser.curr_tok() {
+    parser.advance();
+
+    loop {
+      if let Some(&Token { data: TokenData::Identifier(ref param_ident), .. }) = parser.curr_tok() {
+        let parameter_name = param_ident.clone();
+
         parser.advance();
 
-        let mut parameters = Vec::new();
+        if let Some(&Token { data: TokenData::Operator(Colon), .. }) = parser.curr_tok() {
+          parser.advance();
 
-        loop {
-          if let Some(&Token { data: TokenData::Identifier(ref param_ident), .. }) = parser.curr_tok() {
-            let parameter_name = param_ident.clone();
-
-            parser.advance();
-
-            if let Some(&Token { data: TokenData::Operator(Colon), .. }) = parser.curr_tok() {
-              parser.advance();
-
-              if let Some(parameter_type) = type_expression(parser) {
-                if let Some(&Token { data: TokenData::Operator(op), origin: params_end }) = parser.curr_tok() {
-                  if op == Comma {
-                    parser.advance();
-                    
-                    parameters.push((parameter_name, parameter_type));
-
-                    continue
-                  } else if op == RightParen {
-                    parser.advance();
-
-                    parameters.push((parameter_name, parameter_type));
-
-                    end_region = params_end;
-
-                    break;
-                  }
-                }
-
-                parser.error("Expected , to separate parameters or ) to end parameter list".to_owned());
-              } // else { Error has already been issued by type_expression, fall through to synchronization }
-            } else {
-              parser.error("Expected : and a type expression to follow parameter name".to_owned());
-            }
-          }
-
-          if parser.synchronize(sync::close_pair_or(sync::operator(LeftParen), sync::operator(RightParen), sync::operator(Comma))) {
-            if let Some(&Token { data: TokenData::Operator(op), .. }) = parser.curr_tok() {
+          if let Some(parameter_type) = type_expression(parser) {
+            if let Some(&Token { data: TokenData::Operator(op), origin: params_end }) = parser.curr_tok() {
               if op == Comma {
                 parser.advance();
-                continue;
-              } else {
+                
+                parameters.push((parameter_name, parameter_type));
+
+                continue
+              } else if op == RightParen {
                 parser.advance();
+
+                parameters.push((parameter_name, parameter_type));
+
+                end_region = params_end;
+
                 break;
               }
             }
-          }
 
-          // Could not recover
-          return None
+            parser.error("Expected , to separate parameters or ) to end parameter list".to_owned());
+          } // else { Error has already been issued by type_expression, fall through to synchronization }
+        } else {
+          parser.error("Expected : and a type expression to follow parameter name".to_owned());
         }
-
-        let return_type = if let Some(&Token { data: TokenData::Operator(RightArrow), .. }) = parser.curr_tok() {
-          parser.advance();
-
-          if let Some(texpr) = type_expression(parser) {
-            end_region = texpr.origin;
-            Some(texpr)
-          } else {
-            // type_expression should have already provided an error message
-            // Synchronization should be handled by higher level parselet
-            return None
-          }
-        } else {
-          None
-        };
-
-        let body = if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
-          if let Some(blk) = block(parser) {
-            end_region = blk.origin;
-            Some(blk)
-          } else {
-            // block should have already provided an error message
-            // Synchronization should be handled by higher level parselet
-            return None
-          }
-        } else {
-          None
-        };
-
-        return Some(Item::new(
-          ItemData::Function { identifier, parameters, return_type, body },
-          SourceRegion::merge(start_region, end_region)
-        ))
-      } else {
-        parser.error("Expected parameter list to follow identifier in function declaration".to_owned());
       }
-    } else {
-      parser.error("Expected identifier for function to follow fn keyword".to_owned());
-    }
 
-    return None;
+      if parser.synchronize(sync::close_pair_or(sync::operator(LeftParen), sync::operator(RightParen), sync::operator(Comma))) {
+        if let Some(&Token { data: TokenData::Operator(op), .. }) = parser.curr_tok() {
+          if op == Comma {
+            parser.advance();
+            continue;
+          } else {
+            parser.advance();
+            break;
+          }
+        }
+      }
+
+      // Could not recover
+      return None
+    }
   }
 
-  unreachable!("Internal error, function parselet called on non-fn token");
+  let return_type = if let Some(&Token { data: TokenData::Operator(RightArrow), .. }) = parser.curr_tok() {
+    parser.advance();
+
+    if let Some(texpr) = type_expression(parser) {
+      end_region = texpr.origin;
+      Some(texpr)
+    } else {
+      // type_expression should have already provided an error message
+      // Synchronization should be handled by higher level parselet
+      return None
+    }
+  } else {
+    None
+  };
+
+  let body = if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+    if let Some(blk) = block(parser) {
+      end_region = blk.origin;
+      Some(blk)
+    } else {
+      // block should have already provided an error message
+      // Synchronization should be handled by higher level parselet
+      return None
+    }
+  } else {
+    None
+  };
+
+  Some(Item::new(
+    ItemData::Function { identifier, parameters, return_type, body },
+    SourceRegion::merge(start_region, end_region)
+  ))
 }
 
 
