@@ -91,7 +91,7 @@ fn prepass (analyzer: &mut Analyzer) {
       match &item.data {
         ItemData::Module { identifier, items, .. } => {
           let module_key = breakable_block! {
-            let module = Module::new(Some(analyzer.active_module), Some(item.origin));
+            let module = Module::new(Some(analyzer.get_active_module_key()), Some(item.origin));
 
             if let Some(existing_binding) = analyzer.lookup_user_ident(identifier) {
               if let Some(&existing_key) = analyzer.get_active_module().modules.get(identifier.as_ref()) {
@@ -124,16 +124,9 @@ fn prepass (analyzer: &mut Analyzer) {
             break key;
           };
 
-          let parent_module = analyzer.active_module;
-          analyzer.active_module = module_key;
-          // ERROROROR //
-          // need to offload the current namespace and create a new one
-          // actually, the current implementation of namespace stack doesnt make sense anyways
-          // we dont need multiple layers of namespace at the item level
-          // so a new layer should indicate a new module
-          // meanwhile local namespaces should be stored separately
+          analyzer.push_active_module(module_key);
           prepass_impl(analyzer, items);
-          analyzer.active_module = parent_module;
+          analyzer.pop_active_module();
         },
 
         ItemData::Global { identifier, explicit_type, initializer: _ } => {

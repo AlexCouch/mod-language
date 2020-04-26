@@ -27,13 +27,15 @@ pub struct Analyzer<'a> {
   /// All contextual information used by a semantic analyzer
   pub context: Context,
 
-  /// A stack of namespaces which identifier lookups traverse down
-  pub namespaces: Vec<Namespace>,
-  /// A stack of placeholders to enable deep popping of namespaces
-  pub namespace_markers: Vec<usize>,
+  /// A stack of namespaces which identifier lookups traverse the top of
+  pub item_namespaces: Vec<Namespace>,
 
-  /// The active module being analyzed
-  pub active_module: ModuleKey,
+  /// A stack of namespaces which identifier lookups traverse the full depth of
+  pub local_namespaces: Vec<Namespace>,
+
+  /// A stack of active modules being analyzed
+  pub active_modules: Vec<ModuleKey>,
+
   /// The active local context being analyzed, if any
   pub local_context: Option<LocalContext>,
 }
@@ -43,20 +45,41 @@ impl<'a> Analyzer<'a> {
   /// Create a new semantic analyzer
   pub fn new (ast: &'a [Item]) -> Self {
     let context = Context::default();
-    let active_module = context.lib;
+    let active_modules = vec![ context.lib ];
 
     Self {
       ast,
 
       context,
-      namespaces: vec![ Namespace::default() ],
-      namespace_markers: vec![ ],
+      item_namespaces: vec![ Namespace::default() ],
+      local_namespaces: vec![ ],
 
-      active_module,
+      active_modules,
       local_context: None,
     }
   }
 
+
+  /// Traverse the user defined namespace stack of an Analyzer,
+  /// looking for a key binding matching an identifier
+  /// 
+  /// Returns a NamespaceKey if one is found
+  /// 
+  /// This is different from `lookup_ident` in that it does not traverse the core namespace;
+  /// see `lookup_ident` docs for more information on traversal
+  pub fn lookup_user_ident<S: AsRef<str>> (&self, ident: &S) -> Option<NamespaceKey> {
+    let ident = ident.as_ref();
+
+    for lns in self.local_namespaces.iter().rev() {
+      let key = lns.get(ident);
+
+      if key.is_some() { return key.unref() }
+    }
+
+    self.item_namespaces
+      .last()
+      .and_then(|ins| ins.get(ident).unref())
+  }
 
   /// Traverse the namespace stack of an Analyzer,
   /// looking for a key binding matching an identifier
@@ -65,48 +88,14 @@ impl<'a> Analyzer<'a> {
   /// 
   /// # Traversal order
   /// 
-  /// `namespace N -> ... -> namespace 0 -> core`
+  /// `local_namespace N -> ... -> local_namespace 0 -> item_namespace N -> core`
   /// 
-  /// When looking for an identifier, the namespace stack is traversed in descending order.
-  /// If the last namespace on the stack does not have the required identifier,
-  /// the core namespace is tried, finally if no entry is found in core then None is returned
-  /// 
-  /// This is different from `lookup_user_ident` in that it traverses the core namespace
+  /// When looking for an identifier, the local namespace stack is traversed in descending order.
+  /// If the local namespace stack does not contain the identifier, the namespace top of the item namespace stack is traversed,
+  /// after that the core namespace is tried, (if you want to skip the core namespace use `lookup_user_ident`),
+  /// finally if no entry is found in core then None is returned
   pub fn lookup_ident<S: AsRef<str>> (&self, ident: &S) -> Option<NamespaceKey> {
-    let ident = ident.as_ref();
-
-    for ns in self.namespaces.iter().rev() {
-      let key = ns.get(ident);
-
-      if key.is_some() { return key.unref() }
-    }
-
-    self.context.core.get(ident).unref()
-  }
-
-  /// Traverse the user defined namespace stack of an Analyzer,
-  /// looking for a key binding matching an identifier
-  /// 
-  /// Returns a NamespaceKey if one is found
-  /// 
-  /// # Traversal order
-  /// 
-  /// `namespace N -> ... -> namespace 0`
-  /// 
-  /// When looking for an identifier, the namespace stack is traversed in descending order.
-  /// If the last namespace on the stack does not have the required identifier, None is returned
-  /// 
-  /// This is different from `lookup_ident` in that it does not traverse the core namespace
-  pub fn lookup_user_ident<S: AsRef<str>> (&self, ident: &S) -> Option<NamespaceKey> {
-    let ident = ident.as_ref();
-
-    for ns in self.namespaces.iter().rev() {
-      let key = ns.get(ident);
-
-      if key.is_some() { return key.unref() }
-    }
-
-    self.context.core.get(ident).unref()
+    self.lookup_user_ident(ident).or_else(|| self.context.core.get(ident.as_ref()).unref())
   }
 
   /// Insert a new identifier binding into the namespace stack
@@ -117,12 +106,12 @@ impl<'a> Analyzer<'a> {
     let ident = ident.into();
     let key = key.into();
     
-    if let Some(tns) = self.namespaces.last_mut().allow_if_not(|tns| tns.contains_key(&ident)) {
+    if let Some(tns) = self.item_namespaces.last_mut().allow_if_not(|tns| tns.contains_key(&ident)) {
       tns.insert(ident, key);
     } else {
       let mut nns = HashMap::default();
       nns.insert(ident, key);
-      self.namespaces.push(nns);
+      self.item_namespaces.push(nns);
     }
   }
 
@@ -145,14 +134,42 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  
+  /// Push a new active module key and namespace on an Analyzer's stack
+  /// 
+  /// Panics if there is any local context or namespace
+  pub fn push_active_module (&mut self, key: ModuleKey) {
+    assert!(self.local_context.is_none() && self.local_namespaces.is_empty(), "Internal error, cannot create new active module with active local context or namespace");
+    self.active_modules.push(key);
+    self.item_namespaces.push(Namespace::default());
+  }
+
+  /// Pop and returns active module key and namespace from an Analyzer's stack
+  ///
+  /// Panics if there is only one (the root) active module and namespace left on the stack,
+  /// or if the item namespaces and active modules counts are not identical
+  pub fn pop_active_module (&mut self) -> (ModuleKey, Namespace) {
+    assert!(self.item_namespaces.len() == self.active_modules.len() && self.active_modules.len() > 1, "Internal error, unexpected active module / item namespace state while popping active module");
+    unsafe { (
+      self.active_modules.pop().unwrap_unchecked(),
+      self.item_namespaces.pop().unwrap_unchecked()
+    ) }
+  }
+
+
+  /// Get they key of the active Module in an Analyzer
+  pub fn get_active_module_key (&self) -> ModuleKey {
+    unsafe { self.active_modules.last().unref().unwrap_unchecked() }
+  }
+
   /// Get an immutable reference to the active Module in an Analyzer
   pub fn get_active_module (&self) -> &Module {
-    unsafe { self.context.modules.get_unchecked(self.active_module).as_ref().unwrap_unchecked() }
+    unsafe { self.context.modules.get_unchecked(self.get_active_module_key()).as_ref().unwrap_unchecked() }
   }
   
   /// Get a mutable reference to the active Module in an Analyzer
   pub fn get_active_module_mut (&mut self) -> &mut Module {
-    unsafe { self.context.modules.get_unchecked_mut(self.active_module).as_mut().unwrap_unchecked() }
+    unsafe { self.context.modules.get_unchecked_mut(self.get_active_module_key()).as_mut().unwrap_unchecked() }
   }
 
 
