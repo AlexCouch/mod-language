@@ -128,6 +128,18 @@ impl From<&str> for Identifier {
   }
 }
 
+impl Into<String> for Identifier {
+  fn into (self) -> String {
+    self.as_ref().to_owned()
+  }
+}
+
+impl Into<String> for &Identifier {
+  fn into (self) -> String {
+    self.as_ref().to_owned()
+  }
+}
+
 /// An enum containing either an Integer or FloatingPoint numeric value
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[allow(missing_docs)]

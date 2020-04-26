@@ -14,7 +14,7 @@ use crate::{
 
 
 /// A set of integers representing an index, line and column in a source file
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 #[allow(missing_docs)]
 pub struct SourceLocation {
   pub index: usize,
@@ -36,7 +36,7 @@ impl SourceLocation {
 }
 
 /// A pair of SourceLocations indicating a region in a source file
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 #[allow(missing_docs)]
 pub struct SourceRegion {
   pub start: SourceLocation,
