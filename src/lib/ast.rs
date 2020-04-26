@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-  source::{ SourceRegion, SourceLocation, },
+  source::{ SourceRegion, },
   common::{ Number, Identifier, Operator, },
 };
 
@@ -67,7 +67,7 @@ impl TypeExpression {
 
   /// Create a new TypeExpression with no SourceRegion origin
   pub fn no_src (data: TypeExpressionData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region(None) }
+    Self { data, origin: SourceRegion::ANONYMOUS }
   }
 }
 
@@ -164,7 +164,7 @@ impl Expression {
 
   /// Create a new Expression with no SourceRegion origin
   pub fn no_src (data: ExpressionData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region(None) }
+    Self { data, origin: SourceRegion::ANONYMOUS }
   }
 }
 
@@ -247,7 +247,7 @@ impl Statement {
 
   /// Create a new Statement with no SourceRegion origin
   pub fn no_src (data: StatementData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region(None) }
+    Self { data, origin: SourceRegion::ANONYMOUS }
   }
 }
 
@@ -281,7 +281,7 @@ impl Block {
 
   /// Create a new Block with no SourceRegion
   pub fn no_src (statements: Vec<Statement>, trailing_expression: Option<Expression>) -> Self {
-    Self { statements, trailing_expression, origin: SourceLocation::ZERO.to_region(None) }
+    Self { statements, trailing_expression, origin: SourceRegion::ANONYMOUS }
   }
 
   /// Determine if a Block has a trailing Expression, making the Block itself an Expression
@@ -319,7 +319,7 @@ impl ConditionalBranch {
 
   /// Create a new ConditionalBranch with no SourceRegion
   pub fn no_src (condition: Expression, body: Block) -> Self {
-    Self { condition, body, origin: SourceLocation::ZERO.to_region(None) }
+    Self { condition, body, origin: SourceRegion::ANONYMOUS }
   }
 
   /// Determine if the Block of a ConditionalBranch has a trailing Expression, making the ConditionalBranch itself an Expression
@@ -359,7 +359,7 @@ impl Conditional {
 
   /// Create a new Condtional with no SourceRegion
   pub fn no_src (if_branch: ConditionalBranch, else_if_branches: Vec<ConditionalBranch>, else_block: Option<Block>) -> Self {
-    Self { if_branch, else_if_branches, else_block, origin: SourceLocation::ZERO.to_region(None) }
+    Self { if_branch, else_if_branches, else_block, origin: SourceRegion::ANONYMOUS }
   }
 
   /// Determine if a Conditional's if Branch Block has a trailing Expression, making the Conditional itself an Expression
@@ -425,6 +425,6 @@ impl Item {
 
   /// Create a new Item with no SourceRegion origin
   pub fn no_src (data: ItemData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region(None) }
+    Self { data, origin: SourceRegion::ANONYMOUS }
   }
 }

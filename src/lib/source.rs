@@ -28,7 +28,7 @@ impl SourceLocation {
   pub const ZERO: Self = Self { index: 0, line: 0, column: 0 };
 
   /// Create a zero-width SourceRegion from a SourceLocation
-  pub fn to_region (self, source: Option<SourceKey>) -> SourceRegion {
+  pub const fn to_region (self, source: Option<SourceKey>) -> SourceRegion {
     SourceRegion {
       source,
       start: self,
@@ -47,19 +47,23 @@ pub struct SourceRegion {
 }
 
 impl SourceRegion {
+  /// A SourceRegion that is not attributed to any file or specific location
+  pub const ANONYMOUS: Self = SourceLocation::ZERO.to_region(None);
+
   /// Create a new SourceRegion from the start of one and the end of another
   /// 
-  /// Panics if the input SourceRegions' sources are not equal
+  /// If the input SourceRegions' sources are not equal,
+  /// this will create an anonymous SourceRegion instead
   pub fn merge (start: Self, end: Self) -> Self {
-    // TODO figure out a way to make this sensible
-    // we can't just merge source regions if they are from different files
-    // they probably shouldnt ever be but who knows what might happen later
-    assert!(start.source == end.source, "Internal error, cannot merge SourceRegions from multiple files");
-
-    Self {
-      source: start.source,
-      start: start.start,
-      end: end.end,
+    // TODO figure out a way to make this more sensible
+    if start.source == end.source {
+      Self {
+        source: start.source,
+        start: start.start,
+        end: end.end,
+      }
+    } else {
+      Self::ANONYMOUS
     }
   }
 }
@@ -196,6 +200,12 @@ impl SourceManager {
 
   /// Load a Source from a file path and get a key to it
   pub fn load<P: AsRef<Path>> (&self, path: P) -> IOResult<SourceKey> {
+    for src in self.map().values() {
+      if src.path == path.as_ref() {
+        return Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists))
+      }
+    }
+
     Ok(self.map().insert(Source::load(path)?))
   }
 
