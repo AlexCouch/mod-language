@@ -1,10 +1,11 @@
 //! The Item Parser function and its dependencies
 
 use crate::{
-  source::{ SourceRegion, },
+  source::{ SourceRegion, SOURCE_MANAGER, },
   common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, },
   token::{ Token, TokenData, },
   ast::{ Item, ItemData, },
+  lexer::{ Lexer, },
 };
 
 use super::{ Parser, ParseletPredicate, ParseletFunction, type_expression, expression, block, sync, };
@@ -26,16 +27,14 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
   if let Some(&Token { data: TokenData::Keyword(Module), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
-    if let Some(&Token { data: TokenData::Identifier(ref identifier), .. }) = parser.curr_tok() {
+    if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: end_region }) = parser.curr_tok() {
       let identifier = identifier.clone();
 
       parser.advance();
 
-      // TODO: multiple source files
-      if let Some(&Token { data: TokenData::Operator(Semi), origin: end_region }) = parser.curr_tok() {
-        parser.error_at(SourceRegion::merge(start_region, end_region), format!("Cannot import source module file `{}`, multiple source files NYI", identifier.as_ref()));
-        return None
-      } else if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+      if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+        parser.advance();
+
         let mut items = Vec::new();
 
         let mut itm_ok = true;
@@ -49,7 +48,8 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
 
             // The end of the block
             Some(&Token { data: TokenData::Operator(RightBracket), origin: end_region }) => {
-              return Some(Item::new(ItemData::Module { identifier, items }, SourceRegion::merge(start_region, end_region)));
+              parser.advance();
+              return Some(Item::new(ItemData::Module { identifier, items, inline: true }, SourceRegion::merge(start_region, end_region)));
             },
 
             // Items
@@ -68,10 +68,8 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
                   items.push(item);
 
                   continue
+                } // else { Error message already provided by item }
                 } else {
-                  parser.error("Expected an item or end of input".to_owned());
-                }
-              } else {
                 parser.error("Expected a ; to separate items or end of input".to_owned());
               }
 
@@ -87,6 +85,7 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
                   Token { data: TokenData::Keyword(_), .. } => {
                     itm_ok = true;
                   },
+                  Token { data: TokenData::Operator(RightBracket), .. } => continue, // The next iteration will handle the closing bracket
                   _ => unreachable!("Internal error, unexpected parser state post synchronization")
                 }
               } else {
@@ -96,6 +95,68 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
             }
           }
         }
+      } else {
+        let curr_source_key = start_region.source.expect("Internal error: Module item has no source origin");
+        let curr_source = SOURCE_MANAGER.get(curr_source_key).expect("Internal error: Module item has invalid source origin");
+
+        let curr_path = &curr_source.path;
+        let curr_dir = curr_path.parent().expect("Internal error: Source file path has no directory");
+
+        let sub_mod_path: std::path::PathBuf = [ curr_dir, identifier.as_ref().as_ref() ].iter().collect::<std::path::PathBuf>();
+        let sub_dir_mod_path: std::path::PathBuf = sub_mod_path.join("mod.ms");
+        let sub_file_mod_path: std::path::PathBuf = sub_mod_path.with_extension("ms");
+
+        let dir_exists = sub_dir_mod_path.exists();
+        let file_exists = sub_file_mod_path.exists();
+
+        let local_region = SourceRegion::merge(start_region, end_region);
+
+        let local_error = |msg| parser.error_at(local_region, format!("Cannot import submodule `{}`: {}", identifier, msg));
+
+        let sub_mod_path = if dir_exists && !file_exists {
+          sub_dir_mod_path
+        } else if file_exists && !dir_exists {
+          sub_file_mod_path
+        } else {
+          if file_exists && dir_exists {
+            local_error(format!(
+              "A file exists at both [{}] and [{}], please remove one to resolve the ambiguity",
+              sub_dir_mod_path.display(), sub_file_mod_path.display()
+            ))
+          } else {
+            local_error(format!(
+              "Expected a file at either [{}] or [{}], but neither exists",
+              sub_dir_mod_path.display(), sub_file_mod_path.display()
+            ))
+      }
+
+          return None
+        };
+
+        let sub_source_key = match SOURCE_MANAGER.load(&sub_mod_path) {
+          Ok(key) => key,
+          Err(e) => {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+              local_error(format!(
+                "File [{}] has already been loaded during this session, it cannot be imported twice",
+                sub_mod_path.display()
+              ))
+            } else {
+              local_error(format!(
+                "Unexpected error loading file [{}] from disk: {}",
+                sub_mod_path.display(), e
+              ))
+    }
+
+            return None
+  }
+        };
+
+        let mut sub_lexer = Lexer::new(sub_source_key);
+        let sub_stream = sub_lexer.lex_stream();
+        let mut sub_parser = Parser::new(&sub_stream);
+
+        return Some(Item::new(ItemData::Module { identifier, items: sub_parser.parse_ast(), inline: false }, local_region));
       }
     }
   }

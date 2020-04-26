@@ -89,7 +89,7 @@ fn prepass (analyzer: &mut Analyzer) {
   fn prepass_impl (analyzer: &mut Analyzer, items: &[Item]) {
     for item in items {
       match &item.data {
-        ItemData::Module { identifier, items } => {
+        ItemData::Module { identifier, items, .. } => {
           let module_key = breakable_block! {
             let module = Module::new(Some(analyzer.active_module), Some(item.origin));
 

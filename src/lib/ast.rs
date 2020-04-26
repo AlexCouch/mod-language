@@ -374,7 +374,7 @@ impl Conditional {
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
-  Module { identifier: Identifier, items: Vec<Item> },
+  Module { identifier: Identifier, items: Vec<Item>, inline: bool },
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
   Function { identifier: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: Option<TypeExpression>, body: Option<Block> },
 }
@@ -384,8 +384,9 @@ impl ItemData {
   /// requires a semicolon to separate it from other Items
   pub fn requires_semi (&self) -> bool {
     match self {
-      ItemData::Global { .. }
-        => true,
+      | ItemData::Global { .. }
+      => true,
+      ItemData::Module { inline, .. } => { !*inline },
       _ => false
     }
   }
