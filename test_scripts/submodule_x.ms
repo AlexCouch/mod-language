@@ -1,0 +1,3 @@
+fn testable_func () {
+  
+}

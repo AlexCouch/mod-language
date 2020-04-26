@@ -14,7 +14,7 @@ fn add (a: s32, b: s32) -> s32 {
   a + b
 }
 
-fn subrt () {
+fn subrt {
   print(x % 3, y * 2);
 }
 

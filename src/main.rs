@@ -18,7 +18,7 @@ fn main () -> std::io::Result<()> {
   SESSION.init();
   SOURCE_MANAGER.init();
 
-  let source = SOURCE_MANAGER.load("./test_scripts/item.ms")?;
+  let source = SOURCE_MANAGER.load("./test_scripts/module.ms")?;
 
   let mut lexer = Lexer::new(source);
 
