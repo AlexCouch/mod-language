@@ -58,10 +58,10 @@ macro_rules! make_definer {
           if let Some(existing_data) = existing_data {
             // Item was already defined in this module
             let message = format!(
-              concat!("Duplicate definition for ", stringify!($data), "`{}`, previous definition is at [{}]"),
+              concat!("Duplicate definition for ", stringify!($ty), "`{}`, previous definition is at [{}]"),
               identifier.as_ref(),
               existing_data.origin
-                .expect(concat!("Internal error: Found duplicate ", stringify!($data), " definition but existing ", stringify!($data), " had no source attribution"))
+                .expect(concat!("Internal error: Found duplicate ", stringify!($ty), " definition but existing ", stringify!($ty), " had no source attribution"))
             );
             
             self.error(origin, message);
@@ -86,7 +86,7 @@ macro_rules! make_definer {
   
             // TODO should this be removed?
             // insanity check, this should never happen
-            assert!(existing_data.is_none(), concat!("Internal error: Found unbound ", stringify!($data), " with definition"));
+            assert!(existing_data.is_none(), concat!("Internal error: Found unbound ", stringify!($ty), " with definition"));
   
             existing_data.replace($data);
             self.get_active_module_mut().$plural.insert(identifier.into(), data_key);
@@ -95,11 +95,11 @@ macro_rules! make_definer {
             return data_key
           } else {
             // Item was expected to be some other kind
-            self.error(origin, format!(
-              concat!(stringify!($ty), " definition `{}` shadows an identifier that was expected to be defined as an {}, first referenced at [{}]"),
+            self.error(self.get_first_reference(existing_binding), format!(
+              concat!("Identifier `{}` refers to a ", stringify!($ty), ", defined at [{}]; expected a {}"),
               identifier,
-              existing_binding.kind(),
-              self.get_first_reference(existing_binding)
+              origin,
+              existing_binding.kind()
             ));
           }
         }
