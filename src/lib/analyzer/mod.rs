@@ -2,7 +2,6 @@
 
 use crate::{
   util::{ UnwrapUnchecked, Unref, },
-  extras::{ AllowIf, },
   session::{ SESSION, MessageKind, },
   source::{ SourceRegion, },
   common::{ Identifier, },
@@ -173,19 +172,11 @@ impl<'a> Analyzer<'a> {
   }
 
   /// Insert a new identifier binding into the item namespace stack
-  /// 
-  /// If there is already a binding for the given identifier
-  /// in the top frame of the namespace stack, a new namespace stack frame is generated
   pub fn bind_item_ident<I: Into<String>, K: Into<NamespaceKey>> (&mut self, ident: I, key: K, origin: Option<SourceRegion>) {
     let ident = ident.into();
     let key = key.into();
-    
-    let tns = if let Some(tns) = self.item_namespaces.last_mut().allow_if_not(|tns| tns.has_entry(&ident)) {
-      tns
-    } else {
-      self.item_namespaces.push(Namespace::default());
-      self.item_namespaces.last_mut().unwrap()
-    };
+        
+    let tns = self.item_namespaces.last_mut().expect("Internal error, no item namespace on the stack");
     
     tns.add_entry(ident, key);
 
