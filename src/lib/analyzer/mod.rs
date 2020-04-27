@@ -40,7 +40,15 @@ pub struct Analyzer<'a> {
 
 macro_rules! make_definer {
   (($plural:ident) pub fn $fn_name:ident (&mut self, origin: SourceRegion, identifier: &Identifier, $data:ident: $ty:ident) -> $key:ident; $($rest:tt)*) => {
-    /// Define an item of the given kind
+    /// Defines an item of the given kind in an Analyzer's active module and namespace, and returns its key
+    /// 
+    /// Will produce session errors if the definition shadows:
+    /// + An existing definition
+    /// + An import
+    /// + An identifier expected to refer to another kind of item
+    /// 
+    /// 
+    /// Under these circumstances, the item is still created in order to prevent error spam
     pub fn $fn_name (&mut self, origin: SourceRegion, identifier: &Identifier, $data: $ty) -> $key {
       if let Some(existing_binding) = self.lookup_ident(identifier, false) {
         if let Some(&existing_key) = self.get_active_module().$plural.get(identifier.as_ref()) {
@@ -48,7 +56,7 @@ macro_rules! make_definer {
           let existing_data = unsafe { self.context.$plural.get_unchecked_mut(existing_key) };
   
           if let Some(existing_data) = existing_data {
-            // Item was already defined
+            // Item was already defined in this module
             let message = format!(
               concat!("Duplicate definition for ", stringify!($data), "`{}`, previous definition is at [{}]"),
               identifier.as_ref(),
@@ -58,15 +66,14 @@ macro_rules! make_definer {
             
             self.error(origin, message);
           } else {
-            // Item was only referenced
-            // not sure if this is possible
+            // Item was not defined but has been imported somewhere
             existing_data.replace($data);
             self.add_reference(existing_key, origin);
             self.bind_item_namespace_origin(existing_key, origin);
             return existing_key
           }
         } else if let Some(import_origin) = self.get_item_namespace_origin(existing_binding) {
-          // Item is an import
+          // Item shadows an import from another module
           self.error(origin, format!(
             concat!(stringify!($ty), " definition `{}` shadows an {} item imported at [{}]"),
             identifier.as_ref(), existing_binding.kind(), import_origin
@@ -77,7 +84,8 @@ macro_rules! make_definer {
             // Item was expected to be this kind, this is fine
             let existing_data = unsafe { self.context.$plural.get_unchecked_mut(data_key) };
   
-            // insanity check
+            // TODO should this be removed?
+            // insanity check, this should never happen
             assert!(existing_data.is_none(), concat!("Internal error: Found unbound ", stringify!($data), " with definition"));
   
             existing_data.replace($data);
@@ -96,7 +104,10 @@ macro_rules! make_definer {
           }
         }
       }
-  
+      
+      // Either this is the first time we've encountered this identifier,
+      // or we've fallen through from an error condition,
+      // and this definition is shadowing to prevent error spam
       let key = self.context.$plural.insert(Some($data));
       self.get_active_module_mut().$plural.insert(identifier.into(), key);
       self.bind_item_ident(identifier, key, Some(origin));
