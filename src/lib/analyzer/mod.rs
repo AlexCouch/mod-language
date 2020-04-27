@@ -5,8 +5,9 @@ use crate::{
   extras::{ AllowIf, },
   session::{ SESSION, MessageKind, },
   source::{ SourceRegion, },
+  common::{ Identifier, },
   ast::{ Item, },
-  ctx::{ Context, LocalContext, Namespace, Module, TypeData, ModuleKey, TypeKey, NamespaceKey, },
+  ctx::{ Context, LocalContext, Namespace, Module, Type, Global, Function, TypeData, ModuleKey, TypeKey, GlobalKey, FunctionKey, NamespaceKey, },
 };
 
 mod passes;
@@ -34,6 +35,79 @@ pub struct Analyzer<'a> {
 
   /// The active local context being analyzed, if any
   pub local_context: Option<LocalContext>,
+}
+
+
+macro_rules! make_definer {
+  (($plural:ident) pub fn $fn_name:ident (&mut self, origin: SourceRegion, identifier: &Identifier, $data:ident: $ty:ident) -> $key:ident; $($rest:tt)*) => {
+    /// Define an item of the given kind
+    pub fn $fn_name (&mut self, origin: SourceRegion, identifier: &Identifier, $data: $ty) -> $key {
+      if let Some(existing_binding) = self.lookup_ident(identifier, false) {
+        if let Some(&existing_key) = self.get_active_module().$plural.get(identifier.as_ref()) {
+          // Found an item known to exist in this module
+          let existing_data = unsafe { self.context.$plural.get_unchecked_mut(existing_key) };
+  
+          if let Some(existing_data) = existing_data {
+            // Item was already defined
+            let message = format!(
+              concat!("Duplicate definition for ", stringify!($data), "`{}`, previous definition is at [{}]"),
+              identifier.as_ref(),
+              existing_data.origin
+                .expect(concat!("Internal error: Found duplicate ", stringify!($data), " definition but existing ", stringify!($data), " had no source attribution"))
+            );
+            
+            self.error(origin, message);
+          } else {
+            // Item was only referenced
+            // not sure if this is possible
+            existing_data.replace($data);
+            self.add_reference(existing_key, origin);
+            self.bind_item_namespace_origin(existing_key, origin);
+            return existing_key
+          }
+        } else if let Some(import_origin) = self.get_item_namespace_origin(existing_binding) {
+          // Item is an import
+          self.error(origin, format!(
+            concat!(stringify!($ty), " definition `{}` shadows an {} item imported at [{}]"),
+            identifier.as_ref(), existing_binding.kind(), import_origin
+          ));
+        } else {
+          // Item is something that has been referenced but not attributed to any location
+          if let NamespaceKey::$ty(data_key) = existing_binding {
+            // Item was expected to be this kind, this is fine
+            let existing_data = unsafe { self.context.$plural.get_unchecked_mut(data_key) };
+  
+            // insanity check
+            assert!(existing_data.is_none(), concat!("Internal error: Found unbound ", stringify!($data), " with definition"));
+  
+            existing_data.replace($data);
+            self.get_active_module_mut().$plural.insert(identifier.into(), data_key);
+            self.add_reference(data_key, origin);
+            self.bind_item_namespace_origin(data_key, origin);
+            return data_key
+          } else {
+            // Item was expected to be some other kind
+            self.error(origin, format!(
+              concat!(stringify!($ty), " definition `{}` shadows an identifier that was expected to be defined as an {}, first referenced at [{}]"),
+              identifier,
+              existing_binding.kind(),
+              self.get_first_reference(existing_binding)
+            ));
+          }
+        }
+      }
+  
+      let key = self.context.$plural.insert(Some($data));
+      self.get_active_module_mut().$plural.insert(identifier.into(), key);
+      self.bind_item_ident(identifier, key, Some(origin));
+      self.add_reference(key, origin);
+      key
+    }
+
+    make_definer!{ $($rest)* }
+  };
+
+  () => {};
 }
 
 
@@ -173,6 +247,17 @@ impl<'a> Analyzer<'a> {
     self.context.reference_locations.entry(key.into()).or_insert_with(Vec::default).push(region)
   }
 
+  /// Get the first location a namespacekey was referenced
+  /// 
+  /// Panics if there is not a reference
+  pub fn get_first_reference<K: Into<NamespaceKey>> (&self, key: K) -> SourceRegion {
+    *self.context.reference_locations
+      .get(&key.into())
+      .expect("Internal error: Item created with no reference locations")
+      .first()
+      .expect("Internal error: Item reference array was empty")
+  }
+
   /// Get a shared TypeKey from an anonymous Type such as a function type
   /// 
   /// If this is the first time the given Type has been generated, a new key is created,
@@ -185,6 +270,14 @@ impl<'a> Analyzer<'a> {
     } else {
       self.context.types.insert(ty)
     }
+  }
+
+  
+  make_definer! {
+    (modules) pub fn define_module (&mut self, origin: SourceRegion, identifier: &Identifier, module: Module) -> ModuleKey;
+    (types) pub fn define_type (&mut self, origin: SourceRegion, identifier: &Identifier, r#type: Type) -> TypeKey;
+    (globals) pub fn define_global (&mut self, origin: SourceRegion, identifier: &Identifier, global: Global) -> GlobalKey;
+    (functions) pub fn define_function (&mut self, origin: SourceRegion, identifier: &Identifier, function: Function) -> FunctionKey;
   }
 
   
