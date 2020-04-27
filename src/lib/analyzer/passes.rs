@@ -95,27 +95,60 @@ fn prepass (analyzer: &mut Analyzer) {
 
             if let Some(existing_binding) = analyzer.lookup_ident(identifier, false) {
               if let Some(&existing_key) = analyzer.get_active_module().modules.get(identifier.as_ref()) {
+                // Found an item known to exist in this module
                 let existing_module = unsafe { analyzer.context.modules.get_unchecked_mut(existing_key) };
 
                 if let Some(existing_module) = existing_module {
+                  // Item was already defined
                   let message = format!(
                     "Duplicate definition for module `{}`, previous definition is at [{}]",
                     identifier.as_ref(),
-                    existing_module.origin.expect("Internal error: Found duplicate module definition but existing module had no source attribution")
+                    existing_module.origin
+                      .expect("Internal error: Found duplicate module definition but existing module had no source attribution")
                   );
                   
                   analyzer.error(item.origin, message);
                 } else {
+                  // Item was only referenced
+                  // not sure if this is possible
                   existing_module.replace(module);
                   analyzer.add_reference(existing_key, item.origin);
                   analyzer.bind_item_namespace_origin(existing_key, item.origin);
                   break existing_key;
                 }
-              // TODO: need some way of deferring errors because the item may be imported later
               } else if let Some(import_origin) = analyzer.get_item_namespace_origin(existing_binding) {
-                analyzer.error(item.origin, format!("Module definition `{}` shadows an {} item imported at [{}]", identifier.as_ref(), existing_binding.kind(), import_origin));
+                // Item is an import
+                analyzer.error(item.origin, format!(
+                  "Module definition `{}` shadows an {} item imported at [{}]",
+                  identifier.as_ref(), existing_binding.kind(), import_origin
+                ));
               } else {
-                analyzer.error(item.origin, format!("Module definition `{}` shadows an imported {} item", identifier.as_ref(), existing_binding.kind()));
+                // Item is something that has been referenced but not attributed to any location
+                if let NamespaceKey::Module(module_key) = existing_binding {
+                  // Item was expected to be a module, this is fine
+                  let existing_module = unsafe { analyzer.context.modules.get_unchecked_mut(module_key) };
+
+                  // insanity check
+                  assert!(existing_module.is_none(), "Internal error: Found unbound module with definition");
+
+                  existing_module.replace(module);
+                  analyzer.get_active_module_mut().modules.insert(identifier.into(), module_key);
+                  analyzer.add_reference(module_key, item.origin);
+                  analyzer.bind_item_namespace_origin(module_key, item.origin);
+                  break module_key;
+                } else {
+                  // Item was expected to be some other kind
+                  analyzer.error(item.origin, format!(
+                    "Module definition `{}` shadows an identifier that was expected to be defined as an {}, first referenced at [{}]",
+                    identifier,
+                    existing_binding.kind(),
+                    analyzer.context.reference_locations
+                      .get(&existing_binding)
+                      .expect("Internal error: Existing binding has no reference locations")
+                      .first()
+                      .expect("Internal error: Existing binding has reference location vec but no locations")
+                  ));
+                }
               }
             }
 
@@ -143,7 +176,8 @@ fn prepass (analyzer: &mut Analyzer) {
                 let message = format!(
                   "Duplicate definition for global variable `{}`, previous definition is at [{}]",
                   identifier.as_ref(),
-                  existing_global.origin.expect("Internal error: Found duplicate global definition but existing global had no source attribution")
+                  existing_global.origin
+                    .expect("Internal error: Found duplicate global definition but existing global had no source attribution")
                 );
                 
                 analyzer.error(item.origin, message);
@@ -153,11 +187,38 @@ fn prepass (analyzer: &mut Analyzer) {
                 analyzer.bind_item_namespace_origin(existing_key, item.origin);
                 continue
               }
-            // TODO: need some way of deferring errors because the item may be imported later
             } else if let Some(import_origin) = analyzer.get_item_namespace_origin(existing_binding) {
-              analyzer.error(item.origin, format!("Global variable definition `{}` shadows an {} item imported at [{}]", identifier.as_ref(), existing_binding.kind(), import_origin));
+              analyzer.error(item.origin, format!(
+                "Global variable definition `{}` shadows an {} item imported at [{}]",
+                identifier.as_ref(), existing_binding.kind(), import_origin
+              ));
             } else {
-              analyzer.error(item.origin, format!("Global variable definition `{}` shadows an imported {} item", identifier.as_ref(), existing_binding.kind()));
+              // Item is something that has been referenced but not attributed to any location
+              if let NamespaceKey::Global(global_key) = existing_binding {
+                // Item was expected to be a global, this is fine
+                let existing_global = unsafe { analyzer.context.globals.get_unchecked_mut(global_key) };
+
+                // insanity check
+                assert!(existing_global.is_none(), "Internal error: Found unbound global with definition");
+
+                existing_global.replace(global);
+                analyzer.get_active_module_mut().globals.insert(identifier.into(), global_key);
+                analyzer.add_reference(global_key, item.origin);
+                analyzer.bind_item_namespace_origin(global_key, item.origin);
+                continue
+              } else {
+                // Item was expected to be some other kind
+                analyzer.error(item.origin, format!(
+                  "Module definition `{}` shadows an identifier that was expected to be defined as an {}, first referenced at [{}]",
+                  identifier,
+                  existing_binding.kind(),
+                  analyzer.context.reference_locations
+                    .get(&existing_binding)
+                    .expect("Internal error: Existing binding has no reference locations")
+                    .first()
+                    .expect("Internal error: Existing binding has reference location vec but no locations")
+                ));
+              }
             }
           }
 
@@ -183,9 +244,9 @@ fn prepass (analyzer: &mut Analyzer) {
                 let message = format!(
                   "Duplicate definition for function `{}`, previous definition is at [{}]",
                   identifier.as_ref(),
-                  existing_function.origin.expect("Internal error: Found duplicate function definition but existing function had no source attribution")
+                  existing_function.origin
+                    .expect("Internal error: Found duplicate function definition but existing function had no source attribution")
                 );
-                
                 analyzer.error(item.origin, message);
               } else {
                 existing_function.replace(function);
@@ -193,11 +254,38 @@ fn prepass (analyzer: &mut Analyzer) {
                 analyzer.bind_item_namespace_origin(existing_key, item.origin);
                 continue
               }
-            // TODO: need some way of deferring errors because the item may be imported later
             } else if let Some(import_origin) = analyzer.get_item_namespace_origin(existing_binding) {
-              analyzer.error(item.origin, format!("Function definition `{}` shadows an {} item imported at [{}]", identifier.as_ref(), existing_binding.kind(), import_origin));
+              analyzer.error(item.origin, format!(
+                "Function definition `{}` shadows an {} item imported at [{}]",
+                identifier.as_ref(), existing_binding.kind(), import_origin
+              ));
             } else {
-              analyzer.error(item.origin, format!("Function definition `{}` shadows an imported {} item", identifier.as_ref(), existing_binding.kind()));
+              // Item is something that has been referenced but not attributed to any location
+              if let NamespaceKey::Function(function_key) = existing_binding {
+                // Item was expected to be a function, this is fine
+                let existing_function = unsafe { analyzer.context.functions.get_unchecked_mut(function_key) };
+
+                // insanity check
+                assert!(existing_function.is_none(), "Internal error: Found unbound function with definition");
+
+                existing_function.replace(function);
+                analyzer.get_active_module_mut().functions.insert(identifier.into(), function_key);
+                analyzer.add_reference(function_key, item.origin);
+                analyzer.bind_item_namespace_origin(function_key, item.origin);
+                continue
+              } else {
+                // Item was expected to be some other kind
+                analyzer.error(item.origin, format!(
+                  "Function definition `{}` shadows an identifier that was expected to be defined as an {}, first referenced at [{}]",
+                  identifier,
+                  existing_binding.kind(),
+                  analyzer.context.reference_locations
+                    .get(&existing_binding)
+                    .expect("Internal error: Existing binding has no reference locations")
+                    .first()
+                    .expect("Internal error: Existing binding has reference location vec but no locations")
+                ));
+              }
             }
           }
         
