@@ -5,6 +5,34 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "(Linux/lldb) Launch",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/mod_language",
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "(Linux/gdb) Launch",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/mod_language",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+          {
+              "description": "Enable pretty-printing for gdb",
+              "text": "-enable-pretty-printing",
+              "ignoreFailures": true
+          }
+      ]
+    },
+
+    {
       "name": "(Windows) Launch",
       "type": "cppvsdbg",
       "request": "launch",
