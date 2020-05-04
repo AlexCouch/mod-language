@@ -16,6 +16,7 @@ use std::{
 use crate::{
   util::{ make_key_type, Unref, UnwrapUnchecked, },
   collections::{ SlotMap, },
+  session::{ SESSION, },
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Path, },
@@ -98,38 +99,107 @@ impl Context {
   pub fn lower_key (&mut self, key: NamespaceKey) -> Option<NamespaceKey> {
     let item = self.items.get(key)?;
 
-    if let NamespaceItem::Alias(alias) = item {
-      let mut alias = alias.clone();
-      let mut lowered_key = None;
-      let orig_key = key;
+    macro_rules! replace_cache {
+      ($new_res:expr) => {
+        unsafe { self.items.get_unchecked_mut(key).mut_alias_unchecked() }.cached_key.replace($new_res);
+      };
+    }
 
-      if alias.cached_key.is_none() {
-        let mut base: &NamespaceItem = if alias.path.absolute {
-          self.items.get(alias.relative_to?)?
+    macro_rules! error {
+      ($origin:expr, $($format_args:expr),+) => {
+        {
+          SESSION.error(Some($origin), format!($($format_args),+));
+
+          replace_cache!(Err(()));
+
+          return None
+        }
+      };
+    }
+
+    Some(if let NamespaceItem::Alias(alias) = item {
+      if let Some(res) = alias.cached_key {
+        if let Ok(res) = res {
+          return Some(res)
         } else {
-          self.items.get(self.lib_mod)?
-        };
-        
-        let mut iter = alias.path.iter().peekable();
-
-        while let Some(ident) = iter.next() {
-          let key = base.ref_module()?.export_bindings.get_entry(ident)?;
-
-          if iter.peek().is_some() {
-            base = self.items.get(key)?;
-          } else {
-            alias.cached_key.replace(key);
-            unsafe { *self.items.get_unchecked_mut(orig_key).mut_import_unchecked() = alias };
-            lowered_key = Some(key);
-            break
-          }
+          return None
         }
       }
 
+      println!("lowering alias {:?}", &alias);
+
+      let alias = alias.clone();
+
+      let lowered_key = match &alias.data {
+        AliasData::Import(path) => {
+          let base_key = if path.absolute {
+            self.lib_mod
+          } else {
+            alias.relative_to.expect("Internal error, no base key for relative import alias")
+          };
+
+          let mut base_name = Identifier::default();
+
+          base_name.set(
+            &self.items
+              .get(base_key)
+              .expect("Internal error, base key for import alias is not valid")
+              .ref_module()
+              .expect("Internal error, base key for import alias does not resolve to a module")
+              .canonical_name
+          );
+
+          let mut lowered_key = base_key;
+
+          for ident in path.iter() {
+            let base = self.resolve_key(lowered_key)?;
+
+            if let NamespaceItem::Module(module) = base {
+              let entry_source = if lowered_key == base_key && alias.relative_to.is_some() {
+                &module.local_bindings
+              } else {
+                &module.export_bindings
+              };
+
+              if let Some(exported_key) = entry_source.get_entry(ident) {
+                base_name.set(ident);
+
+                lowered_key = self.lower_key(exported_key)?;
+              } else {
+                error!(alias.origin, "Module `{}` does not export an item named `{}`", module.canonical_name, ident);
+              }
+            } else {
+              error!(alias.origin, "`{}` is not a Module and has no exports", base_name);
+            }
+          }
+
+          lowered_key
+        },
+
+        AliasData::Export(ident) => {
+          let base_key = alias.relative_to.expect("Internal error, no base key for export alias");
+
+          let base: &Module = 
+            self.items
+              .get(base_key)
+              .expect("Internal error, base key for export alias is not valid")
+              .ref_module()
+              .expect("Internal error, base key for export alias does not resolve to a module");
+          
+          if let Some(local_key) = base.local_bindings.get_entry(ident) {
+            self.lower_key(local_key)?
+          } else {
+            error!(alias.origin, "Module `{}` does not have an item named `{}` to export", base.canonical_name, ident);
+          }
+        },
+      };
+
+      replace_cache!(Ok(lowered_key));
+
       lowered_key
     } else {
-      Some(key)
-    }
+      key
+    })
   }
 
   /// Resolve a NamespaceKey, traversing imports as deeply as possible
@@ -282,23 +352,32 @@ impl<'a> Iterator for NamespaceIterMut<'a> {
   }
 }
 
-
+/// The data associated with an alias, either import or export
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub enum AliasData {
+  Import(Path),
+  Export(Identifier),
+}
 
 /// A lazy evaluated, cached alias to a path
+#[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub struct Alias {
-  path: Path,
-  relative_to: Option<NamespaceKey>,
-  cached_key: Option<NamespaceKey>,
+  pub data: AliasData,
+  pub relative_to: Option<NamespaceKey>,
+  pub cached_key: Option<Result<NamespaceKey, ()>>,
+  pub origin: SourceRegion,
 }
 
 impl Alias {
   /// Create a new unresolved Alias
-  pub fn new<P: Into<Path>> (relative_to: Option<NamespaceKey>, path: P) -> Self {
+  pub fn new (relative_to: Option<NamespaceKey>, data: AliasData, origin: SourceRegion) -> Self {
     Self {
-      path: path.into(),
+      data,
       relative_to,
       cached_key: None,
+      origin,
     }
   }
 }
@@ -468,22 +547,22 @@ impl NamespaceItem {
 
 
   /// Convert a reference to a NamespaceItem into an optional reference to a Alias
-  #[inline] pub fn ref_import (&self) -> Option<&Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
+  #[inline] pub fn ref_alias (&self) -> Option<&Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
 
   /// Convert a reference to a NamespaceItem into an optional reference to a Alias
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
-  #[inline] pub unsafe fn ref_import_unchecked (&self) -> &Alias { if cfg!(debug_assertions) { self.ref_import().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
+  #[inline] pub unsafe fn ref_alias_unchecked (&self) -> &Alias { if cfg!(debug_assertions) { self.ref_alias().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
 
   /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Alias
-  #[inline] pub fn mut_import (&mut self) -> Option<&mut Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
+  #[inline] pub fn mut_alias (&mut self) -> Option<&mut Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
 
   /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Alias
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
-  #[inline] pub unsafe fn mut_import_unchecked (&mut self) -> &mut Alias { if cfg!(debug_assertions) { self.mut_import().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
+  #[inline] pub unsafe fn mut_alias_unchecked (&mut self) -> &mut Alias { if cfg!(debug_assertions) { self.mut_alias().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
 
   /// Convert a reference to a NamespaceItem into an optional reference to a Module
   #[inline] pub fn ref_module (&self) -> Option<&Module> { match self { Self::Module(item) => Some(item), _ => None } }

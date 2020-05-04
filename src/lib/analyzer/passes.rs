@@ -7,7 +7,7 @@ use crate::{
   common::{ Identifier, },
   // source::{ SourceRegion, },
   ast::{ Item, ItemData, Export, Alias as ASTAlias, },
-  ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, Alias as CTXAlias, },
+  ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, Alias as CTXAlias, AliasData, },
 };
 
 use super::{ Analyzer, };
@@ -89,7 +89,7 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
 
             let relative_to = if path.absolute { None } else { Some(analyzer.get_active_module_key()) };
 
-            analyzer.create_item(new_name.to_owned(), CTXAlias::new(relative_to, path.extend(base.to_owned())), item.origin);
+            analyzer.create_item(new_name.to_owned(), CTXAlias::new(relative_to, AliasData::Import(path.extend(base.to_owned())), item.origin), item.origin);
           }
         },
 
@@ -99,7 +99,7 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
               for ASTAlias { base, new_name } in aliases.iter() {
                 let new_name = if let Some(new_name) = new_name { new_name } else { base };
                 
-                let key = analyzer.context.items.insert(CTXAlias::new(Some(analyzer.get_active_module_key()), base.to_owned()).into());
+                let key = analyzer.context.items.insert(CTXAlias::new(Some(analyzer.get_active_module_key()), AliasData::Export(base.to_owned()), item.origin).into());
                 
                 analyzer.get_active_module_mut().export_bindings.set_entry_bound(new_name.to_owned(), key, item.origin);
               }
