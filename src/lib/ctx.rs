@@ -1,4 +1,12 @@
+
+
+#![allow(dead_code)]
+
 //! Contextual types used by the semantic analysis system
+
+use core::{
+  hint::{ unreachable_unchecked, },
+};
 
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
@@ -6,46 +14,29 @@ use std::{
 };
 
 use crate::{
-  util::{ make_key_type, Unref, },
-  source::{ SourceRegion, },
+  util::{ make_key_type, Unref, UnwrapUnchecked, },
   collections::{ SlotMap, },
+  source::{ SourceRegion, },
+  common::{ Identifier, },
+  ast::{ Path, },
 };
 
 
-
-/// A local context for semantic analysis inside a function
-pub struct LocalContext {
-  /// All function parameter variables available in a local context
-  pub parameters: SlotMap<ParameterKey, Parameter>,
-  /// All stack variables created in a local context,
-  /// not all of them may be accessable by the namespace
-  pub locals:     SlotMap<LocalKey, Local>,
-}
-
-/// The library-wide context for a semantic analyzer,
-/// where all data is stored for reference by descendant structures
+/// The main layer of contextual information derived from a semantic analysis session
+#[derive(Debug)]
 pub struct Context {
-  /// All modules in a library being analyzed
-  pub modules:   SlotMap<ModuleKey, Option<Module>>,
-  /// All types in a library being analyzed
-  pub types:     SlotMap<TypeKey, Option<Type>>,
-  /// All globals in a library being analyzed
-  pub globals:   SlotMap<GlobalKey, Option<Global>>,
-  /// All functions in a library being analyzed
-  pub functions: SlotMap<FunctionKey, Option<Function>>,
-
-  /// A list of source locations referencing items in the context
+  /// Storage for all top-level items discovered by a semantic analyzer
+  pub items: SlotMap<NamespaceKey, NamespaceItem>,
+  /// The namespace containing compiler intrinsics for a Context
+  pub core_ns: Namespace,
+  /// The module containing compiler intrinsics for a Context
+  pub core_mod: NamespaceKey,
+  /// The root module for the library represented by a Context
+  pub lib_mod: NamespaceKey,
+  /// A list of source locations referencing items in a Context
   pub reference_locations: HashMap<NamespaceKey, Vec<SourceRegion>>,
-
-  /// The universal namespace available to all code in a library,
-  /// containing things like the built in primitive types
-  pub core: Namespace,
-
-  /// The ModuleKey associated with the root library module
-  pub lib: ModuleKey,
-
-  /// The TypeKey given as a result of a type error
-  pub err_ty: TypeKey,
+  /// The key given as a result of a type error
+  pub err_ty: NamespaceKey,
 }
 
 impl Default for Context {
@@ -68,124 +59,97 @@ impl Context {
       ("s64",  TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 64 })),
     ];
 
-    let mut types = SlotMap::default();
-    let mut core_mod = Module::default();
+    let mut items = SlotMap::default();
+    let mut core_mod = Module::new(None, "core".into(), SourceRegion::ANONYMOUS);
     let mut core_ns  = Namespace::default();
 
-    for &(name, ref ty) in PRIMITIVE_TYPES.iter() {
-      let key = types.insert(Some(ty.clone().into()));
-      let ns_key = NamespaceKey::Type(key);
+    for &(name, ref td) in PRIMITIVE_TYPES.iter() {
+      let key = items.insert(Type::new(name.into(), SourceRegion::ANONYMOUS, Some(td.clone())).into());
 
-      core_ns.add_entry(name, ns_key);
-      core_mod.types.insert(name.to_string(), key);
-      core_mod.exports.insert(name.to_string(), ns_key);
+      core_ns.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
+      core_mod.local_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
+      core_mod.export_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
     }
 
-    let mut modules = SlotMap::default();
-    let core_key = modules.insert(Some(core_mod));
-    core_ns.add_entry("core", NamespaceKey::Module(core_key));
+    let core_key = items.insert(core_mod.into());
+    core_ns.set_entry_bound("core", core_key, SourceRegion::ANONYMOUS);
 
-    let lib_mod = Module::default();
-    let lib_key = modules.insert(Some(lib_mod));
-    core_ns.add_entry("lib", NamespaceKey::Module(lib_key));
+    let lib_mod = Module::new(None, "lib".into(), SourceRegion::ANONYMOUS);
+    let lib_key = items.insert(lib_mod.into());
+    core_ns.set_entry_bound("lib", lib_key, SourceRegion::ANONYMOUS);
 
-    let err_ty = types.insert(Some(TypeData::Alias(TypeKey::default()).into()));
+    let err_ty = items.insert(Type::new("err_ty".into(), SourceRegion::ANONYMOUS, Some(TypeData::Alias(NamespaceKey::default()))).into());
 
     Self {
-      modules,
-      types,
-      globals: SlotMap::default(),
-      functions: SlotMap::default(),
+      items,
 
       reference_locations: HashMap::default(),
 
-      core: core_ns,
-      lib: lib_key,
+      core_ns,
+      core_mod: core_key,
+      lib_mod: lib_key,
 
       err_ty,
     }
   }
-}
 
 
+  /// Get the bottom level of NamespaceKey using alias traversal
+  pub fn lower_key (&mut self, key: NamespaceKey) -> Option<NamespaceKey> {
+    let item = self.items.get(key)?;
 
+    if let NamespaceItem::Alias(alias) = item {
+      let mut alias = alias.clone();
+      let mut lowered_key = None;
+      let orig_key = key;
 
-/// The kind of an identifier in a Namespace
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum NamespaceKind {
-  /// An identifier known to refer to a module
-  Module,
-  /// An identifier known to refer to a type
-  Type,
-  /// An identifier known to refer to a global
-  Global,
-  /// An identifier known to refer to a function
-  Function,
-  /// An identifier known to refer to a local function parameter variable
-  Parameter,
-  /// An identifier known to refer to a local stack variable
-  Local,
-}
+      if alias.cached_key.is_none() {
+        let mut base: &NamespaceItem = if alias.path.absolute {
+          self.items.get(alias.relative_to?)?
+        } else {
+          self.items.get(self.lib_mod)?
+        };
+        
+        let mut iter = alias.path.iter().peekable();
 
-impl Display for NamespaceKind {
-  fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    write!(f, "{}", match self {
-      Self::Module => "Module",
-      Self::Type => "Type",
-      Self::Global => "Global",
-      Self::Function => "Function",
-      Self::Parameter => "Parameter",
-      Self::Local => "Local",
-    })
-  }
-}
+        while let Some(ident) = iter.next() {
+          let key = base.ref_module()?.export_bindings.get_entry(ident)?;
 
+          if iter.peek().is_some() {
+            base = self.items.get(key)?;
+          } else {
+            alias.cached_key.replace(key);
+            unsafe { *self.items.get_unchecked_mut(orig_key).mut_import_unchecked() = alias };
+            lowered_key = Some(key);
+            break
+          }
+        }
+      }
 
-/// Any identifier in a Namespace
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum NamespaceKey {
-  /// A module identifier
-  Module(ModuleKey),
-  /// A type identifier
-  Type(TypeKey),
-  /// A global identifier
-  Global(GlobalKey),
-  /// A function identifier
-  Function(FunctionKey),
-
-  /// A function parameter local variable
-  Parameter(ParameterKey),
-  /// A stack local variable
-  Local(LocalKey),
-}
-
-impl NamespaceKey {
-  /// Get the NamespaceKind of a NamespaceKey
-  pub fn kind (&self) -> NamespaceKind {
-    match self {
-      Self::Module(_) => NamespaceKind::Module,
-      Self::Type(_) => NamespaceKind::Type,
-      Self::Global(_) => NamespaceKind::Global,
-      Self::Function(_) => NamespaceKind::Function,
-      Self::Parameter(_) => NamespaceKind::Parameter,
-      Self::Local(_) => NamespaceKind::Local,
+      lowered_key
+    } else {
+      Some(key)
     }
   }
-}
 
-impl From<ModuleKey> for NamespaceKey { #[inline] fn from (key: ModuleKey) -> Self { Self::Module(key) } }
-impl From<TypeKey> for NamespaceKey { #[inline] fn from (key: TypeKey) -> Self { Self::Type(key) } }
-impl From<GlobalKey> for NamespaceKey { #[inline] fn from (key: GlobalKey) -> Self { Self::Global(key) } }
-impl From<FunctionKey> for NamespaceKey { #[inline] fn from (key: FunctionKey) -> Self { Self::Function(key) } }
-impl From<ParameterKey> for NamespaceKey { #[inline] fn from (key: ParameterKey) -> Self { Self::Parameter(key) } }
-impl From<LocalKey> for NamespaceKey { #[inline] fn from (key: LocalKey) -> Self { Self::Local(key) } }
+  /// Resolve a NamespaceKey, traversing imports as deeply as possible
+  pub fn resolve_key (&mut self, key: NamespaceKey) -> Option<&NamespaceItem> {
+    let key = self.lower_key(key)?;
+    self.items.get(key)
+  }
+
+  /// Resolve a NamespaceKey, traversing imports as deeply as possible
+  pub fn resolve_key_mut (&mut self, key: NamespaceKey) -> Option<&mut NamespaceItem> {
+    let key = self.lower_key(key)?;
+    self.items.get_mut(key)
+  }
+}
 
 
 /// A layer of semantic distinction for identifiers in a compilation context
 #[derive(Debug, Clone, Default)]
 pub struct Namespace {
-  entries: HashMap<String, NamespaceKey>,
+  entries: HashMap<Identifier, NamespaceKey>,
   bind_locations: HashMap<NamespaceKey, SourceRegion>,
 }
 
@@ -201,17 +165,20 @@ impl Namespace {
   }
 
   /// Register a binding location for a Namespace entry
-  /// 
-  /// Panics if the Namespace entry is already bound
   pub fn set_bind_location (&mut self, key: NamespaceKey, location: SourceRegion) {
-    assert!(!self.has_bind_location(key), "Internal error: Namespace entry bound to multiple source locations");
-
     self.bind_locations.insert(key, location);
   }
   
   /// Get the entry, if any, associated with an identifier in a Namespace
   pub fn get_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> Option<NamespaceKey> {
     self.entries.get(ident.as_ref()).unref()
+  }
+
+  /// Get the entry associated with an identifier in a Namespace
+  /// # Safety
+  /// It is up to the caller to determine whether the identifier provided is bound
+  pub unsafe fn get_entry_unchecked<I: AsRef<str> + ?Sized> (&self, ident: &I) -> NamespaceKey {
+    *self.entries.get(ident.as_ref()).unwrap_unchecked()
   }
 
   /// Determine if a namespace entry has a binding location
@@ -235,71 +202,137 @@ impl Namespace {
   }
 
   /// Register a new namespace entry
-  ///
-  /// Panics if the namespace entry is already bound
-  pub fn add_entry<I: Into<String> + AsRef<str>> (&mut self, ident: I, key: NamespaceKey) {
-    assert!(!self.has_entry(&ident), "Internal error: Namespace entry already exists");
-
+  pub fn set_entry<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: NamespaceKey) {
     self.entries.insert(ident.into(), key);
   }
 
+  /// Register a new namespace entry, and immediately bind its source location
+  pub fn set_entry_bound<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: NamespaceKey, location: SourceRegion) {
+    self.set_entry(ident, key);
+    self.set_bind_location(key, location);
+  }
+
+  /// Get a key/loc iterator over the bind pairs in a namespace
+  pub fn bind_iter (&self) -> HashMapIter<NamespaceKey, SourceRegion> {
+    self.bind_locations.iter()
+  }
+
+  /// Get a mutable key/loc iterator over the bind pairs in a namespace
+  pub fn bind_iter_mut (&mut self) -> HashMapIterMut<NamespaceKey, SourceRegion> {
+    self.bind_locations.iter_mut()
+  }
+
   /// Get a key/value iterator over the entry pairs in a namespace
-  pub fn entry_iter (&self) -> HashMapIter<String, NamespaceKey> {
+  pub fn entry_iter (&self) -> HashMapIter<Identifier, NamespaceKey> {
     self.entries.iter()
   }
 
   /// Get a mutable key/value iterator over the entry pairs in a namespace
-  pub fn entry_iter_mut (&mut self) -> HashMapIterMut<String, NamespaceKey> {
+  pub fn entry_iter_mut (&mut self) -> HashMapIterMut<Identifier, NamespaceKey> {
     self.entries.iter_mut()
+  }
+
+  /// Get an immutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
+  pub fn iter (&self) -> NamespaceIter {
+    NamespaceIter {
+      bind_locations: &self.bind_locations,
+      entry_iter: self.entries.iter()
+    }
+  }
+
+  /// Get a mutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
+  pub fn iter_mut (&mut self) -> NamespaceIterMut {
+    NamespaceIterMut {
+      bind_locations: &self.bind_locations,
+      entry_iter: self.entries.iter_mut()
+    }
+  }
+}
+
+/// An immutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
+pub struct NamespaceIter<'a> {
+  bind_locations: &'a HashMap<NamespaceKey, SourceRegion>,
+  entry_iter: HashMapIter<'a, Identifier, NamespaceKey>,
+}
+
+impl<'a> Iterator for NamespaceIter<'a> {
+  type Item = (&'a Identifier, &'a NamespaceKey, &'a SourceRegion);
+
+  fn next (&mut self) -> Option<Self::Item> {
+    let (ident, key) = self.entry_iter.next()?;
+
+    Some((ident, key, self.bind_locations.get(key)?))
+  }
+}
+
+/// A mutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
+pub struct NamespaceIterMut<'a> {
+  bind_locations: &'a HashMap<NamespaceKey, SourceRegion>,
+  entry_iter: HashMapIterMut<'a, Identifier, NamespaceKey>,
+}
+
+impl<'a> Iterator for NamespaceIterMut<'a> {
+  type Item = (&'a Identifier, &'a mut NamespaceKey, &'a SourceRegion);
+
+  fn next (&mut self) -> Option<Self::Item> {
+    let (ident, key) = self.entry_iter.next()?;
+    let owned_key = *key;
+
+    Some((ident, key, self.bind_locations.get(&owned_key)?))
+  }
+}
+
+
+
+/// A lazy evaluated, cached alias to a path
+#[derive(Debug, Clone)]
+pub struct Alias {
+  path: Path,
+  relative_to: Option<NamespaceKey>,
+  cached_key: Option<NamespaceKey>,
+}
+
+impl Alias {
+  /// Create a new unresolved Alias
+  pub fn new<P: Into<Path>> (relative_to: Option<NamespaceKey>, path: P) -> Self {
+    Self {
+      path: path.into(),
+      relative_to,
+      cached_key: None,
+    }
   }
 }
 
 
 /// The basic unit of source for a semantic analyzer,
 /// serves as a container for types, values, and other modules
+#[derive(Debug, Clone)]
 pub struct Module {
-  /// The hierarchical predecessor of a module if one exists.
-  /// All modules other than the root library module and core module have a parent
-  /// Later, external dependency modules may be possible, which would also have no parent
-  pub parent: Option<ModuleKey>,
-  
-  /// Hierarchical descedants of a module
-  pub modules:   HashMap<String, ModuleKey>,
-  /// Types associated with a module
-  pub types:     HashMap<String, TypeKey>,
-  /// Globals associated with a module
-  pub globals:   HashMap<String, GlobalKey>,
-  /// Functions associated with a module
-  pub functions: HashMap<String, FunctionKey>,
-
-  /// A list of all items publicly accessable from outside a module
-  pub exports: HashMap<String, NamespaceKey>,
-
-  /// The source location at which a Module was defined
-  pub origin: Option<SourceRegion>,
-}
-
-impl Default for Module {
-  #[inline] fn default () -> Self { Self::new(None, None) }
+  /// Immediate hierarchical ancestor of a Module, if any
+  pub parent: Option<NamespaceKey>,
+  /// The canonical, original name of a Module
+  pub canonical_name: Identifier,
+  /// Namespaced bindings available locally, inside a Module
+  pub local_bindings: Namespace,
+  /// Namespaced bindings available publicly, outside a Module
+  pub export_bindings: Namespace,
+  /// The SourceRegion at which a Module was defined
+  pub origin: SourceRegion,
 }
 
 impl Module {
   /// Create a new semantic analysis Module, and initialize its parent key
-  pub fn new (parent: Option<ModuleKey>, origin: Option<SourceRegion>) -> Self {
+  pub fn new (parent: Option<NamespaceKey>, canonical_name: Identifier, origin: SourceRegion) -> Self {
     Self {
       parent,
-
-      modules: HashMap::default(),
-      types: HashMap::default(),
-      globals: HashMap::default(),
-      functions: HashMap::default(),
-      
-      exports: HashMap::default(),
-
+      canonical_name,
+      local_bindings: Namespace::default(),
+      export_bindings: Namespace::default(),
       origin,
     }
   }
 }
+
 
 /// Data representation of the simplest kind of type,
 /// built in primitives such as numbers
@@ -327,100 +360,235 @@ pub enum PrimitiveType {
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum TypeData {
   /// A reference to another type
-  Alias(TypeKey),
+  Alias(NamespaceKey),
   /// Built in primitive type such as an integer
   Primitive(PrimitiveType),
   /// A pointer to another type
-  Pointer(TypeKey),
+  Pointer(NamespaceKey),
   /// A function pointer
   Function {
     /// The type(s) of any parameters accepted by a function
-    parameter_types: Vec<TypeKey>,
+    parameter_types: Vec<NamespaceKey>,
     /// The type of value returned by a function, if any
-    return_type: Option<TypeKey>
+    return_type: Option<NamespaceKey>
   },
 }
 
 /// Any Type known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Type {
-  /// The unique data associated with a type
-  pub data: TypeData,
-  /// The source location at which a global was defined
-  pub origin: Option<SourceRegion>,
+  /// The canonical, original name of a Type
+  pub canonical_name: Identifier,
+  /// The unique data associated with a Type, if it has been defined
+  pub data: Option<TypeData>,
+  /// The SourceRegion at which a Type was defined
+  pub origin: SourceRegion,
 }
 
-impl PartialEq for Type {
-  #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data }
+impl Type {
+  /// Create a new Type and initialize its canonical name, origin, and optionally its data
+  pub fn new (canonical_name: Identifier, origin: SourceRegion, data: Option<TypeData>) -> Self {
+    Self {
+      canonical_name,
+      data,
+      origin,
+    }
+  }
 }
 
-impl std::hash::Hash for Type {
-  #[inline] fn hash<H: std::hash::Hasher> (&self, hasher: &mut H) { self.data.hash(hasher) }
-}
 
-impl From<TypeData> for Type {
-  fn from (data: TypeData) -> Self { Self { data, origin: None } }
-}
-
-/// A global variable in a semantic analysis context
+/// Any Global known by a semantic analyzer
+#[derive(Debug, Clone)]
 pub struct Global {
-  /// The type of value represented by a global
-  pub ty: TypeKey,
-  /// The source location at which a global was defined
-  pub origin: Option<SourceRegion>,
+  /// The canonical, original name of a Global
+  pub canonical_name: Identifier,
+  /// The Type associated with a Global, if it has been defined
+  pub ty: Option<NamespaceKey>,
+  /// The SourceRegion at which a Global was defined
+  pub origin: SourceRegion,
 }
 
-impl From<TypeKey> for Global {
-  fn from (ty: TypeKey) -> Self { Self { ty, origin: None } }
+impl Global {
+  /// Create a new Global and initialize its canonical name, origin, and optionally its type
+  pub fn new (canonical_name: Identifier, origin: SourceRegion, ty: Option<NamespaceKey>) -> Self {
+    Self {
+      canonical_name,
+      ty,
+      origin,
+    }
+  }
 }
 
-/// A function in a semantic analysis context
+/// Any Function known by a semantic analyzer
+#[derive(Debug, Clone)]
 pub struct Function {
-  /// The type of the interface presented by a function
-  pub ty: TypeKey,
-  /// The source location at which a function was defined
-  pub origin: Option<SourceRegion>,
+  /// The canonical, original name of a Function
+  pub canonical_name: Identifier,
+  /// The Type associated with a Function, if it has been defined
+  pub ty: Option<NamespaceKey>,
+  /// The SourceRegion at which a Function was defined
+  pub origin: SourceRegion,
 }
 
-impl From<TypeKey> for Function {
-  fn from (ty: TypeKey) -> Self { Self { ty, origin: None } }
+impl Function {
+  /// Create a new Function and initialize its canonical name, origin, and optionally its type
+  pub fn new (canonical_name: Identifier, origin: SourceRegion, ty: Option<NamespaceKey>) -> Self {
+    Self {
+      canonical_name,
+      ty,
+      origin,
+    }
+  }
 }
 
-/// A function parameter variable in a semantic analysis local context
-pub struct Parameter {
-  /// The type of value represented by a parameter
-  pub ty: TypeKey,
-  /// The source location at which a parameter was defined
-  pub origin: Option<SourceRegion>,
+
+/// A top-level item known by a semantic analyzer
+#[allow(missing_docs)]
+#[allow(clippy::large_enum_variant)] // This is unavoidable in this instance
+#[derive(Debug, Clone)]
+pub enum NamespaceItem {
+  Alias(Alias),
+  Module(Module),
+  Type(Type),
+  Global(Global),
+  Function(Function),
 }
 
-impl From<TypeKey> for Parameter {
-  fn from (ty: TypeKey) -> Self { Self { ty, origin: None } }
+impl NamespaceItem {
+  /// Get the NamespaceKind of a NamespaceItem
+  pub fn kind (&self) -> NamespaceKind {
+    match self {
+      Self::Alias(_)    => NamespaceKind::Alias,
+      Self::Module(_)   => NamespaceKind::Module,
+      Self::Type(_)     => NamespaceKind::Type,
+      Self::Global(_)   => NamespaceKind::Global,
+      Self::Function(_) => NamespaceKind::Function,
+    }
+  }
+
+
+  /// Convert a reference to a NamespaceItem into an optional reference to a Alias
+  #[inline] pub fn ref_import (&self) -> Option<&Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
+
+  /// Convert a reference to a NamespaceItem into an optional reference to a Alias
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn ref_import_unchecked (&self) -> &Alias { if cfg!(debug_assertions) { self.ref_import().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Alias
+  #[inline] pub fn mut_import (&mut self) -> Option<&mut Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Alias
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn mut_import_unchecked (&mut self) -> &mut Alias { if cfg!(debug_assertions) { self.mut_import().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
+
+  /// Convert a reference to a NamespaceItem into an optional reference to a Module
+  #[inline] pub fn ref_module (&self) -> Option<&Module> { match self { Self::Module(item) => Some(item), _ => None } }
+
+  /// Convert a reference to a NamespaceItem into an optional reference to a Module
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn ref_module_unchecked (&self) -> &Module { if cfg!(debug_assertions) { self.ref_module().unwrap() } else if let Self::Module(item) = self { item } else { unreachable_unchecked() } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Module
+  #[inline] pub fn mut_module (&mut self) -> Option<&mut Module> { match self { Self::Module(item) => Some(item), _ => None } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Module
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn mut_module_unchecked (&mut self) -> &mut Module { if cfg!(debug_assertions) { self.mut_module().unwrap() } else if let Self::Module(item) = self { item } else { unreachable_unchecked() } }
+  
+  /// Convert a reference to a NamespaceItem into an optional reference to a Type
+  #[inline] pub fn ref_type (&self) -> Option<&Type> { match self { Self::Type(item) => Some(item), _ => None } }
+
+  /// Convert a reference to a NamespaceItem into an optional reference to a Type
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn ref_type_unchecked (&self) -> &Type { if cfg!(debug_assertions) { self.ref_type().unwrap() } else if let Self::Type(item) = self { item } else { unreachable_unchecked() } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Type
+  #[inline] pub fn mut_type (&mut self) -> Option<&mut Type> { match self { Self::Type(item) => Some(item), _ => None } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Type
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn mut_type_unchecked (&mut self) -> &mut Type { if cfg!(debug_assertions) { self.mut_type().unwrap() } else if let Self::Type(item) = self { item } else { unreachable_unchecked() } }
+  
+  /// Convert a reference to a NamespaceItem into an optional reference to a Global
+  #[inline] pub fn ref_global (&self) -> Option<&Global> { match self { Self::Global(item) => Some(item), _ => None } }
+
+  /// Convert a reference to a NamespaceItem into an optional reference to a Global
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn ref_global_unchecked (&self) -> &Global { if cfg!(debug_assertions) { self.ref_global().unwrap() } else if let Self::Global(item) = self { item } else { unreachable_unchecked() } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Global
+  #[inline] pub fn mut_global (&mut self) -> Option<&mut Global> { match self { Self::Global(item) => Some(item), _ => None } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Global
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn mut_global_unchecked (&mut self) -> &mut Global { if cfg!(debug_assertions) { self.mut_global().unwrap() } else if let Self::Global(item) = self { item } else { unreachable_unchecked() } }
+  
+  /// Convert a reference to a NamespaceItem into an optional reference to a Function
+  #[inline] pub fn ref_function (&self) -> Option<&Function> { match self { Self::Function(item) => Some(item), _ => None } }
+
+  /// Convert a reference to a NamespaceItem into an optional reference to a Function
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn ref_function_unchecked (&self) -> &Function { if cfg!(debug_assertions) { self.ref_function().unwrap() } else if let Self::Function(item) = self { item } else { unreachable_unchecked() } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Function
+  #[inline] pub fn mut_function (&mut self) -> Option<&mut Function> { match self { Self::Function(item) => Some(item), _ => None } }
+
+  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Function
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn mut_function_unchecked (&mut self) -> &mut Function { if cfg!(debug_assertions) { self.mut_function().unwrap() } else if let Self::Function(item) = self { item } else { unreachable_unchecked() } }
 }
 
-/// A stack variable in a semantic analysis local context
-pub struct Local {
-  /// The type of value represented by a local
-  pub ty: TypeKey,
-  /// The source location at which a local was defined
-  pub origin: Option<SourceRegion>,
+impl From<Alias> for NamespaceItem { #[inline] fn from (item: Alias) -> NamespaceItem { Self::Alias(item) } }
+impl From<Module> for NamespaceItem { #[inline] fn from (item: Module) -> NamespaceItem { Self::Module(item) } }
+impl From<Type> for NamespaceItem { #[inline] fn from (item: Type) -> NamespaceItem { Self::Type(item) } }
+impl From<Global> for NamespaceItem { #[inline] fn from (item: Global) -> NamespaceItem { Self::Global(item) } }
+impl From<Function> for NamespaceItem { #[inline] fn from (item: Function) -> NamespaceItem { Self::Function(item) } }
+
+/// The kind of a top-level item known by a semantic analyzer
+#[repr(u8)]
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NamespaceKind {
+  Alias,
+  Module,
+  Type,
+  Global,
+  Function,
 }
 
-impl From<TypeKey> for Local {
-  fn from (ty: TypeKey) -> Self { Self { ty, origin: None } }
+impl Display for NamespaceKind {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    write!(f, "{}", match self {
+      Self::Alias => "Alias",
+      Self::Module => "Module",
+      Self::Type => "Type",
+      Self::Global => "Global",
+      Self::Function => "Function",
+    })
+  }
 }
 
 make_key_type! {
-  /// An addressable key representing a module in a semantic analysis context
-  pub struct ModuleKey;
-  /// An addressable key representing a type in a semantic analysis context
-  pub struct TypeKey;
-  /// An addressable key representing a global in a semantic analysis context
-  pub struct GlobalKey;
-  /// An addressable key representing a function in a semantic analysis context
-  pub struct FunctionKey;
-  /// An addressable key representing a function's local parameter in a semantic analysis context
-  pub struct ParameterKey;
-  /// An addressable key representing a function's local stack variable in a semantic analysis context
-  pub struct LocalKey;
+  /// A key referring to a top-level item in a semantic analyzer
+  pub struct NamespaceKey;
 }

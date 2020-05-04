@@ -1,162 +1,163 @@
+use std::{
+  fmt::{ Display, Formatter, Result as FMTResult, },
+};
+
 use crate::{
-  ast::{ Item, ItemData, TypeExpression, TypeExpressionData, },
-  ctx::{ Module, TypeData, Global, Function, TypeKey, NamespaceKey, },
+  // util::{ UnwrapUnchecked, },
+  common::{ Identifier, },
+  // source::{ SourceRegion, },
+  ast::{ Item, ItemData, Export, Alias as ASTAlias, },
+  ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, Alias as CTXAlias, },
 };
 
 use super::{ Analyzer, };
 
 
+struct RefPathDisplay<'a>(&'a [&'a Identifier]);
 
-/// A layer of analysis used by an Analyzer
-pub trait Pass {
-  /// Run a Pass on an Analyzer
-  fn analyze (&mut self, analyzer: &mut Analyzer);
-}
-
-impl<F> Pass for F where F: Fn (&mut Analyzer) { #[inline] fn analyze (&mut self, analyzer: &mut Analyzer) { (self)(analyzer) } }
-
-
-trait ResolveTypeError {
-  type Resolved;
-  fn resolve (self) -> Self::Resolved;
-}
-
-
-
-
-/// Creates or gets an existing TypeKey from a TypeExpression, during the prepass
-/// 
-/// This is a simple wrapper for the prebuild_type_impl,
-/// to unwrap the type whether it was an err or ok,
-/// while _impl uses Result to make escaping recursion easier
-#[inline] fn prebuild_type (analyzer: &mut Analyzer, texpr: &TypeExpression) -> TypeKey {
-  fn prebuild_type_impl (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Result<TypeKey, TypeKey> {
-    match &texpr.data {
-      TypeExpressionData::Identifier(identifier) => {
-        if let Some(existing_binding) = analyzer.lookup_ident(identifier, true) {
-          if let NamespaceKey::Type(tk) = existing_binding {
-            analyzer.add_reference(tk, texpr.origin);
-            Ok(tk)
-          } else {
-            let kind = existing_binding.kind();
-            analyzer.error(texpr.origin, format!("Identifier `{}` does not resolve to a type, it is bound to a {}", identifier, kind));
-            Err(analyzer.context.err_ty)
-          }
-        } else {
-          let key = analyzer.context.types.insert(None);
-          analyzer.bind_item_ident(identifier, key, None);
-          analyzer.add_reference(key, texpr.origin);
-          Ok(key)
-        }
-      },
-
-      TypeExpressionData::Function { parameter_types: parameter_texprs, return_type: return_texpr } => {
-        let mut parameter_types = Vec::new();
-
-        for texpr in parameter_texprs.iter() {
-          parameter_types.push(prebuild_type_impl(analyzer, texpr)?);
-        }
-
-        let return_type = if let box Some(texpr) = return_texpr {
-          Some(prebuild_type_impl(analyzer, texpr)?)
-        } else {
-          None
-        };
-
-        let fn_td = TypeData::Function { parameter_types, return_type };
-
-        let key = analyzer.resolve_anon_type_key(fn_td);
-
-        analyzer.add_reference(key, texpr.origin);
-
-        Ok(key)
+impl<'a> Display for RefPathDisplay<'a> {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    let mut iter = self.0.iter().peekable();
+    while let Some(ident) = iter.next() {
+      write!(f, "{}", ident)?;
+      if iter.peek().is_some() {
+        write!(f, "::")?;
       }
     }
+    Ok(())
   }
-
-  match prebuild_type_impl(analyzer, texpr) { Ok(ty) => ty, Err(ty) => ty }
 }
 
 
-/// This pass binds all the top-level identifiers together,
-/// allowing out of order declarations
-/// 
-/// After scanning and binding the entire source tree,
-/// it scans the items that were collected,
-/// and reports any items that were referenced but never defined
-fn prepass (analyzer: &mut Analyzer) {
-  fn prepass_impl (analyzer: &mut Analyzer, items: &[Item]) {
-    for item in items {
+/// Binds top level items to their identifiers
+#[inline]
+fn pass_bind_top_level (analyzer: &mut Analyzer) {
+  fn binder_impl (analyzer: &mut Analyzer, items: &[Item]) {
+    fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item) -> (&'a Identifier, NamespaceKey) {
       match &item.data {
         ItemData::Module { identifier, items, .. } => {
-          let module_key = analyzer.define_module(
-            item.origin,
-            identifier,
+          let new_mod = analyzer.create_item(
+            identifier.to_owned(),
             Module::new(
               Some(analyzer.get_active_module_key()),
-              Some(item.origin)
-            )
+              identifier.to_owned(),
+              item.origin
+            ),
+            item.origin
           );
 
-          analyzer.push_active_module(module_key);
-          prepass_impl(analyzer, items);
+          analyzer.push_active_module(new_mod);
+
+          binder_impl(analyzer, items);
+
           analyzer.pop_active_module();
+
+          (identifier, new_mod)
         },
 
-        ItemData::Global { identifier, explicit_type, initializer: _ } => {
-          let ty = prebuild_type(analyzer, explicit_type);
-          let global = Global { ty, origin: Some(item.origin) };
+        ItemData::Global { identifier, .. } => (identifier, analyzer.create_item(
+          identifier.to_owned(),
+          Global::new(
+            identifier.to_owned(),
+            item.origin,
+            None
+          ),
+          item.origin
+        )),
 
-          analyzer.define_global(item.origin, identifier, global);
+        ItemData::Function { identifier, .. } => (identifier, analyzer.create_item(
+          identifier.to_owned(),
+          Function::new(
+            identifier.to_owned(),
+            item.origin,
+            None
+          ),
+          item.origin
+        )),
+
+        | ItemData::Import { .. }
+        | ItemData::Export(_)
+        => unreachable!("Internal error, export node contains invalid descendent")
+      }
+    }
+
+    for item in items.iter() {
+      match &item.data {
+        ItemData::Import { refs, path } => {
+          for ASTAlias { base, new_name } in refs.iter() {
+            let new_name = if let Some(new_name) = new_name { new_name } else { base };
+
+            let relative_to = if path.absolute { None } else { Some(analyzer.get_active_module_key()) };
+
+            analyzer.create_item(new_name.to_owned(), CTXAlias::new(relative_to, path.extend(base.to_owned())), item.origin);
+          }
         },
-        
-        ItemData::Function { identifier, parameters, return_type, body: _ } => {
-          let ty = prebuild_type(analyzer, &TypeExpression::new(TypeExpressionData::Function {
-            parameter_types: parameters.iter().map(|(_, texpr)| texpr.clone()).collect(),
-            return_type: box return_type.clone()
-          }, item.origin));
 
-          let function = Function { ty, origin: Some(item.origin) };
+        ItemData::Export(export) => {
+          match export {
+            Export::List(aliases) => {
+              for ASTAlias { base, new_name } in aliases.iter() {
+                let new_name = if let Some(new_name) = new_name { new_name } else { base };
+                
+                let key = analyzer.context.items.insert(CTXAlias::new(Some(analyzer.get_active_module_key()), base.to_owned()).into());
+                
+                analyzer.get_active_module_mut().export_bindings.set_entry_bound(new_name.to_owned(), key, item.origin);
+              }
+            },
 
-          analyzer.define_function(item.origin, identifier, function);
+            Export::Inline(item) => {
+              let (identifier, key) = bind_item(analyzer, item);
+
+              analyzer.get_active_module_mut().export_bindings.set_entry_bound(identifier.to_owned(), key, item.origin);
+            },
+          }
         },
+
+        _ => {
+          bind_item(analyzer, item);
+        }
       }
     }
   }
 
-  prepass_impl(analyzer, analyzer.ast);
+  binder_impl(analyzer, analyzer.ast)
+}
 
-  macro_rules! check_undefines {
-    ($name:ident [$plural:ident]; $($rest:tt)*) => {
-      for (&key, $name) in analyzer.context.$plural.pair_iter() {
-        if $name.is_none() {
-          // TODO it would be nice to print the identifier here
-          analyzer.error(
-            analyzer.get_first_reference(key),
-            concat!("Undefined ", stringify!($name)).to_owned()
+
+/// Traverses the top level items discovered in the first pass and attempts to resolve all of the aliases
+#[inline]
+pub fn pass_resolve_aliases (analyzer: &mut Analyzer) {
+  fn resolver_impl (analyzer: &mut Analyzer, module_key: NamespaceKey) {
+    if let NamespaceItem::Module(module) = analyzer.context.items.get(module_key).expect("Internal error, alias resolver impl called on undefined key") {
+      let aliases: Vec<_> =
+        module.local_bindings
+          .iter()
+          .map(|(ident, key, loc)| (ident.clone(), *key, *loc, "import"))
+          .chain(module.export_bindings
+            .iter()
+            .map(|(ident, key, loc)| (ident.clone(), *key, *loc, "export"))
           )
+          .collect();
+
+      for (ident, key, loc, kind) in aliases.into_iter() {
+        if let Some(item_key) = analyzer.context.lower_key(key) {
+          resolver_impl(analyzer, item_key)
+        } else {
+          analyzer.error(loc, format!("Unresolved {} `{}`", kind, ident));
         }
       }
-
-      check_undefines! { $($rest)* }
-    };
-
-    () => {};
+    }
   }
 
-  check_undefines! {
-    module [modules];
-    global [globals];
-    function [functions];
-  }
+  resolver_impl(analyzer, analyzer.get_active_module_key())
 }
 
 
 impl<'a> Analyzer<'a> {
-  /// Create a new Pass list for use with an Analyzer
-  pub fn create_passes () -> Vec<Box<dyn Pass>> {
-    vec! [
-      box prepass,
-    ]
+  /// Runs each pass of analysis session in sequence
+  pub fn run_passes (&mut self) {
+    pass_bind_top_level(self);
+
+    pass_resolve_aliases(self);
   }
 }

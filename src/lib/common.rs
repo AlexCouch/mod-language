@@ -4,6 +4,9 @@ use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   str::from_utf8_unchecked as str_from_utf8_unchecked,
   slice::Iter as SliceIter,
+  cmp::Ordering,
+  hash::{ Hash, Hasher, },
+  borrow::{ Borrow, },
 };
 
 
@@ -13,7 +16,7 @@ use crate::{
 
 
 /// A value identifying a particular language variable or type
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone)]
 pub struct Identifier {
   vec: Vec<u8>,
 }
@@ -32,6 +35,25 @@ impl Debug for Identifier {
 
 impl Default for Identifier {
   #[inline] fn default () -> Self { Self::new() }
+}
+
+impl PartialEq for Identifier {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.as_ref() == other.as_ref() }
+}
+
+impl Eq for Identifier { }
+
+impl PartialOrd for Identifier {
+  #[inline] fn partial_cmp (&self, other: &Self) -> Option<Ordering> { self.as_ref().partial_cmp(other.as_ref()) }
+}
+
+impl Ord for Identifier {
+  #[inline] fn cmp (&self, other: &Self) -> Ordering { self.as_ref().cmp(other.as_ref()) }
+}
+
+
+impl Hash for Identifier {
+  #[inline] fn hash<H: Hasher> (&self, hasher: &mut H) { self.as_ref().hash(hasher) }
 }
 
 /// An iterator over the bytes of an Identifier as chars
@@ -112,15 +134,19 @@ impl Identifier {
   pub fn byte_iter (&self) -> SliceIter<u8> {
     self.vec.iter()
   }
-}
 
-impl AsRef<str> for Identifier {
-  fn as_ref (&self) -> &str {
-    unsafe { str_from_utf8_unchecked(self.vec.as_slice()) }
+  /// Get an &str pointing into an Identifier
+  pub fn as_str (&self) -> &str {
+    self.as_ref()
   }
 }
 
+impl AsRef<str> for Identifier {
+  #[inline] fn as_ref (&self) -> &str { unsafe { str_from_utf8_unchecked(self.vec.as_slice()) } }
+}
+
 impl From<&str> for Identifier {
+  #[inline]
   fn from (s: &str) -> Self {
     let mut i = Self::new();
     i.set(s);
@@ -129,15 +155,15 @@ impl From<&str> for Identifier {
 }
 
 impl Into<String> for Identifier {
-  fn into (self) -> String {
-    self.as_ref().to_owned()
-  }
+  #[inline] fn into (self) -> String { self.as_ref().to_owned() }
 }
 
 impl Into<String> for &Identifier {
-  fn into (self) -> String {
-    self.as_ref().to_owned()
-  }
+  #[inline] fn into (self) -> String { self.as_ref().to_owned() }
+}
+
+impl Borrow<str> for Identifier {
+  #[inline] fn borrow (&self) -> &str { self.as_ref() }
 }
 
 /// An enum containing either an Integer or FloatingPoint numeric value
@@ -167,12 +193,15 @@ impl From<f64> for Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Keyword {
+  Import,
+  Export,
   Module,
   Global,
+  Function,
+  From,
+  If,
   Else,
   Let,
-  Function,
-  If,
 }
 
 impl Keyword {
@@ -181,12 +210,15 @@ impl Keyword {
     use Keyword::*;
 
     match self {
+      Import   => "import",
+      Export   => "export",
       Module   => "mod",
       Global   => "global",
+      Function => "fn",
+      From     => "from",
+      If       => "if",
       Else     => "else",
       Let      => "let",
-      Function => "fn",
-      If       => "if",
     }
   }
 }
@@ -202,6 +234,7 @@ pub enum Operator {
   Or,
   As,
 
+  DoubleColon,
   RightArrow,
 
   AssignAdd,
@@ -248,6 +281,7 @@ impl Operator {
       Or  => "or",
       As  => "as",
 
+      DoubleColon => "::",
       RightArrow => "->",
     
       AssignAdd => "+=",
@@ -290,7 +324,10 @@ impl Operator {
 /// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
 pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
   &[
+    ("import", Either::A(Keyword::Import)),
+    ("export", Either::A(Keyword::Export)),
     ("global", Either::A(Keyword::Global)),
+    ("from",   Either::A(Keyword::From)),
     ("else",   Either::A(Keyword::Else)),
     ("let",    Either::A(Keyword::Let)),
     ("not",    Either::B(Operator::Not)),
@@ -312,6 +349,7 @@ pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
 pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
   use Operator::*;
   &[
+    ("::", DoubleColon),
     ("->", RightArrow),
     
     ("+=", AssignAdd),

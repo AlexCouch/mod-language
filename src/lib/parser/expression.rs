@@ -1,13 +1,14 @@
 //! The Statement Parser function and its dependencies
 
 use crate::{
+  util::{ Either, },
   source::{ SourceRegion, },
   common::{ Operator::*, Keyword::*, get_binary_precedence },
   token::{ Token, TokenData, TokenKind, },
   ast::{ Expression, ExpressionData, },
 };
 
-use super::{ Parser, ParseletPredicate, ParseletFunction, sync, block, conditional, };
+use super::{ Parser, ParseletPredicate, ParseletFunction, sync, block, conditional, path, };
 
 
 
@@ -53,14 +54,16 @@ pub fn expression (parser: &mut Parser) -> Option<Expression> {
 // Prefix parselets //
 
 
-fn pfx_identifier (parser: &mut Parser) -> Option<Expression> {
-  if let Some(&Token { data: TokenData::Identifier(ref ident), origin }) = parser.curr_tok() {
-    let result = Some(Expression::new(ExpressionData::Identifier(ident.clone()), origin));
-    parser.advance();
-    return result
-  }
+fn pfx_path_or_ident (parser: &mut Parser) -> Option<Expression> {
+  let (path_or_ident, origin) = path(parser)?;
 
-  unreachable!("Internal error, identifier expression parselet called on non-identifier token");
+  Some(Expression::new(
+    match path_or_ident {
+      Either::A(path)  => ExpressionData::Path(path),
+      Either::B(ident) => ExpressionData::Identifier(ident),
+    },
+    origin
+  ))
 }
 
 fn pfx_number (parser: &mut Parser) -> Option<Expression> {
@@ -135,7 +138,7 @@ impl PrefixParselet {
     macro_rules! pfx { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( PrefixParselet { predicate: $predicate, function: $function } ),* ] } }
 
     pfx! [
-      |token| token.kind() == TokenKind::Identifier => pfx_identifier,
+      |token| token.kind() == TokenKind::Identifier => pfx_path_or_ident,
       |token| token.kind() == TokenKind::Number => pfx_number,
       |token| token.is_operator(LeftParen) => pfx_syntactic_group,
       |token| token.is_operator(LeftBracket) => pfx_block,

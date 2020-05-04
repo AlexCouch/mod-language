@@ -11,6 +11,9 @@ use crate::{
 
 pub mod sync;
 
+mod path;
+pub use path::*;
+
 mod type_expression;
 pub use type_expression::*;
 

@@ -3,6 +3,9 @@
 use std::{
   fmt::{ Debug, Formatter, Result as FMTResult, },
   ops::{ Deref, },
+  hash::{ Hash, Hasher, },
+  collections::hash_map::{ DefaultHasher, },
+  cmp::{ Ordering, },
 };
 
 use crate::{
@@ -11,26 +14,142 @@ use crate::{
 };
 
 
+/// A series of identifiers representing a hierarchical path
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Default)]
+pub struct Path {
+  pub absolute: bool,
+  pub chain: Vec<Identifier>,
+  pub chain_hash: u64,
+}
+
+impl Path {
+  /// Update the hash for the identifier chain in a Path
+  pub fn update_chain_hash (&mut self) {
+    let mut hasher = DefaultHasher::default();
+
+    self.chain.hash(&mut hasher);
+
+    self.chain_hash = hasher.finish();
+  }
+  /// Create a new Path and its chain hash
+  pub fn new (absolute: bool, chain: Vec<Identifier>) -> Self {
+    let mut s = Self {
+      absolute,
+      chain,
+      chain_hash: 0
+    };
+
+    s.update_chain_hash();
+
+    s
+  }
+
+  
+  /// Create a new Path and its chain hash by extending an existing Path and rehashing
+  pub fn extend<I: Into<Identifier>> (&self, extension: I) -> Self {
+    let mut chain = self.chain.clone();
+    chain.push(extension.into());
+    Self::new(self.absolute, chain)
+  }
+
+  
+  /// Update a Path and its chain hash by extending and rehashing
+  pub fn extend_in_place<I: Into<Identifier>> (&mut self, extension: I) {
+    self.chain.push(extension.into());
+    self.update_chain_hash();
+  }
+
+  /// Create a new Path and its chain hash by extending an existing Path and rehashing
+  pub fn extend_multi<I: IntoIterator<Item = Identifier>> (&self, extension: I) -> Self {
+    Self::new(self.absolute, self.chain.iter().map(|i| i.to_owned()).chain(extension.into_iter()).collect())
+  }
+
+  /// Update a Path and its chain hash by extending and rehashing
+  pub fn extend_in_place_multi<I: IntoIterator<Item = Identifier>> (&mut self, extension: I) {
+    for ident in extension.into_iter() {
+      self.chain.push(ident)
+    }
+
+    self.update_chain_hash();
+  }
+
+  /// Pop an identifier off the end of a Path and update its chain hash
+  /// 
+  /// Panics if there is no identifier to pop, or if popping the identifier causes the path to be empty when it is non-absolute
+  pub fn pop (&mut self) -> Identifier {
+    let ident = self.chain.pop().expect("Internal error, found empty Path");
+
+    assert!(self.absolute || !self.chain.is_empty(), "Internal error, non-absolute Path emptied");
+
+    self.update_chain_hash();
+
+    ident
+  }
+}
+
+impl PartialEq for Path {
+  fn eq (&self, other: &Self) -> bool {
+    self.absolute == other.absolute && self.chain_hash == other.chain_hash && self.chain == other.chain
+  }
+}
+
+impl Eq for Path { }
+
+impl Ord for Path {
+  fn cmp (&self, other: &Self) -> Ordering {
+    self.absolute.cmp(&other.absolute).then(self.chain.cmp(&other.chain))
+  }
+}
+
+impl PartialOrd for Path {
+  fn partial_cmp (&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+}
+
+impl Hash for Path {
+  fn hash<H: Hasher> (&self, h: &mut H) {
+    self.absolute.hash(h);
+    self.chain_hash.hash(h);
+  }
+}
+
+impl Deref for Path {
+  type Target = Vec<Identifier>;
+  #[inline] fn deref (&self) -> &Self::Target { &self.chain }
+}
+
+impl<T: Into<Identifier>> From<T> for Path {
+  #[inline] fn from (i: T) -> Self { Self::new(false, vec![ i.into() ]) }
+}
+
+impl<T: Into<Identifier>> From<Vec<T>> for Path {
+  #[inline] fn from (vec: Vec<T>) -> Self { Self::new(false, vec.into_iter().map(|i| i.into()).collect()) }
+}
+
+
 /// An enum containing the particular variant of an expression referencing a type
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpressionData {
   Identifier(Identifier),
+  Path(Path),
   Function { parameter_types: Vec<TypeExpression>, return_type: Box<Option<TypeExpression>> },
 }
 
 impl From<Identifier> for TypeExpressionData {
-  #[inline]
-  fn from (ident: Identifier) -> Self {
-    Self::Identifier(ident)
-  }
+  #[inline] fn from (ident: Identifier) -> Self { Self::Identifier(ident) }
 }
 
 impl From<&str> for TypeExpressionData {
-  #[inline]
-  fn from (ident: &str) -> Self {
-    Self::Identifier(ident.into())
-  }
+  #[inline]  fn from (ident: &str) -> Self { Self::Identifier(ident.into()) }
+}
+
+impl From<Path> for TypeExpressionData {
+  #[inline] fn from (path: Path) -> Self { Self::Path(path) }
+}
+
+impl From<Vec<Identifier>> for TypeExpressionData {
+  #[inline] fn from (path: Vec<Identifier>) -> Self { Self::Path(path.into()) }
 }
 
 /// A syntactic element referencing or describing a type
@@ -55,8 +174,7 @@ impl Deref for TypeExpression {
 }
 
 impl<T: Into<TypeExpressionData>> From<T> for TypeExpression {
-  #[inline]
-  fn from (value: T) -> Self { Self::no_src(value.into()) }
+  #[inline] fn from (value: T) -> Self { Self::no_src(value.into()) }
 }
 
 impl TypeExpression {
@@ -77,6 +195,8 @@ impl TypeExpression {
 #[derive(Debug, PartialEq)]
 pub enum ExpressionData {
   Identifier(Identifier),
+  Path(Path),
+
   Number(Number),
 
   Unary {
@@ -97,38 +217,31 @@ pub enum ExpressionData {
 }
 
 impl From<Identifier> for ExpressionData {
-  #[inline]
-  fn from (ident: Identifier) -> Self {
-    Self::Identifier(ident)
-  }
+  #[inline] fn from (ident: Identifier) -> Self { Self::Identifier(ident) }
 }
 
 impl From<&str> for ExpressionData {
-  #[inline]
-  fn from (ident: &str) -> Self {
-    Self::Identifier(ident.into())
-  }
+  #[inline] fn from (ident: &str) -> Self { Self::Identifier(ident.into()) }
+}
+
+impl From<Path> for ExpressionData {
+  #[inline] fn from (path: Path) -> Self { Self::Path(path) }
+}
+
+impl From<Vec<Identifier>> for ExpressionData {
+  #[inline] fn from (path: Vec<Identifier>) -> Self { Self::Path(path.into()) }
 }
 
 impl From<Number> for ExpressionData {
-  #[inline]
-  fn from (num: Number) -> Self {
-    Self::Number(num)
-  }
+  #[inline] fn from (num: Number) -> Self { Self::Number(num) }
 }
 
 impl From<u64> for ExpressionData {
-  #[inline]
-  fn from (num: u64) -> Self {
-    Self::Number(num.into())
-  }
+  #[inline] fn from (num: u64) -> Self { Self::Number(num.into()) }
 }
 
 impl From<f64> for ExpressionData {
-  #[inline]
-  fn from (num: f64) -> Self {
-    Self::Number(num.into())
-  }
+  #[inline] fn from (num: f64) -> Self { Self::Number(num.into()) }
 }
 
 /// A syntactic element forming a sequence of actions or a reference
@@ -152,8 +265,7 @@ impl Deref for Expression {
 }
 
 impl<T: Into<ExpressionData>> From<T> for Expression {
-  #[inline]
-  fn from (data: T) -> Self { Self::no_src(data.into()) }
+  #[inline] fn from (data: T) -> Self { Self::no_src(data.into()) }
 }
 
 impl Expression {
@@ -235,8 +347,7 @@ impl From<Expression> for Statement {
 }
 
 impl<T: Into<StatementData>> From<T> for Statement {
-  #[inline]
-  fn from (data: T) -> Self { Self::no_src(data.into()) }
+  #[inline] fn from (data: T) -> Self { Self::no_src(data.into()) }
 }
 
 impl Statement {
@@ -338,7 +449,8 @@ pub struct Conditional {
 }
 
 impl Debug for Conditional {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult {
+  #[inline]
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
     f.debug_struct("Conditional")
       .field("if_branch", &self.if_branch)
       .field("else_if_branches", &self.else_if_branches)
@@ -368,12 +480,30 @@ impl Conditional {
   }
 }
 
+/// Semantic element aliasing an item in a module
+#[allow(missing_docs)]
+#[derive(Debug, PartialEq)]
+pub struct Alias {
+  pub base: Identifier,
+  pub new_name: Option<Identifier>,
+}
+
+/// The data associated with an Export
+#[allow(missing_docs)]
+#[derive(Debug, PartialEq)]
+pub enum Export {
+  List(Vec<Alias>),
+  Inline(Box<Item>),
+}
 
 
 /// An enum containing the particular variant of an Item
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
+  Import { refs: Vec<Alias>, path: Path },
+  Export(Export),
+
   Module { identifier: Identifier, items: Vec<Item>, inline: bool },
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
   Function { identifier: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: Option<TypeExpression>, body: Option<Block> },
@@ -385,8 +515,13 @@ impl ItemData {
   pub fn requires_semi (&self) -> bool {
     match self {
       | ItemData::Global { .. }
+      | ItemData::Import { .. }
       => true,
       ItemData::Module { inline, .. } => { !*inline },
+      ItemData::Export(export) => match export {
+        Export::Inline(box item) => item.requires_semi(),
+        Export::List(list) => list.len() == 1
+      },
       _ => false
     }
   }
@@ -413,8 +548,7 @@ impl Deref for Item {
 }
 
 impl<T: Into<ItemData>> From<T> for Item {
-  #[inline]
-  fn from (data: T) -> Self { Self::no_src(data.into()) }
+  #[inline] fn from (data: T) -> Self { Self::no_src(data.into()) }
 }
 
 impl Item {

@@ -1,25 +1,286 @@
 //! The Item Parser function and its dependencies
 
 use crate::{
+  util::{ Either, },
   source::{ SourceRegion, SOURCE_MANAGER, },
-  common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, },
+  common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, Identifier, },
   token::{ Token, TokenData, },
-  ast::{ Item, ItemData, },
+  ast::{ Item, ItemData, Alias, Export, },
   lexer::{ Lexer, },
 };
 
-use super::{ Parser, ParseletPredicate, ParseletFunction, type_expression, expression, block, sync, };
+use super::{ Parser, ParseletPredicate, ParseletFunction, type_expression, expression, block, path, sync, };
 
 
 /// Parse a single Item
 pub fn item (parser: &mut Parser) -> Option<Item> {
-  if let Some(parselet_function) = ItemParselet::get_function(parser.curr_tok()?) {
+  let curr_tok = parser.curr_tok()?;
+
+  let parselet: Option<ParseletFunction<Item>> = match curr_tok.data {
+    TokenData::Keyword(Import) => Some(itm_import),
+    TokenData::Keyword(Export) => Some(itm_export),
+    _ => ItemParselet::get_function(curr_tok)
+  };
+
+  if let Some(parselet_function) = parselet {
     parselet_function(parser)
   } else {
     parser.error("No syntactic match for this token in the context of a top level item".to_owned());
 
     None
   }
+}
+
+
+fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, SourceRegion)>, ()> {
+  if let Some(Token { data: TokenData::Operator(As), .. }) = parser.curr_tok() {
+    parser.advance();
+    
+    if let Some(&Token { data: TokenData::Identifier(ref new_name), origin }) = parser.curr_tok() {
+      let new_name = new_name.to_owned();
+      parser.advance();
+
+      Ok(Some((new_name, origin)))
+    } else {
+      parser.error("Expected identifier to follow aliasing keyword `as`".to_owned());
+
+      Err(())
+    }
+  } else {
+    Ok(None)
+  }
+}
+
+fn get_new_name (parser: &mut Parser) -> Result<Option<Identifier>, ()> {
+  match get_new_name_and_origin(parser) {
+    Ok(opt) => Ok(opt.map(|(new_name, _)| new_name)),
+    Err(()) => Err(())
+  }
+}
+
+
+fn itm_import (parser: &mut Parser) -> Option<Item> {
+  if let Some(&Token { data: TokenData::Keyword(Import), origin: start_region }) = parser.curr_tok() {
+    parser.advance();
+
+    let refs = if let Some(Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+      parser.advance();
+
+      let mut refs = Vec::new();
+
+      let mut ref_ok = true;
+
+      loop {
+        match parser.curr_tok() {
+          // Unexpected end of input
+          None => {
+            parser.error_at(SourceRegion::merge(start_region, parser.curr_region()), "Unexpected end of input, expected } to close block".to_owned());
+            return None
+          },
+  
+          // The end of the block
+          Some(&Token { data: TokenData::Operator(RightBracket), .. }) => {
+            parser.advance();
+            break
+          },
+  
+          // Refs
+          _ => {
+            if ref_ok {
+              if let Some(Token { data: TokenData::Identifier(base), .. }) = parser.curr_tok() {
+                let base = base.clone();
+                
+                parser.advance();
+                                
+                if let Ok(new_name) = get_new_name(parser) {
+                  refs.push(Alias { base, new_name });
+
+                  if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
+                    parser.advance();
+                    ref_ok = true;
+                  }
+
+                  continue
+                }
+              }
+            } else {
+              parser.error("Expected , to separate import references or } to end block".to_owned());
+            }
+    
+            if parser.synchronize(sync::close_pair_or(sync::operator(LeftBracket), sync::operator(RightBracket), sync::operator(Comma))) {
+              if let Some(&Token { data: TokenData::Operator(op), .. }) = parser.curr_tok() {
+                parser.advance();
+
+                if op == Comma { continue }
+                else { break }
+              }
+            }
+      
+            // Could not recover
+            return None
+          }
+        }
+      }
+
+      refs
+    } else if let Some((path_or_ident, path_end)) = path(parser) {
+      match path_or_ident {
+        Either::A(path) => {
+          let mut path = path;
+
+          let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
+          
+          let (new_name, end) = if let Some((new_name, new_end)) = new_name_and_origin {
+            (Some(new_name), new_end)
+          } else {
+            (None, path_end)
+          };
+
+          let refs = vec![ Alias { base: path.pop(), new_name } ];
+          return Some(Item::new(ItemData::Import { refs, path }, SourceRegion::merge(start_region, end)))
+        },
+        Either::B(base) => {
+          let new_name = if let Ok(new_name) = get_new_name(parser) { new_name } else { return None };
+
+          vec![ Alias { base, new_name } ]
+        }
+      }
+      
+    } else {
+      parser.error("Expected identifier or path to follow `import` keyword".to_owned());
+
+      return None
+    };
+
+    if let Some(Token { data: TokenData::Keyword(From), .. }) = parser.curr_tok() {
+      parser.advance();
+
+      if let Some((path_or_ident, path_end)) = path(parser) {
+        let path = match path_or_ident {
+          Either::A(path) => path,
+          Either::B(ident) => ident.into()
+        };
+
+        return Some(Item::new(ItemData::Import { refs, path }, SourceRegion::merge(start_region, path_end)))
+      } else {
+        return None
+      }
+    } else {
+      parser.error("Expected `from` keyword to separate imported identifier from source path".to_owned());
+
+      return None
+    }
+  }
+
+  unreachable!("Internal error, import item parselet called on non-import token");
+}
+
+fn itm_export (parser: &mut Parser) -> Option<Item> {
+  if let Some(&Token { data: TokenData::Keyword(Export), origin: start_region }) = parser.curr_tok() {
+    parser.advance();
+
+    if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+      parser.advance();
+
+      let mut refs = Vec::new();
+
+      let mut ref_ok = true;
+
+      let end_region;
+
+      loop {
+        match parser.curr_tok() {
+          // Unexpected end of input
+          None => {
+            parser.error_at(SourceRegion::merge(start_region, parser.curr_region()), "Unexpected end of input, expected } to close block".to_owned());
+            return None
+          },
+  
+          // The end of the block
+          Some(&Token { data: TokenData::Operator(RightBracket), origin }) => {
+            parser.advance();
+            end_region = origin;
+            break
+          },
+  
+          // Refs
+          _ => {
+            if ref_ok {
+              if let Some(Token { data: TokenData::Identifier(base), .. }) = parser.curr_tok() {
+                let base = base.clone();
+                
+                parser.advance();
+                                
+                if let Ok(new_name) = get_new_name(parser) {
+                  refs.push(Alias { base, new_name });
+
+                  if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
+                    parser.advance();
+                    ref_ok = true;
+                  }
+
+                  continue
+                }
+              }
+            } else {
+              parser.error("Expected , to separate export references or } to end block".to_owned());
+            }
+    
+            if parser.synchronize(sync::close_pair_or(sync::operator(LeftBracket), sync::operator(RightBracket), sync::operator(Comma))) {
+              if let Some(&Token { data: TokenData::Operator(op), origin }) = parser.curr_tok() {
+                parser.advance();
+
+                if op == Comma {
+                  continue
+                } else { 
+                  end_region = origin;
+                  break
+                }
+              }
+            }
+      
+            // Could not recover
+            return None
+          }
+        }
+      }
+
+      return Some(Item::new(ItemData::Export(Export::List(refs)), SourceRegion::merge(start_region, end_region)))
+    } else if let Some(&Token { data: TokenData::Identifier(ref base), origin: base_end }) = parser.curr_tok() {
+      let base = base.to_owned();
+
+      parser.advance();
+
+      let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
+
+      let (new_name, end) = if let Some((new_name, end)) = new_name_and_origin {
+        (Some(new_name), end)
+      } else {
+        (None, base_end)
+      };
+
+      return Some(Item::new(ItemData::Export(Export::List(vec![ Alias { base, new_name }])), SourceRegion::merge(start_region, end)))
+    } else {
+      let curr_tok = if let Some(tok) = parser.curr_tok() { tok } else {
+        parser.error("Expected a list, alias, or inline item to follow `export` keyword".to_owned());
+        return None
+      };
+
+      let inline = if let Some(parselet_function) = ItemParselet::get_function(curr_tok) {
+        parselet_function(parser)
+      } else {
+        parser.error("No syntactic match for this token in the context of a top level item".to_owned());
+    
+        return None
+      }?;
+
+      let region = SourceRegion::merge(start_region, inline.origin);
+
+      return Some(Item::new(ItemData::Export(Export::Inline(box inline)), region))
+    }
+  }
+
+  unreachable!("Internal error, export item parselet called on non-export token");
 }
 
 
@@ -209,6 +470,7 @@ fn itm_global (parser: &mut Parser) -> Option<Item> {
       parser.error("Expected identifier for variable to follow let keyword".to_owned());
     }
   }
+
   unreachable!("Internal error, global item parselet called on non-global token");
 }
 
@@ -329,16 +591,14 @@ struct ItemParselet {
   function: ParseletFunction<Item>,
 }
 
-impl ItemParselet {
-  const PARSELETS: &'static [Self] = {
-    macro_rules! itm { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( ItemParselet { predicate: $predicate, function: $function } ),* ] } }
+macro_rules! itm { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( ItemParselet { predicate: $predicate, function: $function } ),* ] } }
 
-    itm! [
-      |token| token.is_keyword(Module) => itm_module,
-      |token| token.is_keyword(Global) => itm_global,
-      |token| token.is_keyword(Function) => itm_function,
-    ]
-  };
+impl ItemParselet {
+  const PARSELETS: &'static [Self] = itm! [
+    |token| token.is_keyword(Module)   => itm_module,
+    |token| token.is_keyword(Global)   => itm_global,
+    |token| token.is_keyword(Function) => itm_function,
+  ];
 
   fn get_function (token: &Token) -> Option<ParseletFunction<Item>> {
     for parselet in Self::PARSELETS.iter() {

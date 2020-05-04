@@ -7,6 +7,7 @@ use mod_language::{
   source::SOURCE_MANAGER,
   lexer::Lexer,
   parser::Parser,
+  analyzer::Analyzer,
   ansi,
 };
 
@@ -18,7 +19,7 @@ fn main () -> std::io::Result<()> {
   SESSION.init();
   SOURCE_MANAGER.init();
 
-  let source = SOURCE_MANAGER.load("./test_scripts/module.ms")?;
+  let source = SOURCE_MANAGER.load("./test_scripts/item_analysis.ms")?;
 
   let mut lexer = Lexer::new(source);
 
@@ -31,6 +32,12 @@ fn main () -> std::io::Result<()> {
   let ast = parser.parse_ast();
 
   println!("Got ast: {:#?}", &ast);
+
+  let analyzer = Analyzer::new(&ast);
+
+  let _context = analyzer.analyze();
+
+  // println!("Got context: {:#?}", &context); yikes
 
   if !SESSION.messages().is_empty() {
     SESSION.print_messages();

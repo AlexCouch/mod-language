@@ -1,11 +1,13 @@
 //! The TypeExpression Parser function and its dependencies
 
 use crate::{
-  token::{ Token, TokenKind, TokenData, },
+  util::{ Either, },
+  common::{ Operator::*, },
+  token::{ Token, TokenData, },
   ast::{ TypeExpression, TypeExpressionData, },
 };
 
-use super::{ Parser, ParseletPredicate, ParseletFunction, };
+use super::{ Parser, ParseletPredicate, ParseletFunction, path, };
 
 
 
@@ -28,14 +30,16 @@ pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
 // Parselets //
 
 
-fn tpx_identifier (parser: &mut Parser) -> Option<TypeExpression> {
-  if let Some(&Token { data: TokenData::Identifier(ref ident), origin }) = parser.curr_tok() {
-    let result = Some(TypeExpression::new(TypeExpressionData::Identifier(ident.clone()), origin));
-    parser.advance();
-    return result
-  }
+fn tpx_path_or_ident (parser: &mut Parser) -> Option<TypeExpression> {
+  let (path_or_ident, origin) = path(parser)?;
 
-  unreachable!("Internal error, type expression identifier parselet called on non-identifier token");
+  Some(TypeExpression::new(
+    match path_or_ident {
+      Either::A(path)  => TypeExpressionData::Path(path),
+      Either::B(ident) => TypeExpressionData::Identifier(ident),
+    },
+    origin
+  ))
 }
 
 
@@ -49,7 +53,7 @@ impl TypeExpressionParselet {
     macro_rules! tpx { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( TypeExpressionParselet { predicate: $predicate, function: $function } ),* ] } }
 
     tpx! [
-      |token| token.kind() == TokenKind::Identifier => tpx_identifier,
+      |token| matches!(token.data, TokenData::Identifier(_) | TokenData::Operator(DoubleColon)) => tpx_path_or_ident,
     ]
   };
 
