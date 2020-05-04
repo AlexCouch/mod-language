@@ -126,8 +126,6 @@ impl Context {
         }
       }
 
-      println!("lowering alias {:?}", &alias);
-
       let alias = alias.clone();
 
       let lowered_key = match &alias.data {
