@@ -125,10 +125,8 @@ impl Deref for Token {
 
 impl Debug for Token {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    write!(f, "[{}{}{}]: {:?}",
-      ansi::Foreground::Cyan,
+    write!(f, "[{}]: {:?}",
       self.origin,
-      ansi::Foreground::Reset,
       self.data
     )
   }
@@ -136,6 +134,11 @@ impl Debug for Token {
 
 impl Display for Token {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    Debug::fmt(self, f)
+    write!(f, "[{}{}{}]: {:?}",
+      ansi::Foreground::Cyan,
+      self.origin,
+      ansi::Foreground::Reset,
+      self.data
+    )
   }
 }

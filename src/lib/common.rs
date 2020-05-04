@@ -93,7 +93,9 @@ impl Identifier {
   }
 
   /// Set the value of an Identifier
-  pub fn set (&mut self, s: &str) -> bool {
+  pub fn set<S: AsRef<str>> (&mut self, s: &S) -> bool {
+    let s = s.as_ref();
+
     if s.len() > Self::MAX_LENGTH { return false }
 
     for ch in s.chars() {
@@ -149,7 +151,7 @@ impl From<&str> for Identifier {
   #[inline]
   fn from (s: &str) -> Self {
     let mut i = Self::new();
-    i.set(s);
+    i.set(&s);
     i
   }
 }
