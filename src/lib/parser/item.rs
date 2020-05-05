@@ -331,7 +331,7 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
                   continue
                 } // else { Error message already provided by item }
               } else {
-                parser.error("Expected a ; to separate items or end of input".to_owned());
+                parser.error("Expected a ; to separate items or } to end module".to_owned());
               }
 
               // If we reach here there was some kind of error, either we didnt have a semi after the last item, or our item call had an error,
