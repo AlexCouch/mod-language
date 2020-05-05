@@ -28,24 +28,25 @@ fn main () -> std::io::Result<()> {
 
   let stream = lexer.lex_stream();
 
-  println!("Got token stream, dumping to ./stream.log");
-  std::fs::write("./stream.log", format!("{:#?}", stream)).expect("Failed to dump token stream to ./stream.log");
+  println!("Got token stream, dumping to ./log/stream");
+  if !std::path::Path::new("./log").exists() { std::fs::create_dir("./log").expect("Failed to create ./log dir"); }
+  std::fs::write("./log/stream", format!("{:#?}", stream)).expect("Failed to dump token stream to ./log/stream");
 
 
   let mut parser = Parser::new(&stream);
 
   let ast = parser.parse_ast();
 
-  println!("Got ast, dumping to ./ast.log");
-  std::fs::write("./ast.log", format!("{:#?}", ast)).expect("Failed to dump token ast to ./ast.log");
+  println!("Got ast, dumping to ./log/ast");
+  std::fs::write("./log/ast", format!("{:#?}", ast)).expect("Failed to dump token ast to ./log/ast");
 
 
   let analyzer = Analyzer::new(&ast);
 
   let context = analyzer.analyze();
 
-  println!("Got context, dumping to ./context.log");
-  std::fs::write("./context.log", format!("{:#?}", context)).expect("Failed to dump context to ./context.log");
+  println!("Got context, dumping to ./log/context");
+  std::fs::write("./log/context", format!("{:#?}", context)).expect("Failed to dump context to ./log/context");
 
   if !SESSION.messages().is_empty() {
     SESSION.print_messages();
