@@ -1,6 +1,6 @@
 mod A {
-  import X from ::B::C::D;
-  export X;
+  import { X, Y, Z } from ::B::C::D;
+  export { X, Y, Z }
 }
 
 export mod B {
@@ -10,9 +10,13 @@ export mod B {
 
 export mod C {
   export mod D {
-    export fn X { }
+    import s32 as X from core;
+    export X;
+    export fn Y { }
+    export global Z: s32 = 99;
   }
 }
 
 import X from A;
-export X;
+export X as Y;
+export s32 as i32;
