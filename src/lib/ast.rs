@@ -480,19 +480,11 @@ impl Conditional {
   }
 }
 
-/// Semantic element aliasing an item in a module
-#[allow(missing_docs)]
-#[derive(Debug, PartialEq)]
-pub struct Alias {
-  pub base: Identifier,
-  pub new_name: Option<Identifier>,
-}
-
 /// The data associated with an Export
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq)]
-pub enum Export {
-  List(Vec<Alias>),
+pub enum ExportData {
+  List(Vec<(Identifier, Option<Identifier>)>),
   Inline(Box<Item>),
 }
 
@@ -501,8 +493,8 @@ pub enum Export {
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
-  Import { refs: Vec<Alias>, path: Path },
-  Export(Export),
+  Import { data: Vec<(Path, Option<Identifier>)>, terminal: bool },
+  Export { data: ExportData, terminal: bool },
 
   Module { identifier: Identifier, items: Vec<Item>, inline: bool },
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
@@ -515,14 +507,14 @@ impl ItemData {
   pub fn requires_semi (&self) -> bool {
     match self {
       | ItemData::Global { .. }
-      | ItemData::Import { .. }
       => true,
-      ItemData::Module { inline, .. } => { !*inline },
-      ItemData::Export(export) => match export {
-        Export::Inline(box item) => item.requires_semi(),
-        Export::List(list) => list.len() == 1
-      },
-      _ => false
+
+      ItemData::Module { inline, .. } => !*inline,
+
+      ItemData::Function { body, .. } => body.is_none(),
+
+      | ItemData::Import { terminal, .. }
+      | ItemData::Export { terminal, .. } => !*terminal,
     }
   }
 }

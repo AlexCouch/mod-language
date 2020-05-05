@@ -6,7 +6,7 @@ use crate::{
   // util::{ UnwrapUnchecked, },
   common::{ Identifier, },
   // source::{ SourceRegion, },
-  ast::{ Item, ItemData, Export, Alias as ASTAlias, },
+  ast::{ Item, ItemData, ExportData, },
   ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, Alias as CTXAlias, AliasData, },
 };
 
@@ -76,27 +76,27 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
         )),
 
         | ItemData::Import { .. }
-        | ItemData::Export(_)
+        | ItemData::Export { .. }
         => unreachable!("Internal error, export node contains invalid descendent")
       }
     }
 
     for item in items.iter() {
       match &item.data {
-        ItemData::Import { refs, path } => {
-          for ASTAlias { base, new_name } in refs.iter() {
-            let new_name = if let Some(new_name) = new_name { new_name } else { base };
+        ItemData::Import { data, .. } => {
+          for (base, new_name) in data.iter() {
+            let new_name = if let Some(new_name) = new_name { new_name } else { base.last().expect("Internal error, empty import path") };
 
-            let relative_to = if path.absolute { None } else { Some(analyzer.get_active_module_key()) };
+            let relative_to = if base.absolute { None } else { Some(analyzer.get_active_module_key()) };
 
-            analyzer.create_item(new_name.to_owned(), CTXAlias::new(relative_to, AliasData::Import(path.extend(base.to_owned())), item.origin), item.origin);
+            analyzer.create_item(new_name.to_owned(), CTXAlias::new(relative_to, AliasData::Import(base.to_owned()), item.origin), item.origin);
           }
         },
 
-        ItemData::Export(export) => {
-          match export {
-            Export::List(aliases) => {
-              for ASTAlias { base, new_name } in aliases.iter() {
+        ItemData::Export { data, .. } => {
+          match data {
+            ExportData::List(aliases) => {
+              for (base, new_name) in aliases.iter() {
                 let new_name = if let Some(new_name) = new_name { new_name } else { base };
                 
                 let key = analyzer.context.items.insert(CTXAlias::new(Some(analyzer.get_active_module_key()), AliasData::Export(base.to_owned()), item.origin).into());
@@ -105,7 +105,7 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
               }
             },
 
-            Export::Inline(item) => {
+            ExportData::Inline(item) => {
               let (identifier, key) = bind_item(analyzer, item);
 
               analyzer.get_active_module_mut().export_bindings.set_entry_bound(identifier.to_owned(), key, item.origin);

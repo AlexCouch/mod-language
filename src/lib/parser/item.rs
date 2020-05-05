@@ -5,7 +5,7 @@ use crate::{
   source::{ SourceRegion, SOURCE_MANAGER, },
   common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, Identifier, },
   token::{ Token, TokenData, },
-  ast::{ Item, ItemData, Alias, Export, },
+  ast::{ Item, ItemData, ExportData, Path, },
   lexer::{ Lexer, },
 };
 
@@ -33,14 +33,14 @@ pub fn item (parser: &mut Parser) -> Option<Item> {
 
 
 fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, SourceRegion)>, ()> {
-  if let Some(Token { data: TokenData::Operator(As), .. }) = parser.curr_tok() {
+  if let Some(&Token { data: TokenData::Operator(As), origin }) = parser.curr_tok() {
     parser.advance();
     
-    if let Some(&Token { data: TokenData::Identifier(ref new_name), origin }) = parser.curr_tok() {
+    if let Some(&Token { data: TokenData::Identifier(ref new_name), origin: new_name_origin }) = parser.curr_tok() {
       let new_name = new_name.to_owned();
       parser.advance();
 
-      Ok(Some((new_name, origin)))
+      Ok(Some((new_name, SourceRegion::merge(origin, new_name_origin))))
     } else {
       parser.error("Expected identifier to follow aliasing keyword `as`".to_owned());
 
@@ -58,19 +58,38 @@ fn get_new_name (parser: &mut Parser) -> Result<Option<Identifier>, ()> {
   }
 }
 
+fn get_single_import (parser: &mut Parser) -> Option<((Path, Option<Identifier>), SourceRegion)> {
+  let (path_or_ident, origin) = path(parser)?;
+  
+  let path = match path_or_ident {
+    Either::A(path) => path,
+    Either::B(base) => base.into()
+  };
+
+  let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
+      
+  let (new_name, origin) = if let Some((new_name, new_origin)) = new_name_and_origin {
+    (Some(new_name), SourceRegion::merge(origin, new_origin))
+  } else {
+    (None, origin)
+  };
+
+  Some(((path, new_name), origin))
+}
+
 
 fn itm_import (parser: &mut Parser) -> Option<Item> {
   if let Some(&Token { data: TokenData::Keyword(Import), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
-    let refs = if let Some(Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+    let (refs, end_region, terminal) = if let Some(Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
       parser.advance();
 
       let mut refs = Vec::new();
 
       let mut ref_ok = true;
 
-      loop {
+      let end = loop {
         match parser.curr_tok() {
           // Unexpected end of input
           None => {
@@ -79,40 +98,35 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
           },
   
           // The end of the block
-          Some(&Token { data: TokenData::Operator(RightBracket), .. }) => {
+          Some(&Token { data: TokenData::Operator(RightBracket), origin }) => {
             parser.advance();
-            break
+            break origin
           },
   
           // Refs
           _ => {
             if ref_ok {
-              if let Some(Token { data: TokenData::Identifier(base), .. }) = parser.curr_tok() {
-                let base = base.clone();
-                
-                parser.advance();
-                                
-                if let Ok(new_name) = get_new_name(parser) {
-                  refs.push(Alias { base, new_name });
+              if let Some((imp, _)) = get_single_import(parser) {
+                refs.push(imp);
 
-                  if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
-                    parser.advance();
-                    ref_ok = true;
-                  }
-
-                  continue
+                if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
+                  parser.advance();
+                } else {
+                  ref_ok = false;
                 }
+
+                continue
               }
             } else {
               parser.error("Expected , to separate import references or } to end block".to_owned());
             }
     
             if parser.synchronize(sync::close_pair_or(sync::operator(LeftBracket), sync::operator(RightBracket), sync::operator(Comma))) {
-              if let Some(&Token { data: TokenData::Operator(op), .. }) = parser.curr_tok() {
+              if let Some(&Token { data: TokenData::Operator(op), origin }) = parser.curr_tok() {
                 parser.advance();
 
                 if op == Comma { continue }
-                else { break }
+                else { break origin }
               }
             }
       
@@ -120,56 +134,18 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
             return None
           }
         }
-      }
+      };
 
-      refs
-    } else if let Some((path_or_ident, path_end)) = path(parser) {
-      match path_or_ident {
-        Either::A(path) => {
-          let mut path = path;
-
-          let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
-          
-          let (new_name, end) = if let Some((new_name, new_end)) = new_name_and_origin {
-            (Some(new_name), new_end)
-          } else {
-            (None, path_end)
-          };
-
-          let refs = vec![ Alias { base: path.pop(), new_name } ];
-          return Some(Item::new(ItemData::Import { refs, path }, SourceRegion::merge(start_region, end)))
-        },
-        Either::B(base) => {
-          let new_name = if let Ok(new_name) = get_new_name(parser) { new_name } else { return None };
-
-          vec![ Alias { base, new_name } ]
-        }
-      }
-      
+      (refs, end, true)
+    } else if let Some((imp, origin)) = get_single_import(parser) {
+      (vec![ imp ], origin, false)
     } else {
-      parser.error("Expected identifier or path to follow `import` keyword".to_owned());
+      parser.error("Expected identifier or path, or a list of these, to follow `import` keyword".to_owned());
 
       return None
     };
 
-    if let Some(Token { data: TokenData::Keyword(From), .. }) = parser.curr_tok() {
-      parser.advance();
-
-      if let Some((path_or_ident, path_end)) = path(parser) {
-        let path = match path_or_ident {
-          Either::A(path) => path,
-          Either::B(ident) => ident.into()
-        };
-
-        return Some(Item::new(ItemData::Import { refs, path }, SourceRegion::merge(start_region, path_end)))
-      } else {
-        return None
-      }
-    } else {
-      parser.error("Expected `from` keyword to separate imported identifier from source path".to_owned());
-
-      return None
-    }
+    return Some(Item::new(ItemData::Import { data: refs, terminal }, SourceRegion::merge(start_region, end_region)))
   }
 
   unreachable!("Internal error, import item parselet called on non-import token");
@@ -212,7 +188,7 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
                 parser.advance();
                                 
                 if let Ok(new_name) = get_new_name(parser) {
-                  refs.push(Alias { base, new_name });
+                  refs.push((base, new_name));
 
                   if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
                     parser.advance();
@@ -245,7 +221,7 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
         }
       }
 
-      return Some(Item::new(ItemData::Export(Export::List(refs)), SourceRegion::merge(start_region, end_region)))
+      return Some(Item::new(ItemData::Export { data: ExportData::List(refs), terminal: true }, SourceRegion::merge(start_region, end_region)))
     } else if let Some(&Token { data: TokenData::Identifier(ref base), origin: base_end }) = parser.curr_tok() {
       let base = base.to_owned();
 
@@ -259,7 +235,7 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
         (None, base_end)
       };
 
-      return Some(Item::new(ItemData::Export(Export::List(vec![ Alias { base, new_name }])), SourceRegion::merge(start_region, end)))
+      return Some(Item::new(ItemData::Export { data: ExportData::List(vec![ (base, new_name) ]), terminal: false }, SourceRegion::merge(start_region, end)))
     } else {
       let curr_tok = if let Some(tok) = parser.curr_tok() { tok } else {
         parser.error("Expected a list, alias, or inline item to follow `export` keyword".to_owned());
@@ -275,8 +251,9 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
       }?;
 
       let region = SourceRegion::merge(start_region, inline.origin);
+      let terminal = !inline.requires_semi();
 
-      return Some(Item::new(ItemData::Export(Export::Inline(box inline)), region))
+      return Some(Item::new(ItemData::Export { data: ExportData::Inline(box inline), terminal }, region))
     }
   }
 

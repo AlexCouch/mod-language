@@ -1,22 +1,27 @@
 mod A {
-  import { X, Y, Z } from ::B::C::D;
+  import ::B::C::D;
+  import {
+    D::X,
+    D::Y,
+    D::Z,
+  }
   export { X, Y, Z }
 }
 
 export mod B {
-  import C from ::;
+  import ::C;
   export C;
 }
 
 export mod C {
   export mod D {
-    import s32 as X from core;
+    import core::s32 as X;
     export X;
     export fn Y { }
     export global Z: s32 = 99;
   }
 }
 
-import X from A;
+import A::X;
 export X as Y;
 export s32 as i32;
