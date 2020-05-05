@@ -153,18 +153,24 @@ impl Context {
             let base = self.resolve_key(lowered_key)?;
 
             if let NamespaceItem::Module(module) = base {
-              let entry_source = if lowered_key == base_key && alias.relative_to.is_some() {
-                &module.local_bindings
+              base_name.set(&module.canonical_name);
+
+              let (src_ref, entry) = if lowered_key == base_key && alias.relative_to.is_some() {
+                ("contain", if let Some(entry) = module.local_bindings.get_entry(ident) {
+                  Some(entry)
               } else {
-                &module.export_bindings
+                  self.core_ns.get_entry(ident)
+                })
+              } else {
+                ("export", module.export_bindings.get_entry(ident))
               };
 
-              if let Some(exported_key) = entry_source.get_entry(ident) {
+              if let Some(exported_key) = entry {
                 base_name.set(ident);
 
                 lowered_key = self.lower_key(exported_key)?;
               } else {
-                error!(alias.origin, "Module `{}` does not export an item named `{}`", module.canonical_name, ident);
+                error!(alias.origin, "Module `{}` does not {} an item named `{}`", base_name, src_ref, ident);
               }
             } else {
               error!(alias.origin, "`{}` is not a Module and has no exports", base_name);
@@ -186,6 +192,8 @@ impl Context {
           
           if let Some(local_key) = base.local_bindings.get_entry(ident) {
             self.lower_key(local_key)?
+          } else if let Some(core_key) = self.core_ns.get_entry(ident) {
+            core_key
           } else {
             error!(alias.origin, "Module `{}` does not have an item named `{}` to export", base.canonical_name, ident);
           }
