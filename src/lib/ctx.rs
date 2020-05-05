@@ -303,7 +303,7 @@ impl Namespace {
     self.entries.keys()
   }
 
-  /// Get an iterator over the identifiers in a namespace
+  /// Get an iterator over the keys in a namespace
   pub fn key_iter (&self) -> HashMapValues<Identifier, NamespaceKey> {
     self.entries.values()
   }
