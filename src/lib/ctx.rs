@@ -10,7 +10,7 @@ use core::{
 
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
-  collections::{ HashMap, hash_map::{ Iter as HashMapIter, IterMut as HashMapIterMut, }, },
+  collections::{ HashMap, hash_map::{ Iter as HashMapIter, IterMut as HashMapIterMut, Keys as HashMapKeys, Values as HashMapValues, }, },
 };
 
 use crate::{
@@ -158,7 +158,7 @@ impl Context {
               let (src_ref, entry) = if lowered_key == base_key && alias.relative_to.is_some() {
                 ("contain", if let Some(entry) = module.local_bindings.get_entry(ident) {
                   Some(entry)
-              } else {
+                } else {
                   self.core_ns.get_entry(ident)
                 })
               } else {
@@ -296,6 +296,16 @@ impl Namespace {
   /// Get a mutable key/loc iterator over the bind pairs in a namespace
   pub fn bind_iter_mut (&mut self) -> HashMapIterMut<NamespaceKey, SourceRegion> {
     self.bind_locations.iter_mut()
+  }
+
+  /// Get an iterator over the identifiers in a namespace
+  pub fn ident_iter (&self) -> HashMapKeys<Identifier, NamespaceKey> {
+    self.entries.keys()
+  }
+
+  /// Get an iterator over the identifiers in a namespace
+  pub fn key_iter (&self) -> HashMapValues<Identifier, NamespaceKey> {
+    self.entries.values()
   }
 
   /// Get a key/value iterator over the entry pairs in a namespace

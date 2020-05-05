@@ -129,21 +129,11 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
 pub fn pass_resolve_aliases (analyzer: &mut Analyzer) {
   fn resolver_impl (analyzer: &mut Analyzer, module_key: NamespaceKey) {
     if let NamespaceItem::Module(module) = analyzer.context.items.get(module_key).expect("Internal error, alias resolver impl called on undefined key") {
-      let aliases: Vec<_> =
-        module.local_bindings
-          .iter()
-          .map(|(ident, key, loc)| (ident.clone(), *key, *loc, "import"))
-          .chain(module.export_bindings
-            .iter()
-            .map(|(ident, key, loc)| (ident.clone(), *key, *loc, "export"))
-          )
-          .collect();
+      let aliases: Vec<_> = module.local_bindings.key_iter().chain(module.export_bindings.key_iter()).copied().collect();
 
-      for (ident, key, loc, kind) in aliases.into_iter() {
+      for key in aliases.into_iter() {
         if let Some(item_key) = analyzer.context.lower_key(key) {
           resolver_impl(analyzer, item_key)
-        } else {
-          analyzer.error(loc, format!("Unresolved {} `{}`", kind, ident));
         }
       }
     }
