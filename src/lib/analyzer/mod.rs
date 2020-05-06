@@ -96,7 +96,7 @@ impl<'a> Analyzer<'a> {
     let new_item = new_item.into();
 
     if let Some(shadowed_key) = self.get_active_module().local_bindings.get_entry(&identifier) {
-      let shadowed_kind = self.context.resolve_key(shadowed_key).expect("Internal error, shadowed item does not exist").kind();
+      let shadowed_kind = self.context.items.get(shadowed_key).expect("Internal error, shadowed item does not exist").kind();
       let shadowed_location = self.get_active_module().local_bindings.get_bind_location(shadowed_key).expect("Internal error, shadowed item has no bind location");
 
       self.error(origin, format!(

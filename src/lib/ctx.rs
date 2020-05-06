@@ -16,10 +16,8 @@ use std::{
 use crate::{
   util::{ make_key_type, Unref, UnwrapUnchecked, },
   collections::{ SlotMap, },
-  session::{ SESSION, },
   source::{ SourceRegion, },
   common::{ Identifier, },
-  ast::{ Path, },
 };
 
 
@@ -92,132 +90,6 @@ impl Context {
 
       err_ty,
     }
-  }
-
-
-  /// Get the bottom level of NamespaceKey using alias traversal
-  pub fn lower_key (&mut self, key: NamespaceKey) -> Option<NamespaceKey> {
-    let item = self.items.get(key)?;
-
-    macro_rules! replace_cache {
-      ($new_res:expr) => {
-        unsafe { self.items.get_unchecked_mut(key).mut_alias_unchecked() }.cached_key.replace($new_res);
-      };
-    }
-
-    macro_rules! error {
-      ($origin:expr, $($format_args:expr),+) => {
-        {
-          SESSION.error(Some($origin), format!($($format_args),+));
-
-          replace_cache!(Err(()));
-
-          return None
-        }
-      };
-    }
-
-    Some(if let NamespaceItem::Alias(alias) = item {
-      if let Some(res) = alias.cached_key {
-        if let Ok(res) = res {
-          return Some(res)
-        } else {
-          return None
-        }
-      }
-
-      let alias = alias.clone();
-
-      let lowered_key = match &alias.data {
-        AliasData::Import(path) => {
-          let base_key = if path.absolute {
-            self.lib_mod
-          } else {
-            alias.relative_to.expect("Internal error, no base key for relative import alias")
-          };
-
-          let mut base_name = Identifier::default();
-
-          base_name.set(
-            &self.items
-              .get(base_key)
-              .expect("Internal error, base key for import alias is not valid")
-              .ref_module()
-              .expect("Internal error, base key for import alias does not resolve to a module")
-              .canonical_name
-          );
-
-          let mut lowered_key = base_key;
-
-          for ident in path.iter() {
-            let base = self.resolve_key(lowered_key)?;
-
-            if let NamespaceItem::Module(module) = base {
-              base_name.set(&module.canonical_name);
-
-              let (src_ref, entry) = if lowered_key == base_key && alias.relative_to.is_some() {
-                ("contain", if let Some(entry) = module.local_bindings.get_entry(ident) {
-                  Some(entry)
-                } else {
-                  self.core_ns.get_entry(ident)
-                })
-              } else {
-                ("export", module.export_bindings.get_entry(ident))
-              };
-
-              if let Some(exported_key) = entry {
-                base_name.set(ident);
-
-                lowered_key = self.lower_key(exported_key)?;
-              } else {
-                error!(alias.origin, "Module `{}` does not {} an item named `{}`", base_name, src_ref, ident);
-              }
-            } else {
-              error!(alias.origin, "`{}` is not a Module and has no exports", base_name);
-            }
-          }
-
-          lowered_key
-        },
-
-        AliasData::Export(ident) => {
-          let base_key = alias.relative_to.expect("Internal error, no base key for export alias");
-
-          let base: &Module = 
-            self.items
-              .get(base_key)
-              .expect("Internal error, base key for export alias is not valid")
-              .ref_module()
-              .expect("Internal error, base key for export alias does not resolve to a module");
-          
-          if let Some(local_key) = base.local_bindings.get_entry(ident) {
-            self.lower_key(local_key)?
-          } else if let Some(core_key) = self.core_ns.get_entry(ident) {
-            core_key
-          } else {
-            error!(alias.origin, "Module `{}` does not have an item named `{}` to export", base.canonical_name, ident);
-          }
-        },
-      };
-
-      replace_cache!(Ok(lowered_key));
-
-      lowered_key
-    } else {
-      key
-    })
-  }
-
-  /// Resolve a NamespaceKey, traversing imports as deeply as possible
-  pub fn resolve_key (&mut self, key: NamespaceKey) -> Option<&NamespaceItem> {
-    let key = self.lower_key(key)?;
-    self.items.get(key)
-  }
-
-  /// Resolve a NamespaceKey, traversing imports as deeply as possible
-  pub fn resolve_key_mut (&mut self, key: NamespaceKey) -> Option<&mut NamespaceItem> {
-    let key = self.lower_key(key)?;
-    self.items.get_mut(key)
   }
 }
 
@@ -368,35 +240,6 @@ impl<'a> Iterator for NamespaceIterMut<'a> {
   }
 }
 
-/// The data associated with an alias, either import or export
-#[allow(missing_docs)]
-#[derive(Debug, Clone)]
-pub enum AliasData {
-  Import(Path),
-  Export(Identifier),
-}
-
-/// A lazy evaluated, cached alias to a path
-#[allow(missing_docs)]
-#[derive(Debug, Clone)]
-pub struct Alias {
-  pub data: AliasData,
-  pub relative_to: Option<NamespaceKey>,
-  pub cached_key: Option<Result<NamespaceKey, ()>>,
-  pub origin: SourceRegion,
-}
-
-impl Alias {
-  /// Create a new unresolved Alias
-  pub fn new (relative_to: Option<NamespaceKey>, data: AliasData, origin: SourceRegion) -> Self {
-    Self {
-      data,
-      relative_to,
-      cached_key: None,
-      origin,
-    }
-  }
-}
 
 
 /// The basic unit of source for a semantic analyzer,
@@ -542,7 +385,6 @@ impl Function {
 #[allow(clippy::large_enum_variant)] // This is unavoidable in this instance
 #[derive(Debug, Clone)]
 pub enum NamespaceItem {
-  Alias(Alias),
   Module(Module),
   Type(Type),
   Global(Global),
@@ -553,7 +395,6 @@ impl NamespaceItem {
   /// Get the NamespaceKind of a NamespaceItem
   pub fn kind (&self) -> NamespaceKind {
     match self {
-      Self::Alias(_)    => NamespaceKind::Alias,
       Self::Module(_)   => NamespaceKind::Module,
       Self::Type(_)     => NamespaceKind::Type,
       Self::Global(_)   => NamespaceKind::Global,
@@ -561,24 +402,6 @@ impl NamespaceItem {
     }
   }
 
-
-  /// Convert a reference to a NamespaceItem into an optional reference to a Alias
-  #[inline] pub fn ref_alias (&self) -> Option<&Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
-
-  /// Convert a reference to a NamespaceItem into an optional reference to a Alias
-  /// # Safety
-  /// This only performs an assertion on the variant if debug_assertions is enabled,
-  /// it is up to the caller to determine the safety of this transformation
-  #[inline] pub unsafe fn ref_alias_unchecked (&self) -> &Alias { if cfg!(debug_assertions) { self.ref_alias().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
-
-  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Alias
-  #[inline] pub fn mut_alias (&mut self) -> Option<&mut Alias> { match self { Self::Alias(item) => Some(item), _ => None } }
-
-  /// Convert a mutable reference to a NamespaceItem into an optional mutable reference to a Alias
-  /// # Safety
-  /// This only performs an assertion on the variant if debug_assertions is enabled,
-  /// it is up to the caller to determine the safety of this transformation
-  #[inline] pub unsafe fn mut_alias_unchecked (&mut self) -> &mut Alias { if cfg!(debug_assertions) { self.mut_alias().unwrap() } else if let Self::Alias(item) = self { item } else { unreachable_unchecked() } }
 
   /// Convert a reference to a NamespaceItem into an optional reference to a Module
   #[inline] pub fn ref_module (&self) -> Option<&Module> { match self { Self::Module(item) => Some(item), _ => None } }
@@ -653,7 +476,6 @@ impl NamespaceItem {
   #[inline] pub unsafe fn mut_function_unchecked (&mut self) -> &mut Function { if cfg!(debug_assertions) { self.mut_function().unwrap() } else if let Self::Function(item) = self { item } else { unreachable_unchecked() } }
 }
 
-impl From<Alias> for NamespaceItem { #[inline] fn from (item: Alias) -> NamespaceItem { Self::Alias(item) } }
 impl From<Module> for NamespaceItem { #[inline] fn from (item: Module) -> NamespaceItem { Self::Module(item) } }
 impl From<Type> for NamespaceItem { #[inline] fn from (item: Type) -> NamespaceItem { Self::Type(item) } }
 impl From<Global> for NamespaceItem { #[inline] fn from (item: Global) -> NamespaceItem { Self::Global(item) } }
@@ -664,7 +486,6 @@ impl From<Function> for NamespaceItem { #[inline] fn from (item: Function) -> Na
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum NamespaceKind {
-  Alias,
   Module,
   Type,
   Global,
@@ -674,7 +495,6 @@ pub enum NamespaceKind {
 impl Display for NamespaceKind {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
     write!(f, "{}", match self {
-      Self::Alias => "Alias",
       Self::Module => "Module",
       Self::Type => "Type",
       Self::Global => "Global",
