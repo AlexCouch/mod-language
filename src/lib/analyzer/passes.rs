@@ -113,7 +113,10 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
           }
         },
 
-        _ => {
+        | ItemData::Module   { .. }
+        | ItemData::Global   { .. }
+        | ItemData::Function { .. }
+        => {
           bind_item(analyzer, item);
         }
       }
