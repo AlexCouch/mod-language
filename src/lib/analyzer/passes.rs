@@ -3,8 +3,8 @@ use crate::{
   some,
   common::{ Identifier, },
   source::{ SourceRegion, },
-  ast::{ Item, ItemData, ExportData, Path, TypeExpression, TypeExpressionData, },
-  ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, Type, TypeData, },
+  ast::{ Item, ItemData, ExportData, Path, TypeExpression, TypeExpressionData, Statement, StatementData, Expression, ExpressionData, },
+  ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, Type, TypeData, LocalKey, MultiKey, },
 };
 
 use super::{ Analyzer, };
@@ -273,7 +273,7 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
 }
 
 
-fn evaluate_ident (analyzer: &Analyzer, identifier: &Identifier, origin: SourceRegion) -> Option<NamespaceKey> {
+fn evaluate_global_ident (analyzer: &Analyzer, identifier: &Identifier, origin: SourceRegion) -> Option<NamespaceKey> {
   let module = analyzer.get_active_module();
 
   Some(if let Some(local) = module.local_bindings.get_entry(identifier) {
@@ -286,7 +286,7 @@ fn evaluate_ident (analyzer: &Analyzer, identifier: &Identifier, origin: SourceR
   })
 }
 
-fn evaluate_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) -> Option<NamespaceKey> {
+fn evaluate_global_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) -> Option<NamespaceKey> {
   let mut base_name = Identifier::default();
                 
   let base_key = if path.absolute {
@@ -352,7 +352,7 @@ fn evaluate_texpr (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Namespace
 
   match &texpr.data {
     TypeExpressionData::Path(path) => {
-      let key = some!(evaluate_path(analyzer, path, texpr.origin); err_ty);
+      let key = some!(evaluate_global_path(analyzer, path, texpr.origin); err_ty);
       
       let item = analyzer.context.items.get(key).expect("Internal error, path evaluated to invalid key");
 
@@ -366,7 +366,7 @@ fn evaluate_texpr (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Namespace
     },
 
     TypeExpressionData::Identifier(identifier) => {
-      let key = some!(evaluate_ident(analyzer, identifier, texpr.origin); err_ty);
+      let key = some!(evaluate_global_ident(analyzer, identifier, texpr.origin); err_ty);
 
       let item = analyzer.context.items.get(key).expect("Internal error, identifier evaluated to invalid key");
 
@@ -460,6 +460,169 @@ fn pass_type_link_top_level (analyzer: &mut Analyzer) {
 }
 
 
+fn evaluate_local_ident (analyzer: &mut Analyzer, identifier: &Identifier, origin: SourceRegion) -> Option<MultiKey> {
+  Some(if let Some(local) = analyzer.get_active_local_context().get_variable(identifier) {
+    local
+  } else {
+    let module = analyzer.get_active_module();
+
+    if let Some(global) = module.local_bindings.get_entry(identifier) {
+      global
+    } else if let Some(core) = analyzer.context.core_ns.get_entry(identifier) {
+      core
+    } else {
+      analyzer.error(origin, format!("Cannot find item or local variable named `{}`", identifier));
+      return None
+    }.into()
+  })
+}
+
+fn evaluate_local_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) -> Option<MultiKey> {
+  let mut base_name = Identifier::default();
+                
+  let base_key = if path.absolute {
+    analyzer.context.lib_mod
+  } else {
+    analyzer.get_active_module_key()
+  };
+
+  let mut resolved_key: MultiKey = base_key.into();
+  
+  for ident in path.iter() {
+    let ns_key = if let MultiKey::NamespaceKey(ns_key) = resolved_key {
+      ns_key
+    } else {
+      analyzer.error(origin, "Local variables have no viable path extension".to_owned());
+
+      return None
+    };
+
+    let base = analyzer.context.items.get(ns_key).expect("Internal error, invalid lowered key during path resolution");
+
+    if let NamespaceItem::Module(module) = base {
+      base_name.set(&module.canonical_name);
+
+      resolved_key = if !path.absolute && resolved_key == base_key {
+        if let Some(local) = analyzer.get_active_local_context().get_variable(ident) {
+          local
+        } else if let Some(global) = module.local_bindings.get_entry(ident) {
+          global.into()
+        } else if let Some(core) = analyzer.context.core_ns.get_entry(ident) {
+          core.into()
+        } else {
+          analyzer.error(origin, format!("Cannot find item or local variable named `{}`", ident));
+          return None
+        }
+      } else if let Some(exported_key) = module.export_bindings.get_entry(ident) {
+        exported_key.into()
+      } else {
+        analyzer.error(origin, format!("Module `{}` does not export an item named `{}`", base_name, ident));
+        return None
+      };
+    } else {
+      analyzer.error(origin, format!("{} is not a Module and has no exports", ident));
+      return None
+    }
+  }
+
+  Some(resolved_key)
+}
+
+
+/// Generates IR for an expression and returns the Type of an expression
+fn evaluate_expr (analyzer: &mut Analyzer, expr: &Expression) -> MultiKey {
+  /// /// TODO what do ??? /// ///
+  match &expr.data {
+    ExpressionData::Path(path) => {
+      let multi_key = evaluate_local_path(analyzer, path, expr.origin);
+      unimplemented!()
+    },
+
+    ExpressionData::Identifier(ident) => {
+      let multi_key = evaluate_local_ident(analyzer, ident, expr.origin);
+      unimplemented!()
+    },
+
+    ExpressionData::Number(number) => {
+      unimplemented!()
+    },
+    
+    ExpressionData::Unary { box operand, operator } => {
+      unimplemented!()
+    },
+
+    ExpressionData::Binary { box left, box right, operator } => {
+      unimplemented!()
+    },
+
+    ExpressionData::Call { callee, arguments } => {
+      unimplemented!()
+    },
+
+    ExpressionData::Block(box block) => {
+      unimplemented!()
+    },
+
+    ExpressionData::Conditional(box conditional) => {
+      unimplemented!()
+    }
+  }
+}
+
+/// Performs analysis at the statement & expression levels
+fn pass_eval_bodies (analyzer: &mut Analyzer) {
+  fn evaluator_impl (analyzer: &mut Analyzer, items: &[Item]) {
+    fn evaluate_item (analyzer: &mut Analyzer, item: &Item) {
+      match &item.data {
+        ItemData::Module { identifier, items, .. } => {
+          analyzer.push_active_module(analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap());
+          evaluator_impl(analyzer, items);
+          analyzer.pop_active_module();
+        },
+
+        ItemData::Global { identifier, initializer, .. } => {
+          let global_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+
+          // its possible some shadowing error has overwritten this def and if so we just return
+          let global = some!(analyzer.context.items.get(global_key).unwrap().ref_global());
+
+
+        },
+
+        ItemData::Function { identifier, parameters, body, .. } => {
+          let function_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+
+          // its possible some shadowing error has overwritten this def and if so we just return
+          let function = some!(analyzer.context.items.get(function_key).unwrap().ref_function());
+
+
+        },
+
+        | ItemData::Import { .. }
+        | ItemData::Export { .. }
+        => unreachable!()
+      }
+    }
+
+    for item in items.iter() {
+      match &item.data {
+        | ItemData::Import { .. }
+        | ItemData::Export { data: ExportData::List { .. }, .. }
+        => continue,
+        
+        ItemData::Export { data: ExportData::Inline(item), .. } => evaluate_item(analyzer, item),
+        
+        | ItemData::Module   { .. }
+        | ItemData::Global   { .. }
+        | ItemData::Function { .. }
+        => evaluate_item(analyzer, item)
+      }
+    }
+  }
+
+  evaluator_impl(analyzer, analyzer.ast)
+}
+
 
 impl<'a> Analyzer<'a> {
   /// Runs each pass of analysis session in sequence
@@ -467,6 +630,8 @@ impl<'a> Analyzer<'a> {
     pass_bind_top_level(self);
 
     pass_type_link_top_level(self);
+
+    pass_eval_bodies(self);
 
     assert!(self.get_active_module_key() == self.context.lib_mod, "Internal error, a pass did not pop an active module");
   }

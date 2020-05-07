@@ -38,6 +38,16 @@ pub struct Context {
   pub err_ty: NamespaceKey,
   /// Anonymous type lookup helper
   pub anon_types: HashMap<TypeData, NamespaceKey>,
+
+  /// All local contexts discovered by a semantic analyzer
+  pub local_contexts: SlotMap<ContextKey, LocalContext>,
+  /// Bindings from a global variable or function NamespaceKey to its associated LocalContext's ContextKey
+  pub local_context_lookup: HashMap<NamespaceKey, ContextKey>,
+}
+
+make_key_type! {
+  /// A SlotMap key representing a LocalContext
+  pub struct ContextKey;
 }
 
 impl Default for Context {
@@ -93,6 +103,9 @@ impl Context {
       err_ty,
 
       anon_types: HashMap::default(),
+
+      local_contexts: SlotMap::default(),
+      local_context_lookup: HashMap::default(),
     }
   }
 }
@@ -100,36 +113,36 @@ impl Context {
 
 /// A layer of semantic distinction for identifiers in a compilation context
 #[derive(Debug, Clone, Default)]
-pub struct Namespace {
-  entries: HashMap<Identifier, NamespaceKey>,
-  bind_locations: HashMap<NamespaceKey, SourceRegion>,
+pub struct Namespace<K: std::hash::Hash + Eq + Copy = NamespaceKey> {
+  entries: HashMap<Identifier, K>,
+  bind_locations: HashMap<K, SourceRegion>,
 }
 
-impl Namespace {
+impl<K: std::hash::Hash + Eq + Copy> Namespace<K> {
   /// Get the location, if any, a Namespace entry was bound at
-  pub fn get_bind_location (&self, key: NamespaceKey) -> Option<SourceRegion> {
+  pub fn get_bind_location (&self, key: K) -> Option<SourceRegion> {
     self.bind_locations.get(&key).unref()
   }
 
   /// Determine if a Namespace entry has a binding location
-  pub fn has_bind_location (&self, key: NamespaceKey) -> bool {
+  pub fn has_bind_location (&self, key: K) -> bool {
     self.bind_locations.contains_key(&key)
   }
 
   /// Register a binding location for a Namespace entry
-  pub fn set_bind_location (&mut self, key: NamespaceKey, location: SourceRegion) {
+  pub fn set_bind_location (&mut self, key: K, location: SourceRegion) {
     self.bind_locations.insert(key, location);
   }
   
   /// Get the entry, if any, associated with an identifier in a Namespace
-  pub fn get_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> Option<NamespaceKey> {
+  pub fn get_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> Option<K> {
     self.entries.get(ident.as_ref()).unref()
   }
 
   /// Get the entry associated with an identifier in a Namespace
   /// # Safety
   /// It is up to the caller to determine whether the identifier provided is bound
-  pub unsafe fn get_entry_unchecked<I: AsRef<str> + ?Sized> (&self, ident: &I) -> NamespaceKey {
+  pub unsafe fn get_entry_unchecked<I: AsRef<str> + ?Sized> (&self, ident: &I) -> K {
     *self.entries.get(ident.as_ref()).unwrap_unchecked()
   }
 
@@ -140,7 +153,7 @@ impl Namespace {
 
   
   /// Get the identifier associated with an entry, if any
-  pub fn get_entry_ident (&self, key: NamespaceKey) -> Option<&str> {
+  pub fn get_entry_ident (&self, key: K) -> Option<&str> {
     for (i, k) in self.entries.iter() {
       if k == &key { return Some(i.as_str()) }
     }
@@ -149,53 +162,53 @@ impl Namespace {
   }
 
   /// Determine if a Namespace contains a given key
-  pub fn has_entry_key (&self, key: NamespaceKey) -> bool {
+  pub fn has_entry_key (&self, key: K) -> bool {
     self.get_entry_ident(key).is_some()
   }
 
   /// Register a new namespace entry
-  pub fn set_entry<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: NamespaceKey) {
+  pub fn set_entry<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: K) {
     self.entries.insert(ident.into(), key);
   }
 
   /// Register a new namespace entry, and immediately bind its source location
-  pub fn set_entry_bound<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: NamespaceKey, location: SourceRegion) {
+  pub fn set_entry_bound<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: K, location: SourceRegion) {
     self.set_entry(ident, key);
     self.set_bind_location(key, location);
   }
 
   /// Get a key/loc iterator over the bind pairs in a namespace
-  pub fn bind_iter (&self) -> HashMapIter<NamespaceKey, SourceRegion> {
+  pub fn bind_iter (&self) -> HashMapIter<K, SourceRegion> {
     self.bind_locations.iter()
   }
 
   /// Get a mutable key/loc iterator over the bind pairs in a namespace
-  pub fn bind_iter_mut (&mut self) -> HashMapIterMut<NamespaceKey, SourceRegion> {
+  pub fn bind_iter_mut (&mut self) -> HashMapIterMut<K, SourceRegion> {
     self.bind_locations.iter_mut()
   }
 
   /// Get an iterator over the identifiers in a namespace
-  pub fn ident_iter (&self) -> HashMapKeys<Identifier, NamespaceKey> {
+  pub fn ident_iter (&self) -> HashMapKeys<Identifier, K> {
     self.entries.keys()
   }
 
   /// Get an iterator over the keys in a namespace
-  pub fn key_iter (&self) -> HashMapValues<Identifier, NamespaceKey> {
+  pub fn key_iter (&self) -> HashMapValues<Identifier, K> {
     self.entries.values()
   }
 
   /// Get a key/value iterator over the entry pairs in a namespace
-  pub fn entry_iter (&self) -> HashMapIter<Identifier, NamespaceKey> {
+  pub fn entry_iter (&self) -> HashMapIter<Identifier, K> {
     self.entries.iter()
   }
 
   /// Get a mutable key/value iterator over the entry pairs in a namespace
-  pub fn entry_iter_mut (&mut self) -> HashMapIterMut<Identifier, NamespaceKey> {
+  pub fn entry_iter_mut (&mut self) -> HashMapIterMut<Identifier, K> {
     self.entries.iter_mut()
   }
 
   /// Get an immutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-  pub fn iter (&self) -> NamespaceIter {
+  pub fn iter (&self) -> NamespaceIter<K> {
     NamespaceIter {
       bind_locations: &self.bind_locations,
       entry_iter: self.entries.iter()
@@ -203,7 +216,7 @@ impl Namespace {
   }
 
   /// Get a mutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-  pub fn iter_mut (&mut self) -> NamespaceIterMut {
+  pub fn iter_mut (&mut self) -> NamespaceIterMut<K> {
     NamespaceIterMut {
       bind_locations: &self.bind_locations,
       entry_iter: self.entries.iter_mut()
@@ -212,13 +225,13 @@ impl Namespace {
 }
 
 /// An immutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-pub struct NamespaceIter<'a> {
-  bind_locations: &'a HashMap<NamespaceKey, SourceRegion>,
-  entry_iter: HashMapIter<'a, Identifier, NamespaceKey>,
+pub struct NamespaceIter<'a, K: std::hash::Hash + Eq + Copy> {
+  bind_locations: &'a HashMap<K, SourceRegion>,
+  entry_iter: HashMapIter<'a, Identifier, K>,
 }
 
-impl<'a> Iterator for NamespaceIter<'a> {
-  type Item = (&'a Identifier, &'a NamespaceKey, &'a SourceRegion);
+impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for NamespaceIter<'a, K> {
+  type Item = (&'a Identifier, &'a K, &'a SourceRegion);
 
   fn next (&mut self) -> Option<Self::Item> {
     let (ident, key) = self.entry_iter.next()?;
@@ -228,13 +241,13 @@ impl<'a> Iterator for NamespaceIter<'a> {
 }
 
 /// A mutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-pub struct NamespaceIterMut<'a> {
-  bind_locations: &'a HashMap<NamespaceKey, SourceRegion>,
-  entry_iter: HashMapIterMut<'a, Identifier, NamespaceKey>,
+pub struct NamespaceIterMut<'a, K: std::hash::Hash + Eq + Copy> {
+  bind_locations: &'a HashMap<K, SourceRegion>,
+  entry_iter: HashMapIterMut<'a, Identifier, K>,
 }
 
-impl<'a> Iterator for NamespaceIterMut<'a> {
-  type Item = (&'a Identifier, &'a mut NamespaceKey, &'a SourceRegion);
+impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for NamespaceIterMut<'a, K> {
+  type Item = (&'a Identifier, &'a mut K, &'a SourceRegion);
 
   fn next (&mut self) -> Option<Self::Item> {
     let (ident, key) = self.entry_iter.next()?;
@@ -417,6 +430,128 @@ pub enum NamespaceItem {
   Type(Type),
   Global(Global),
   Function(Function),
+}
+
+
+/// A local item known by a semantic analyzer
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct LocalItem {
+  pub canonical_name: Identifier,
+  pub ty: NamespaceKey,
+  pub is_parameter: bool,
+  pub index: usize,
+}
+
+/// A reference to either a NamespaceItem or a LocalItem
+pub enum MultiRef<'a> {
+  LocalItem(&'a LocalItem),
+  NamespaceItem(&'a NamespaceItem),
+}
+
+impl<'a> From<&'a LocalItem> for MultiRef<'a> { #[inline] fn from (item: &'a LocalItem) -> Self { Self::LocalItem(item) } }
+impl<'a> From<&'a NamespaceItem> for MultiRef<'a> { #[inline] fn from (item: &'a NamespaceItem) -> Self { Self::NamespaceItem(item) } }
+
+pub enum MultiMut<'a> {
+  LocalItem(&'a mut LocalItem),
+  NamespaceItem(&'a mut NamespaceItem),
+}
+
+impl<'a> From<&'a mut LocalItem> for MultiMut<'a> { #[inline] fn from (item: &'a mut LocalItem) -> Self { Self::LocalItem(item) } }
+impl<'a> From<&'a mut NamespaceItem> for MultiMut<'a> { #[inline] fn from (item: &'a mut NamespaceItem) -> Self { Self::NamespaceItem(item) } }
+
+make_key_type! {
+  /// A SlotMap Key representing a LocalItem
+  pub struct LocalKey;
+}
+
+/// A Key to either a local variable or a global item
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MultiKey {
+  LocalKey(LocalKey),
+  NamespaceKey(NamespaceKey),
+}
+
+impl MultiKey {
+  /// Convert a MultiKey to its variant
+  pub fn local (self) -> Option<LocalKey> { if let Self::LocalKey(key) = self { Some(key) } else { None } }
+
+  /// Convert a MultiKey to its variant
+  /// 
+  /// # Safety
+  /// This function only checks the validity of this conversion if debug_assertions are enabled,
+  /// it is up to the caller to determine the safety of this operation
+  pub unsafe fn local_unchecked (self) -> LocalKey { if cfg!(debug_assertions) { self.local().unwrap() } else if let Self::LocalKey(key) = self { key } else { unreachable_unchecked() } }
+
+  /// Convert a MultiKey to its variant
+  pub fn namespace (self) -> Option<NamespaceKey> { if let Self::NamespaceKey(key) = self { Some(key) } else { None } }
+
+  /// Convert a MultiKey to its variant
+  /// 
+  /// # Safety
+  /// This function only checks the validity of this conversion if debug_assertions are enabled,
+  /// it is up to the caller to determine the safety of this operation
+  pub unsafe fn namespace_unchecked (self) -> NamespaceKey { if cfg!(debug_assertions) { self.namespace().unwrap() } else if let Self::NamespaceKey(key) = self { key } else { unreachable_unchecked() } }
+}
+
+impl PartialEq<LocalKey> for MultiKey { #[inline] fn eq (&self, other: &LocalKey) -> bool { if let Self::LocalKey(key) = self { key == other } else { false } } }
+impl PartialEq<NamespaceKey> for MultiKey { #[inline] fn eq (&self, other: &NamespaceKey) -> bool { if let Self::NamespaceKey(key) = self { key == other } else { false } } }
+
+impl From<LocalKey> for MultiKey { #[inline] fn from (key: LocalKey) -> Self { Self::LocalKey(key) } }
+impl From<NamespaceKey> for MultiKey { #[inline] fn from (key: NamespaceKey) -> Self { Self::NamespaceKey(key) } }
+
+/// A variant of namespace using MultiKey as its K type
+pub type LocalNamespace = Namespace<MultiKey>;
+
+#[derive(Debug, Clone)]
+pub struct StackFrame {
+  parent: Option<FrameKey>,
+  namespace: LocalNamespace,
+  descendents: Vec<FrameKey>,
+}
+
+make_key_type! {
+  /// A SlotMap Key representing a StackFrame
+  pub struct FrameKey;
+}
+
+// TODO is this dumb as hell?
+// Maybe i should just go ahead and discard stack frames that are dead
+// And generate a regular IR instead of this complicated monstrosity
+
+/// A function or global initializer expression's contextual information
+#[derive(Debug, Clone)]
+pub struct LocalContext {
+  /// All local variables known by a LocalContext
+  pub variables: SlotMap<LocalKey, LocalItem>,
+  /// Storage for all StackFrames in the tree of a LocalContext
+  pub stack_frames: SlotMap<FrameKey, StackFrame>,
+  /// The FrameKey of the root StackFrame of the tree of a LocalContext
+  pub root_stack_frame: FrameKey,
+  /// The FrameKey of the active StackFrame of a LocalContext
+  pub active_frame: FrameKey,
+}
+
+impl LocalContext {
+  // TODO create an initialize context
+  // TODO create stack frames in active frame
+
+  /// Try to lookup a local variable by traversing down the tree from a LocalContext's active StackFrame
+  pub fn get_variable<I: AsRef<str>> (&self, ident: &I) -> Option<MultiKey> {
+    let mut active_frame = unsafe { self.stack_frames.get_unchecked(self.active_frame) };
+
+    loop {
+      let entry = active_frame.namespace.get_entry(ident);
+
+      if entry.is_some() {
+        break entry
+      } else if let Some(parent_key) = active_frame.parent {
+        active_frame = unsafe { self.stack_frames.get_unchecked(parent_key) };
+      } else {
+        break None
+      }
+    }
+  }
 }
 
 impl NamespaceItem {

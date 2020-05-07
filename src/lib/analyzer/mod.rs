@@ -6,7 +6,7 @@ use crate::{
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Item, },
-  ctx::{ Context, Module, NamespaceItem, NamespaceKey, },
+  ctx::{ Context, Module, NamespaceItem, NamespaceKey, LocalContext, ContextKey, },
 };
 
 mod passes;
@@ -19,12 +19,12 @@ mod passes;
 pub struct Analyzer<'a> {
   /// The AST being analyzed
   pub ast: &'a [Item],
-
   /// All contextual information used by a semantic analyzer
   pub context: Context,
-
   /// A stack of active modules being analyzed
   pub active_modules: Vec<NamespaceKey>,
+  /// The key of the local context being analyzed, if any
+  pub active_local_context: Option<ContextKey>,
 }
 
 
@@ -36,10 +36,9 @@ impl<'a> Analyzer<'a> {
 
     Self {
       ast,
-
       context,
-
       active_modules,
+      active_local_context: None,
     }
   }
 
@@ -84,6 +83,20 @@ impl<'a> Analyzer<'a> {
   /// Get a mutable reference to the active Module in an Analyzer
   pub fn get_active_module_mut (&mut self) -> &mut Module {
     unsafe { self.context.items.get_unchecked_mut(self.get_active_module_key()).mut_module_unchecked() }
+  }
+
+  /// Get an immutable reference to the active local context
+  /// 
+  /// Panics if there is no active local context
+  pub fn get_active_local_context (&self) -> &LocalContext {
+    unsafe { self.context.local_contexts.get_unchecked(self.active_local_context.expect("Internal error, cannot get LocalContext")) }
+  }
+
+  /// Get a mutable reference to the active local context
+  /// 
+  /// Panics if there is no active local context
+  pub fn get_active_local_context_mut (&mut self) -> &mut LocalContext {
+    unsafe { self.context.local_contexts.get_unchecked_mut(self.active_local_context.expect("Internal error, cannot get LocalContext")) }
   }
 
 
