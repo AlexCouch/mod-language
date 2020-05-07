@@ -1,7 +1,7 @@
 //! Contains the AST structure and its subordinate structures
 
 use std::{
-  fmt::{ Debug, Formatter, Result as FMTResult, },
+  fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   ops::{ Deref, },
   hash::{ Hash, Hasher, },
   collections::hash_map::{ DefaultHasher, },
@@ -124,6 +124,26 @@ impl<T: Into<Identifier>> From<T> for Path {
 
 impl<T: Into<Identifier>> From<Vec<T>> for Path {
   #[inline] fn from (vec: Vec<T>) -> Self { Self::new(false, vec.into_iter().map(|i| i.into()).collect()) }
+}
+
+impl Display for Path {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    if self.absolute {
+      write!(f, "::")?;
+    }
+
+    let mut iter = self.iter().peekable();
+    
+    while let Some(ident) = iter.next() {
+      write!(f, "{}", ident)?;
+
+      if iter.peek().is_some() {
+        write!(f, "::")?;
+      }
+    }
+
+    Ok(())
+  }
 }
 
 

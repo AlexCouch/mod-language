@@ -7,6 +7,7 @@
 #![feature(box_patterns)]
 #![feature(track_caller)]
 #![feature(stmt_expr_attributes)]
+#![feature(or_patterns)]
 
 extern crate self as mod_language;
 

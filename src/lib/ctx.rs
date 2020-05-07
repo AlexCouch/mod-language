@@ -36,6 +36,8 @@ pub struct Context {
   pub reference_locations: HashMap<NamespaceKey, Vec<SourceRegion>>,
   /// The key given as a result of a type error
   pub err_ty: NamespaceKey,
+  /// Anonymous type lookup helper
+  pub anon_types: HashMap<TypeData, NamespaceKey>,
 }
 
 impl Default for Context {
@@ -63,7 +65,7 @@ impl Context {
     let mut core_ns  = Namespace::default();
 
     for &(name, ref td) in PRIMITIVE_TYPES.iter() {
-      let key = items.insert(Type::new(name.into(), SourceRegion::ANONYMOUS, Some(td.clone())).into());
+      let key = items.insert(Type::new(Some(name.into()), SourceRegion::ANONYMOUS, Some(td.clone())).into());
 
       core_ns.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
       core_mod.local_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
@@ -77,7 +79,7 @@ impl Context {
     let lib_key = items.insert(lib_mod.into());
     core_ns.set_entry_bound("lib", lib_key, SourceRegion::ANONYMOUS);
 
-    let err_ty = items.insert(Type::new("err_ty".into(), SourceRegion::ANONYMOUS, Some(TypeData::Alias(NamespaceKey::default()))).into());
+    let err_ty = items.insert(Type::new(Some("err_ty".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
 
     Self {
       items,
@@ -89,6 +91,8 @@ impl Context {
       lib_mod: lib_key,
 
       err_ty,
+
+      anon_types: HashMap::default(),
     }
   }
 }
@@ -274,7 +278,7 @@ impl Module {
 
 /// Data representation of the simplest kind of type,
 /// built in primitives such as numbers
-#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PrimitiveType {
   /// An empty monostate representing nothing
   Void,
@@ -295,8 +299,10 @@ pub enum PrimitiveType {
 }
 
 /// Unique data for a Type in a semantic analyzer
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TypeData {
+  /// The error type
+  Error,
   /// A reference to another type
   Alias(NamespaceKey),
   /// Built in primitive type such as an integer
@@ -312,11 +318,28 @@ pub enum TypeData {
   },
 }
 
+impl TypeData {
+  /// Determine if a Type is an anonymous Type that is not necessarily associated with a canonical name
+  pub fn is_anon (&self) -> bool {
+    match self {
+      | TypeData::Error    { .. }
+      | TypeData::Pointer  { .. }
+      | TypeData::Function { .. }
+      => true,
+
+      | TypeData::Alias     { .. }
+      | TypeData::Primitive { .. }
+      => false,
+    }
+  }
+}
+
+
 /// Any Type known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Type {
   /// The canonical, original name of a Type
-  pub canonical_name: Identifier,
+  pub canonical_name: Option<Identifier>,
   /// The unique data associated with a Type, if it has been defined
   pub data: Option<TypeData>,
   /// The SourceRegion at which a Type was defined
@@ -325,12 +348,17 @@ pub struct Type {
 
 impl Type {
   /// Create a new Type and initialize its canonical name, origin, and optionally its data
-  pub fn new (canonical_name: Identifier, origin: SourceRegion, data: Option<TypeData>) -> Self {
+  pub fn new (canonical_name: Option<Identifier>, origin: SourceRegion, data: Option<TypeData>) -> Self {
     Self {
       canonical_name,
       data,
       origin,
     }
+  }
+
+  /// Determine if a Type's TypeData is anonymous
+  pub fn is_anon (&self) -> Option<bool> {
+    self.data.as_ref().map(|td| td.is_anon())
   }
 }
 

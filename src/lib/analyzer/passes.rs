@@ -1,32 +1,14 @@
-use std::{
-  fmt::{ Display, Formatter, Result as FMTResult, },
-};
-
 use crate::{
   // util::{ UnwrapUnchecked, },
+  some,
   common::{ Identifier, },
   source::{ SourceRegion, },
-  ast::{ Item, ItemData, ExportData, },
-  ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, },
+  ast::{ Item, ItemData, ExportData, Path, TypeExpression, TypeExpressionData, },
+  ctx::{ Module, Global, Function, NamespaceItem, NamespaceKey, Type, TypeData, },
 };
 
 use super::{ Analyzer, };
 
-
-struct RefPathDisplay<'a>(&'a [&'a Identifier]);
-
-impl<'a> Display for RefPathDisplay<'a> {
-  fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    let mut iter = self.0.iter().peekable();
-    while let Some(ident) = iter.next() {
-      write!(f, "{}", ident)?;
-      if iter.peek().is_some() {
-        write!(f, "::")?;
-      }
-    }
-    Ok(())
-  }
-}
 
 
 /// Binds top level items to their identifiers
@@ -216,7 +198,7 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
               } else if let Some(core) = analyzer.context.core_ns.get_entry(ident) {
                 core
               } else {
-                analyzer.error(alias.origin, format!("Module `{}` does not have an item named `{}` available for import", base_name, ident));
+                analyzer.error(alias.origin, format!("Module `{}` does not have access to an item named `{}`", base_name, ident));
                 return None
               }
             } else if let Some(exported_key) = module.export_bindings.get_entry(ident) {
@@ -291,11 +273,201 @@ fn pass_bind_top_level (analyzer: &mut Analyzer) {
 }
 
 
+fn evaluate_ident (analyzer: &Analyzer, identifier: &Identifier, origin: SourceRegion) -> Option<NamespaceKey> {
+  let module = analyzer.get_active_module();
+
+  Some(if let Some(local) = module.local_bindings.get_entry(identifier) {
+    local
+  } else if let Some(core) = analyzer.context.core_ns.get_entry(identifier) {
+    core
+  } else {
+    analyzer.error(origin, format!("Module `{}` does not have access to an item named `{}`", module.canonical_name, identifier));
+    return None
+  })
+}
+
+fn evaluate_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) -> Option<NamespaceKey> {
+  let mut base_name = Identifier::default();
+                
+  let base_key = if path.absolute {
+    analyzer.context.lib_mod
+  } else {
+    analyzer.get_active_module_key()
+  };
+
+  let mut resolved_key = base_key;
+  
+  for ident in path.iter() {
+    let base = analyzer.context.items.get(resolved_key).expect("Internal error, invalid lowered key during path resolution");
+
+    if let NamespaceItem::Module(module) = base {
+      base_name.set(&module.canonical_name);
+
+      resolved_key = if !path.absolute && resolved_key == base_key {
+        if let Some(local) = module.local_bindings.get_entry(ident) {
+          local
+        } else if let Some(core) = analyzer.context.core_ns.get_entry(ident) {
+          core
+        } else {
+          analyzer.error(origin, format!("Module `{}` does not have access to an item named `{}`", base_name, ident));
+          return None
+        }
+      } else if let Some(exported_key) = module.export_bindings.get_entry(ident) {
+        exported_key
+      } else {
+        analyzer.error(origin, format!("Module `{}` does not export an item named `{}`", base_name, ident));
+        return None
+      };
+    } else {
+      analyzer.error(origin, format!("{} is not a Module and has no exports", ident));
+      return None
+    }
+  }
+
+  Some(resolved_key)
+}
+
+
+macro_rules! bubble_err_ty {
+  ($analyzer:expr, $key:expr) => {
+    if $key != $analyzer.context.err_ty { $key } else { $key }
+  };
+}
+
+fn evaluate_anon_tdata (analyzer: &mut Analyzer, type_data: TypeData, origin: SourceRegion) -> NamespaceKey {
+  assert!(type_data.is_anon(), "Internal error, non-anonymous TypeData passed to evaluate_anon_tdata");
+
+  if let Some(existing_key) = analyzer.context.anon_types.get(&type_data) {
+    *existing_key
+  } else {
+    let new_key = analyzer.context.items.insert(Type::new(None, origin, Some(type_data.clone())).into());
+    analyzer.context.anon_types.insert(type_data, new_key);
+    new_key
+  }
+}
+
+
+fn evaluate_texpr (analyzer: &mut Analyzer, texpr: &TypeExpression) -> NamespaceKey {
+  let err_ty = analyzer.context.err_ty;
+
+  match &texpr.data {
+    TypeExpressionData::Path(path) => {
+      let key = some!(evaluate_path(analyzer, path, texpr.origin); err_ty);
+      
+      let item = analyzer.context.items.get(key).expect("Internal error, path evaluated to invalid key");
+
+      if item.ref_type().is_some() {
+        key
+      } else {
+        analyzer.error(texpr.origin, format!("Path `{}` does not evaluate to a type", path));
+
+        err_ty
+      }
+    },
+
+    TypeExpressionData::Identifier(identifier) => {
+      let key = some!(evaluate_ident(analyzer, identifier, texpr.origin); err_ty);
+
+      let item = analyzer.context.items.get(key).expect("Internal error, identifier evaluated to invalid key");
+
+      if item.ref_type().is_some() {
+        key
+      } else {
+        analyzer.error(texpr.origin, format!("Identifier `{}` does not evaluate to a type", identifier));
+
+        err_ty
+      }
+    },
+
+    TypeExpressionData::Function { parameter_types: parameter_texprs, return_type: return_texpr } => {
+      let mut parameter_types = Vec::with_capacity(parameter_texprs.len());
+
+      for texpr in parameter_texprs.iter() {
+        parameter_types.push(bubble_err_ty!(analyzer, evaluate_texpr(analyzer, texpr)));
+      }
+
+      let return_type = if let box Some(return_texpr) = return_texpr { Some(bubble_err_ty!(analyzer, evaluate_texpr(analyzer, return_texpr))) } else { None };
+
+      let fn_td = TypeData::Function { parameter_types, return_type };
+
+      evaluate_anon_tdata(analyzer, fn_td, texpr.origin)
+    },
+  }
+}
+
+
+/// Binds top level globals and functions to their types
+fn pass_type_link_top_level (analyzer: &mut Analyzer) {
+  fn type_linker_impl (analyzer: &mut Analyzer, items: &[Item]) {
+    fn type_link_item<'a> (analyzer: &mut Analyzer, item: &'a Item) {
+      match &item.data {
+        ItemData::Module { identifier, items, .. } => {
+          analyzer.push_active_module(analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap());
+          type_linker_impl(analyzer, items);
+          analyzer.pop_active_module();
+        },
+
+        ItemData::Global { identifier, explicit_type, .. } => {
+          let global_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+
+          // its possible some shadowing error has overwritten this def and if so we just return
+          some!(analyzer.context.items.get(global_key).unwrap().ref_global());
+
+          let ty = evaluate_texpr(analyzer, explicit_type);
+
+          unsafe { analyzer.context.items.get_unchecked_mut(global_key).mut_global_unchecked() }.ty.replace(ty);
+        },
+
+        ItemData::Function { identifier, parameters, return_type, .. } => {
+          let function_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+
+          // its possible some shadowing error has overwritten this def and if so we just return
+          some!(analyzer.context.items.get(function_key).unwrap().ref_function());
+
+          let parameter_types = parameters.iter().map(|(_, texpr)| texpr.clone()).collect();
+          let return_type = box return_type.as_ref().cloned();
+
+          let fn_texpr = TypeExpression::new(TypeExpressionData::Function { parameter_types, return_type }, item.origin);
+
+          let ty = evaluate_texpr(analyzer, &fn_texpr);
+
+          unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() }.ty.replace(ty);
+        }
+        
+        | ItemData::Import { .. }
+        | ItemData::Export { .. }
+        => unreachable!()
+      }
+    }
+    
+    for item in items.iter() {
+      match &item.data {
+        | ItemData::Import { .. }
+        | ItemData::Export { data: ExportData::List(_), .. } 
+        => continue,
+
+        ItemData::Export { data: ExportData::Inline(item), .. } => type_link_item(analyzer, item),
+
+        | ItemData::Module   { .. }
+        | ItemData::Global   { .. }
+        | ItemData::Function { .. }
+        => type_link_item(analyzer, item)
+      }
+    }
+  }
+
+  type_linker_impl(analyzer, analyzer.ast)
+}
+
 
 
 impl<'a> Analyzer<'a> {
   /// Runs each pass of analysis session in sequence
   pub fn run_passes (&mut self) {
     pass_bind_top_level(self);
+
+    pass_type_link_top_level(self);
+
+    assert!(self.get_active_module_key() == self.context.lib_mod, "Internal error, a pass did not pop an active module");
   }
 }

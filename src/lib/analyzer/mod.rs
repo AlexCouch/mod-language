@@ -105,11 +105,28 @@ impl<'a> Analyzer<'a> {
       ));
     }
 
-    let new_key = self.context.items.insert(new_item);
+    let key = (|| {
+      if let NamespaceItem::Type(ty) = &new_item {
+        if let Some(td) = &ty.data {
+          if td.is_anon() {
+            return if let Some(existing_key) = self.context.anon_types.get(td) {
+              *existing_key
+            } else {
+              let td_for_lookup = td.clone();
+              let new_key = self.context.items.insert(new_item);
+              self.context.anon_types.insert(td_for_lookup, new_key);
+              new_key
+            }
+          }
+        }
+      }
+      
+      self.context.items.insert(new_item)
+    })();
 
-    self.get_active_module_mut().local_bindings.set_entry_bound(identifier, new_key, origin);
+    self.get_active_module_mut().local_bindings.set_entry_bound(identifier, key, origin);
 
-    new_key
+    key
   }
 
 
