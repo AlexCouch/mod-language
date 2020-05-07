@@ -399,7 +399,7 @@ fn evaluate_texpr (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Namespace
 /// Binds top level globals and functions to their types
 fn pass_type_link_top_level (analyzer: &mut Analyzer) {
   fn type_linker_impl (analyzer: &mut Analyzer, items: &[Item]) {
-    fn type_link_item<'a> (analyzer: &mut Analyzer, item: &'a Item) {
+    fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
       match &item.data {
         ItemData::Module { identifier, items, .. } => {
           analyzer.push_active_module(analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap());
