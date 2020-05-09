@@ -10,57 +10,9 @@ use super::{
 };
 
 
+
 /// Binds top level items to their identifiers
 pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Vec<Alias>) {
-  fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Alias>) -> (&'a Identifier, GlobalKey) {
-    match &item.data {
-      ItemData::Module { identifier, items, .. } => {
-        let new_mod = analyzer.create_item(
-          identifier.to_owned(),
-          Module::new(
-            Some(analyzer.get_active_module_key()),
-            identifier.to_owned(),
-            item.origin
-          ),
-          item.origin
-        );
-
-        analyzer.push_active_module(new_mod);
-
-        bind_top_level(analyzer, items, aliases);
-
-        analyzer.pop_active_module();
-
-        (identifier, new_mod)
-      },
-
-      ItemData::Global { identifier, .. } => (identifier, analyzer.create_item(
-        identifier.to_owned(),
-        Global::new(
-          identifier.to_owned(),
-          item.origin,
-          None
-        ),
-        item.origin
-      )),
-
-      ItemData::Function { identifier, .. } => (identifier, analyzer.create_item(
-        identifier.to_owned(),
-        Function::new(
-          identifier.to_owned(),
-          item.origin,
-          None
-        ),
-        item.origin
-      )),
-
-      | ItemData::Import { .. }
-      | ItemData::Export { .. }
-      => unreachable!("Internal error, export node contains invalid descendent")
-    }
-  }
-
-
   for item in items.iter() {
     match &item.data {
       ItemData::Import { data, .. } => {
@@ -118,3 +70,53 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
     }
   }
 }
+
+
+fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Alias>) -> (&'a Identifier, GlobalKey) {
+  match &item.data {
+    ItemData::Module { identifier, items, .. } => {
+      let new_mod = analyzer.create_item(
+        identifier.to_owned(),
+        Module::new(
+          Some(analyzer.get_active_module_key()),
+          identifier.to_owned(),
+          item.origin
+        ),
+        item.origin
+      );
+
+      analyzer.push_active_module(new_mod);
+
+      bind_top_level(analyzer, items, aliases);
+
+      analyzer.pop_active_module();
+
+      (identifier, new_mod)
+    },
+
+    ItemData::Global { identifier, .. } => (identifier, analyzer.create_item(
+      identifier.to_owned(),
+      Global::new(
+        identifier.to_owned(),
+        item.origin,
+        None
+      ),
+      item.origin
+    )),
+
+    ItemData::Function { identifier, .. } => (identifier, analyzer.create_item(
+      identifier.to_owned(),
+      Function::new(
+        identifier.to_owned(),
+        item.origin,
+        None
+      ),
+      item.origin
+    )),
+
+    | ItemData::Import { .. }
+    | ItemData::Export { .. }
+    => unreachable!("Internal error, export node contains invalid descendent")
+  }
+}
+

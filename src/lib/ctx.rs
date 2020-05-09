@@ -32,8 +32,6 @@ pub struct Context {
   pub core_mod: GlobalKey,
   /// The root module for the library represented by a Context
   pub lib_mod: GlobalKey,
-  /// A list of source locations referencing items in a Context
-  pub reference_locations: HashMap<GlobalKey, Vec<SourceRegion>>,
   /// The return type of functions that do not return a value
   pub void_ty: GlobalKey,
   /// The key given as a result of a type error
@@ -111,8 +109,6 @@ impl Context {
 
     Self {
       items,
-
-      reference_locations: HashMap::default(),
 
       core_ns,
       core_mod: core_key,
@@ -354,8 +350,6 @@ pub enum CoercibleType {
 pub enum TypeData {
   /// The error type
   Error,
-  /// A reference to another type
-  Alias(GlobalKey),
   /// Built in primitive type such as an integer
   Primitive(PrimitiveType),
   /// A type which can coerce to another type,
@@ -381,7 +375,6 @@ impl TypeData {
       | TypeData::Function { .. }
       => true,
       
-      | TypeData::Alias     { .. }
       | TypeData::Primitive { .. }
       | TypeData::Coercible { .. }
       => false,
@@ -449,7 +442,6 @@ impl<'a> Display for TypeDisplay<'a> {
       write!(f, "{}", canonical_name)?;
     } else if let Some(data) = &ty.data {
        match data {
-        TypeData::Alias(ty_key) => { write!(f, "{}", self.descend(*ty_key))?; },
         TypeData::Pointer(ty_key) => { write!(f, "^{}", self.descend(*ty_key))?; },
         TypeData::Error => { write!(f, "err ty")?; },
         TypeData::Coercible(CoercibleType::Integer) => { write!(f, "int")?; },

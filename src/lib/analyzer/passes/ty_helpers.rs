@@ -1,8 +1,6 @@
 //! Helpers for type evaluation
 
 use crate::{
-  // util::{ UnwrapUnchecked, },
-  some,
   common::{ Operator, },
   source::{ SourceRegion, },
   ctx::{ Type, Global, Function, GlobalItem, GlobalKey, TypeData, PrimitiveType, CoercibleType, TypeDisplay, },
@@ -13,35 +11,8 @@ use super::{
 };
 
 
-// TODO: Remove the type alias from all code, this just complicates things
-/// Get the lowest level of Type GlobalKey in a chain of Aliases
-pub fn ty_resolve_alias (analyzer: &mut Analyzer, mut alias: GlobalKey) -> Option<GlobalKey> {
-  loop {
-    let ty_data =
-      &analyzer.context.items
-        .get(alias)
-        .expect("Internal error, type alias contained invalid key")
-        .ref_type()
-        .expect("Internal error, type alias does not reference a type")
-        .data;
-    
-    match ty_data {
-      Some(TypeData::Alias(tk)) => { alias = *tk },
-
-      | Some(TypeData::Error)
-      | None
-      => break None,
-
-      _ => break Some(alias)
-    }
-  }
-}
-
-
 /// Get the result type of a unary expression from an operand type and an operator
 pub fn ty_from_unary (analyzer: &mut Analyzer, operand_tk: GlobalKey, operator: Operator, origin: SourceRegion) -> Option<GlobalKey> {
-  let operand_tk = ty_resolve_alias(analyzer, operand_tk)?;
-
   let operand_ty = analyzer.context.items.get(operand_tk).unwrap().ref_type().unwrap();
 
   let operand_td = operand_ty.data.as_ref()?;
@@ -96,9 +67,6 @@ pub fn ty_from_unary (analyzer: &mut Analyzer, operand_tk: GlobalKey, operator: 
 /// 
 /// Allows control of conversion from integers to pointers via `allow_int_to_ptr`
 pub fn ty_will_coerce (analyzer: &mut Analyzer, allow_int_to_ptr: bool, from_tk: GlobalKey, into_tk: GlobalKey) -> bool {
-  let from_tk = some!(ty_resolve_alias(analyzer, from_tk); false);
-  let into_tk = some!(ty_resolve_alias(analyzer, into_tk); false);
-
   if from_tk == into_tk { return true }
   
   let from_ty = analyzer.context.items.get(from_tk).unwrap().ref_type().unwrap();

@@ -2,22 +2,19 @@
 #![allow(unused_variables)]
 
 use crate::{
-  // util::{ UnwrapUnchecked, },
   some,
   common::{ Number, },
   source::{ SourceRegion, },
   ast::{ self, Item, ItemData, ExportData, },
-  ctx::{  GlobalItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
+  ctx::{ GlobalItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
   ir,
 };
 
 use super::{
   Analyzer,
-  ty_helpers::{ ty_from_global_item, ty_from_unary, ty_from_binary, ty_resolve_alias, ty_meet, },
+  ty_helpers::{ ty_from_global_item, ty_from_unary, ty_from_binary, ty_meet, },
   eval_helpers::{ eval_path, eval_local_ident, },
 };
-
-
 
 
 
@@ -40,24 +37,52 @@ pub fn generate_bodies (analyzer: &mut Analyzer, items: &mut Vec<Item>) {
 }
 
 
-/// Peforms type evaluation and ir generation for conditionals
+fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
+  match &mut item.data {
+    ItemData::Module { identifier, items, .. } => {
+      analyzer.push_active_module(analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap());
+      generate_bodies(analyzer, items);
+      analyzer.pop_active_module();
+    },
+
+    ItemData::Global { identifier, initializer, .. } => {
+      let global_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+
+      // its possible some shadowing error has overwritten this def and if so we just return
+      let global = some!(analyzer.context.items.get(global_key).unwrap().ref_global());
+    
+      
+    },
+
+    ItemData::Function { identifier, parameters, body, .. } => {
+      let function_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+
+      // its possible some shadowing error has overwritten this def and if so we just return
+      let function = some!(analyzer.context.items.get(function_key).unwrap().ref_function());
+
+
+    },
+
+    | ItemData::Import { .. }
+    | ItemData::Export { .. }
+    => unreachable!()
+  }
+}
+
+
 fn generate_conditional (analyzer: &mut Analyzer, as_expression: bool, conditional: &ast::Conditional) -> Option<ir::Conditional> {
   unimplemented!()
 }
 
-/// Peforms type evaluation and ir generation for blocks
 fn generate_block (analyzer: &mut Analyzer, as_expression: bool, block: &ast::Block) -> Option<ir::Block> {
   unimplemented!()
 }
 
-/// Peforms type evaluation and ir generation for statements
 fn generate_statement (analyzer: &mut Analyzer, statement: &ast::Statement) -> Option<ir::Statement> {
   unimplemented!()
 }
 
 
-
-/// Peforms type evaluation and ir generation for expressions
 fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir::Expression> {
   match &expr.data {
     ast::ExpressionData::Path(path) => {
@@ -124,8 +149,6 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
 
       let (mut left_ir, mut right_ir) = (irs.0?, irs.1?);
 
-      let left_tk = ty_resolve_alias(analyzer, left_ir.ty)?;
-      let right_tk = ty_resolve_alias(analyzer, right_ir.ty)?;
 
       let operand_tk =
         if let Some(tk) = ty_meet(analyzer, true, left_ir.ty, right_ir.ty) { tk }
@@ -133,17 +156,17 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
           analyzer.error(expr.origin, format!(
             "The types of the subexpressions for this binary operator (left: `{}`, right: `{}`), \
             are not equal and cannot coerce to the same type",
-            TypeDisplay { ty_key: left_tk,  context: &analyzer.context },
-            TypeDisplay { ty_key: right_tk, context: &analyzer.context },
+            TypeDisplay { ty_key: left_ir.ty,  context: &analyzer.context },
+            TypeDisplay { ty_key: right_ir.ty, context: &analyzer.context },
           ));
 
           return None
         };
 
-      if left_tk != operand_tk {
+      if left_ir.ty != operand_tk {
         let origin = left_ir.origin;
         left_ir = ir::Expression::new(ir::ExpressionData::Coerce(box left_ir), operand_tk, origin)
-      } else if right_tk != operand_tk {
+      } else if right_ir.ty != operand_tk {
         let origin = right_ir.origin;
         right_ir = ir::Expression::new(ir::ExpressionData::Coerce(box right_ir), operand_tk, origin)
       }
@@ -236,38 +259,5 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
 
       Some(ir::Expression::new(ir::ExpressionData::Conditional(box conditional), ty, expr.origin))
     }
-  }
-}
-
-
-fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
-  match &mut item.data {
-    ItemData::Module { identifier, items, .. } => {
-      analyzer.push_active_module(analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap());
-      generate_bodies(analyzer, items);
-      analyzer.pop_active_module();
-    },
-
-    ItemData::Global { identifier, initializer, .. } => {
-      let global_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
-
-      // its possible some shadowing error has overwritten this def and if so we just return
-      let global = some!(analyzer.context.items.get(global_key).unwrap().ref_global());
-    
-      
-    },
-
-    ItemData::Function { identifier, parameters, body, .. } => {
-      let function_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
-
-      // its possible some shadowing error has overwritten this def and if so we just return
-      let function = some!(analyzer.context.items.get(function_key).unwrap().ref_function());
-
-
-    },
-
-    | ItemData::Import { .. }
-    | ItemData::Export { .. }
-    => unreachable!()
   }
 }
