@@ -1,3 +1,3 @@
 # Mod Language
 
-WIP wasm scripting langauge written in Rust
+WIP langauge written in Rust
