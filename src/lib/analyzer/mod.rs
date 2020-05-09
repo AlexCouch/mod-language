@@ -6,7 +6,7 @@ use crate::{
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Item, },
-  ctx::{ Context, Module, NamespaceItem, NamespaceKey, LocalContext, ContextKey, },
+  ctx::{ Context, Module, GlobalItem, GlobalKey, LocalContext, ContextKey, },
 };
 
 mod passes;
@@ -16,26 +16,28 @@ mod passes;
 
 
 /// The core interface structure for semantic analysis
-pub struct Analyzer<'a> {
-  /// The AST being analyzed
-  pub ast: &'a [Item],
+pub struct Analyzer {
   /// All contextual information used by a semantic analyzer
   pub context: Context,
   /// A stack of active modules being analyzed
-  pub active_modules: Vec<NamespaceKey>,
+  pub active_modules: Vec<GlobalKey>,
   /// The key of the local context being analyzed, if any
   pub active_local_context: Option<ContextKey>,
 }
 
 
-impl<'a> Analyzer<'a> {
+impl Default for Analyzer {
+  #[inline] fn default () -> Self { Self::new() }
+}
+
+
+impl Analyzer {
   /// Create a new semantic analyzer
-  pub fn new (ast: &'a [Item]) -> Self {
+  pub fn new () -> Self {
     let context = Context::default();
     let active_modules = vec![ context.lib_mod ];
 
     Self {
-      ast,
       context,
       active_modules,
       active_local_context: None,
@@ -44,15 +46,15 @@ impl<'a> Analyzer<'a> {
 
   /// Run a semantic analyzer on its ast,
   /// consuming the analyzer in the process
-  pub fn analyze (mut self) -> Context {
-    self.run_passes();
+  pub fn analyze (mut self, mut ast: Vec<Item>) -> (Context, Vec<Item>) {
+    self.run_passes(&mut ast);
 
-    self.context
+    (self.context, ast)
   }
 
   
   /// Push a new active module key and namespace on an Analyzer's stack
-  pub fn push_active_module (&mut self, key: NamespaceKey) {
+  pub fn push_active_module (&mut self, key: GlobalKey) {
     self.active_modules.push(key);
   }
 
@@ -60,7 +62,7 @@ impl<'a> Analyzer<'a> {
   ///
   /// Panics if there is only one (the root) active module and namespace left on the stack,
   /// or if the item namespaces and active modules counts are not identical
-  pub fn pop_active_module (&mut self) -> NamespaceKey {
+  pub fn pop_active_module (&mut self) -> GlobalKey {
     assert!(
       self.active_modules.len() > 1,
       "Internal error, cannot pop lib module"
@@ -71,7 +73,7 @@ impl<'a> Analyzer<'a> {
 
 
   /// Get they key of the active Module in an Analyzer
-  pub fn get_active_module_key (&self) -> NamespaceKey {
+  pub fn get_active_module_key (&self) -> GlobalKey {
     unsafe { *self.active_modules.last().unwrap_unchecked() }
   }
 
@@ -104,8 +106,8 @@ impl<'a> Analyzer<'a> {
   /// 
   /// Creates an error if there is an existing item with the same identifier
   /// 
-  /// Returns the NamespaceKey associated with the new item
-  pub fn create_item<I: Into<NamespaceItem>> (&mut self, identifier: Identifier, new_item: I, origin: SourceRegion) -> NamespaceKey {
+  /// Returns the GlobalKey associated with the new item
+  pub fn create_item<I: Into<GlobalItem>> (&mut self, identifier: Identifier, new_item: I, origin: SourceRegion) -> GlobalKey {
     let new_item = new_item.into();
 
     if let Some(shadowed_key) = self.get_active_module().local_bindings.get_entry(&identifier) {
@@ -119,7 +121,7 @@ impl<'a> Analyzer<'a> {
     }
 
     let key = (|| {
-      if let NamespaceItem::Type(ty) = &new_item {
+      if let GlobalItem::Type(ty) = &new_item {
         if let Some(td) = &ty.data {
           if td.is_anon() {
             return if let Some(existing_key) = self.context.anon_types.get(td) {

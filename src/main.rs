@@ -41,18 +41,14 @@ fn main () -> std::io::Result<()> {
   std::fs::write("./log/ast", format!("{:#?}", ast)).expect("Failed to dump token ast to ./log/ast");
 
 
-  let analyzer = Analyzer::new(&ast);
+  let analyzer = Analyzer::new();
 
-  let context = analyzer.analyze();
+  let context = analyzer.analyze(ast);
 
   println!("Got context, dumping to ./log/context");
   std::fs::write("./log/context", format!("{:#?}", context)).expect("Failed to dump context to ./log/context");
 
-  let lib = context.items.get(context.lib_mod).unwrap().ref_module().unwrap();
 
-  let export_key = lib.export_bindings.get_entry("Y").expect("Lib does not export item named Y");
-
-  println!("Got exported item Y: {:#?}", context.items.get(export_key).expect("Lib exports invalid key for item named Y"));
 
   if !SESSION.messages().is_empty() {
     SESSION.print_messages();

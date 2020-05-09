@@ -260,6 +260,9 @@ pub enum Operator {
   Div,
   Rem,
 
+  AddressOf,
+  Dereference,
+
   Comma,
   Colon,
   Semi,
@@ -306,6 +309,9 @@ impl Operator {
       Mul => "*", 
       Div => "/", 
       Rem => "%", 
+
+      AddressOf => "^",
+      Dereference => "@",
   
       Comma => ",", 
       Colon => ":", 
@@ -374,6 +380,9 @@ pub const SYM_OPERATOR_VALUES: &[(&str, Operator)] = {
     ("*",  Mul),
     ("/",  Div),
     ("%",  Rem),
+    
+    ("^", AddressOf),
+    ("@", Dereference),
 
     (",",  Comma),
     (":",  Colon),
