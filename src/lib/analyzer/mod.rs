@@ -9,10 +9,8 @@ use crate::{
   ctx::{ Context, Module, GlobalItem, GlobalKey, LocalContext, ContextKey, },
 };
 
-mod passes;
 
-
-
+pub mod passes;
 
 
 /// The core interface structure for semantic analysis
