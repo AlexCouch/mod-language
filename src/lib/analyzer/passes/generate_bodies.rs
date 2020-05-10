@@ -487,11 +487,12 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
                     }
                   } else {
                     analyzer.error(arg_origin, format!(
-                      "Parameter {} is of type `{}`, \
-                       but the argument provided is of type `{}`",
+                      "The type of argument {} (`{}`) \
+                       is not the same as the explicit type given for the parameter declaration (`{}`), \
+                       and will not automatically coerce to it",
                       i,
-                      TypeDisplay { ty_key: param_ty, context: &analyzer.context },
                       TypeDisplay { ty_key: arg_ir.ty, context: &analyzer.context },
+                      TypeDisplay { ty_key: param_ty, context: &analyzer.context },
                     ));
 
                     argument_irs = None;
