@@ -19,7 +19,7 @@ pub struct Analyzer {
   pub context: Context,
   /// A stack of active modules being analyzed
   pub active_modules: Vec<GlobalKey>,
-  /// The key of the local context being analyzed, if any
+  /// The local context being analyzed, if any
   pub local_context: Option<LocalContext>,
 }
 

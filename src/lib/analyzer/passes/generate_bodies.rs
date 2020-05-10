@@ -8,15 +8,14 @@ use crate::{
 
 use super::{
   Analyzer,
-  support::{ Expect, },
-  ty_helpers::{ ty_from_global_item, ty_from_unary, ty_from_binary, ty_meet, ty_will_coerce, ty_meet_n, TyMeetResult, ty_handle_coercion, ty_finalize_coercible, },
+  support_structures::{ Expect, TyMeetResult, },
+  ty_helpers::{ ty_from_global_item, ty_from_unary, ty_from_binary, ty_meet, ty_will_coerce, ty_meet_n, ty_handle_coercion, ty_finalize_coercible, },
   eval_helpers::{ eval_path, eval_local_ident, eval_texpr, },
 };
 
 
 
-/// Performs analysis at the block, statement & expression levels,
-/// with typechecking, and IR generation
+/// Performs analysis at the global, block, statement & expression levels, providing typechecking and IR generation
 pub fn generate_bodies (analyzer: &mut Analyzer, items: &mut Vec<Item>) {
   for item in items.iter_mut() {
     match &mut item.data {

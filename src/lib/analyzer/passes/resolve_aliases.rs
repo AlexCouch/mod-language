@@ -5,12 +5,12 @@ use crate::{
 
 use super::{
   Analyzer,
-  support::{ Alias, AliasData, },
+  support_structures::{ Alias, AliasData, },
 };
 
 
 
-/// Iterates the vec of Alias created by the previous pass and attempts to resolve paths
+/// Iterates the vec of Aliases created by the previous pass and attempts to resolve paths
 pub fn resolve_aliases (analyzer: &mut Analyzer, aliases: &mut Vec<Alias>) {
   while let Some(alias) = aliases.pop() {
     resolve_alias(analyzer, aliases, alias);

@@ -6,7 +6,7 @@ use crate::{
 
 use super::{
   Analyzer,
-  support::{ Alias, AliasData, },
+  support_structures::{ Alias, AliasData, },
 };
 
 

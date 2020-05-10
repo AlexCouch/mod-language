@@ -14,6 +14,7 @@ use crate::{
 
 use super::{
   Analyzer,
+  support_structures::{ TyMeetResult, },
 };
 
 
@@ -138,36 +139,12 @@ pub fn ty_meet (analyzer: &mut Analyzer, allow_int_to_ptr: bool, a_tk: GlobalKey
 }
 
 
-// fn ty_meet_n (tys: &[Type]) -> Option<Type> {
-//   'outer:
-//   for ty_a in tys.iter() {
-//     for ty_b in tys.iter() {
-//       if !ty_will_coerce(ty_b, ty_a) { continue 'outer }
-//     }
-
-//     // if we reach here all types will coerce to ty_a
-//     return Some(ty_a)
-//   }
-//   None
-// }
-
-
-/// The result type given by `ty_meet_n`
-#[allow(missing_docs)]
-pub enum TyMeetResult {
-  Ok(GlobalKey),
-  Unresolvable,
-  None,
-}
-
 /// Get the type coerced union of N types, if one is available
 /// 
 /// Allows control of conversion from integers to pointers via `allow_int_to_ptr`
 /// 
 /// Returns `TyMeetResult`,
-/// with Ok(GlobalKey) for one solution,
-/// Unresolvable for multiple possible solutions,
-/// or None for no solution
+/// see its documentation for more information on possible results
 pub fn ty_meet_n (analyzer: &mut Analyzer, allow_int_to_ptr: bool, tks: &[GlobalKey]) -> TyMeetResult {
   let mut solution = None;
 
