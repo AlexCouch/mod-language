@@ -7,8 +7,7 @@ use std::{
 
 use crate::{
   ansi,
-  some,
-  util::{ padding, count_digits, },
+  util::{ padding, count_digits, some, },
   source::{ SOURCE_MANAGER, SourceRegion, },
 };
 

@@ -20,7 +20,6 @@ pub extern crate mod_utilities;
 pub use mod_utilities as util;
 pub use util::collections as collections;
 
-mod extras;
 pub mod ansi;
 pub mod source;
 pub mod session;
