@@ -511,11 +511,7 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
             }
           } else {
             analyzer.error(
-              SourceRegion {
-                source: callee.origin.source,
-                start: callee.origin.end,
-                end: expr.origin.end
-              },
+              expr.origin,
               format!(
                 "Call contains {} arguments, \
                  but the callee function defines {} parameters",
