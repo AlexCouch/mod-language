@@ -64,8 +64,10 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
           if ty_will_coerce(analyzer, false, initializer_ir.ty, explicit_ty) {
             ty_handle_coercion(explicit_ty, &mut initializer_ir);
           } else {
-            analyzer.error(item.origin, format!(
-              "The type of this expression (`{}`) is not the same as the explicit type given for this declaration (`{}`), and will not automatically coerce to it",
+            analyzer.error(initializer_ir.origin, format!(
+              "The type of this expression (`{}`) \
+               is not the same as the explicit type given for this declaration (`{}`), \
+               and will not automatically coerce to it",
               TypeDisplay { ty_key: initializer_ir.ty, context: &analyzer.context },
               TypeDisplay { ty_key: explicit_ty, context: &analyzer.context }
             ));
@@ -99,9 +101,8 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
         
         analyzer.remove_local_context();
 
-        let function: &mut Function = unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() };
-
-        function.body.replace(some!(body_ir)).expect_none("Internal error, function body IR replaced");
+        unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() }
+          .body.replace(some!(body_ir)).expect_none("Internal error, function body IR replaced");
       }
     },
 
@@ -270,7 +271,9 @@ fn generate_stmt (analyzer: &mut Analyzer, stmt: &ast::Statement) -> Option<ir::
               (e_tk, Some(i_ir))
             } else {
               analyzer.error(i_ir.origin, format!(
-                "The type of this expression (`{}`) is not the same as the explicit type given for this declaration (`{}`), and will not automatically coerce to it",
+                "The type of this expression (`{}`) \
+                 is not the same as the explicit type given for this declaration (`{}`), \
+                 and will not automatically coerce to it",
                 TypeDisplay { ty_key: i_ir.ty, context: &analyzer.context },
                 TypeDisplay { ty_key: e_tk, context: &analyzer.context },
               ));
@@ -290,7 +293,11 @@ fn generate_stmt (analyzer: &mut Analyzer, stmt: &ast::Statement) -> Option<ir::
         (Some(Some(e_tk)), None) => (e_tk, None),
 
         (None, None) => {
-          analyzer.error(stmt.origin, "Local variable declarations must specify an explicit type, an initializer expression, or both".to_owned());
+          analyzer.error(
+            stmt.origin,
+            "Local variable declarations must specify an explicit type, \
+             an initializer expression, or both".to_owned()
+          );
           return None
         },
 
@@ -413,7 +420,11 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
 
       let result_ty = ty_from_unary(analyzer, operand_ir.ty, operator, expr.origin)?;
 
-      Some(ir::Expression::new(ir::ExpressionData::Unary { operand: box operand_ir, operator }, result_ty, expr.origin))
+      Some(ir::Expression::new(
+        ir::ExpressionData::Unary { operand: box operand_ir, operator },
+        result_ty,
+        expr.origin
+      ))
     },
 
     &ast::ExpressionData::Binary { box ref left, box ref right, operator } => {
@@ -426,8 +437,9 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
         if let Some(tk) = ty_meet(analyzer, true, left_ir.ty, right_ir.ty) { tk }
         else {
           analyzer.error(expr.origin, format!(
-            "The types of the subexpressions for this binary operator (left: `{}`, right: `{}`), \
-            are not equal and cannot coerce to the same type",
+            "The types of the subexpressions for this binary operator \
+             (left: `{}`, right: `{}`), \
+             are not equal and cannot coerce to the same type",
             TypeDisplay { ty_key: left_ir.ty,  context: &analyzer.context },
             TypeDisplay { ty_key: right_ir.ty, context: &analyzer.context },
           ));
@@ -475,7 +487,8 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
                     }
                   } else {
                     analyzer.error(arg_origin, format!(
-                      "Parameter {} is of type `{}`, but the argument provided is of type `{}`",
+                      "Parameter {} is of type `{}`, \
+                       but the argument provided is of type `{}`",
                       i,
                       TypeDisplay { ty_key: param_ty, context: &analyzer.context },
                       TypeDisplay { ty_key: arg_ir.ty, context: &analyzer.context },
@@ -504,7 +517,8 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
                 end: expr.origin.end
               },
               format!(
-                "Call contains {} arguments, but the callee function defines {} parameters",
+                "Call contains {} arguments, \
+                 but the callee function defines {} parameters",
                 num_args, num_params
               )
             );
@@ -512,7 +526,11 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
         },
 
         _ => {
-          analyzer.error(callee.origin, "Subexpression does not evaluate to a function and cannot be used as the callee of a call expression".to_owned());
+          analyzer.error(
+            callee.origin,
+            "Subexpression does not evaluate to a function, \
+             and cannot be used as the callee of a call expression".to_owned()
+          );
         }
       }
 
@@ -524,7 +542,11 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
 
       let ty = block.trailing_expression.as_ref().unwrap().ty;
 
-      Some(ir::Expression::new(ir::ExpressionData::Block(box block), ty, expr.origin))
+      Some(ir::Expression::new(
+        ir::ExpressionData::Block(box block),
+        ty,
+        expr.origin
+      ))
     }
 
     ast::ExpressionData::Conditional(box conditional) => {
@@ -532,7 +554,11 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
 
       let ty = conditional.if_branch.body.trailing_expression.as_ref().unwrap().ty;
 
-      Some(ir::Expression::new(ir::ExpressionData::Conditional(box conditional), ty, expr.origin))
+      Some(ir::Expression::new(
+        ir::ExpressionData::Conditional(box conditional),
+        ty,
+        expr.origin
+      ))
     }
   }
 }
