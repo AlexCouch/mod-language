@@ -60,8 +60,18 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
         let mut initializer_ir = some!(initializer_ir);
         let explicit_ty = some!(global.ty);
 
-        if ty_will_coerce(analyzer, false, initializer_ir.ty, explicit_ty) {
-          ty_handle_coercion(explicit_ty, &mut initializer_ir);
+        if initializer_ir.ty != explicit_ty {
+          if ty_will_coerce(analyzer, false, initializer_ir.ty, explicit_ty) {
+            ty_handle_coercion(explicit_ty, &mut initializer_ir);
+          } else {
+            analyzer.error(item.origin, format!(
+              "The type of this expression (`{}`) is not the same as the explicit type given for this declaration (`{}`), and will not automatically coerce to it",
+              TypeDisplay { ty_key: initializer_ir.ty, context: &analyzer.context },
+              TypeDisplay { ty_key: explicit_ty, context: &analyzer.context }
+            ));
+
+            return
+          }
         }
 
         unsafe { analyzer.context.items.get_unchecked_mut(global_key).mut_global_unchecked() }
