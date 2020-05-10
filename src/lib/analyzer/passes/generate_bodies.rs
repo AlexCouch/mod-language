@@ -1,9 +1,8 @@
 use crate::{
   some,
   common::{ Number, },
-  source::{ SourceRegion, },
   ast::{ self, Item, ItemData, ExportData, },
-  ctx::{ GlobalItem, Function, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
+  ctx::{ GlobalItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
   ir,
 };
 
