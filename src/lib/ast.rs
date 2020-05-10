@@ -3,9 +3,6 @@
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   ops::{ Deref, },
-  hash::{ Hash, Hasher, },
-  collections::hash_map::{ DefaultHasher, },
-  cmp::{ Ordering, },
 };
 
 use crate::{
@@ -16,33 +13,19 @@ use crate::{
 
 /// A series of identifiers representing a hierarchical path
 #[allow(missing_docs)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Path {
   pub absolute: bool,
   pub chain: Vec<Identifier>,
-  pub chain_hash: u64,
 }
 
 impl Path {
-  /// Update the hash for the identifier chain in a Path
-  pub fn update_chain_hash (&mut self) {
-    let mut hasher = DefaultHasher::default();
-
-    self.chain.hash(&mut hasher);
-
-    self.chain_hash = hasher.finish();
-  }
   /// Create a new Path and its chain hash
   pub fn new (absolute: bool, chain: Vec<Identifier>) -> Self {
-    let mut s = Self {
+    Self {
       absolute,
       chain,
-      chain_hash: 0
-    };
-
-    s.update_chain_hash();
-
-    s
+    }
   }
 
   
@@ -57,7 +40,6 @@ impl Path {
   /// Update a Path and its chain hash by extending and rehashing
   pub fn extend_in_place<I: Into<Identifier>> (&mut self, extension: I) {
     self.chain.push(extension.into());
-    self.update_chain_hash();
   }
 
   /// Create a new Path and its chain hash by extending an existing Path and rehashing
@@ -70,8 +52,6 @@ impl Path {
     for ident in extension.into_iter() {
       self.chain.push(ident)
     }
-
-    self.update_chain_hash();
   }
 
   /// Pop an identifier off the end of a Path and update its chain hash
@@ -82,36 +62,10 @@ impl Path {
 
     assert!(self.absolute || !self.chain.is_empty(), "Internal error, non-absolute Path emptied");
 
-    self.update_chain_hash();
-
     ident
   }
 }
 
-impl PartialEq for Path {
-  fn eq (&self, other: &Self) -> bool {
-    self.absolute == other.absolute && self.chain_hash == other.chain_hash && self.chain == other.chain
-  }
-}
-
-impl Eq for Path { }
-
-impl Ord for Path {
-  fn cmp (&self, other: &Self) -> Ordering {
-    self.absolute.cmp(&other.absolute).then(self.chain.cmp(&other.chain))
-  }
-}
-
-impl PartialOrd for Path {
-  fn partial_cmp (&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
-}
-
-impl Hash for Path {
-  fn hash<H: Hasher> (&self, h: &mut H) {
-    self.absolute.hash(h);
-    self.chain_hash.hash(h);
-  }
-}
 
 impl Deref for Path {
   type Target = Vec<Identifier>;
