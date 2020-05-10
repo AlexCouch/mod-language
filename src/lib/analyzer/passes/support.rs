@@ -21,3 +21,15 @@ pub struct Alias {
   pub new_name: Identifier,
   pub origin: SourceRegion,
 }
+
+/// Defines an expectation of some aspect of an analysis action
+#[repr(u8)]
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Expect {
+  Require,
+  Allow,
+  Deny,
+}
+
+impl Default for Expect { #[inline] fn default () -> Self { Self::Allow } }

@@ -1,9 +1,15 @@
-//! Helpers for type evaluation
+//! Helpers for type evaluation, inferrence, and coercion
+
+use std::{
+  mem::{ swap, },
+};
+
 
 use crate::{
   common::{ Operator, },
   source::{ SourceRegion, },
   ctx::{ Type, Global, Function, GlobalItem, GlobalKey, TypeData, PrimitiveType, CoercibleType, TypeDisplay, },
+  ir,
 };
 
 use super::{
@@ -66,7 +72,7 @@ pub fn ty_from_unary (analyzer: &mut Analyzer, operand_tk: GlobalKey, operator: 
 /// Determine if a type will coerce into another type
 /// 
 /// Allows control of conversion from integers to pointers via `allow_int_to_ptr`
-pub fn ty_will_coerce (analyzer: &mut Analyzer, allow_int_to_ptr: bool, from_tk: GlobalKey, into_tk: GlobalKey) -> bool {
+pub fn ty_will_coerce (analyzer: &Analyzer, allow_int_to_ptr: bool, from_tk: GlobalKey, into_tk: GlobalKey) -> bool {
   if from_tk == into_tk { return true }
   
   let from_ty = analyzer.context.items.get(from_tk).unwrap().ref_type().unwrap();
@@ -129,6 +135,94 @@ pub fn ty_meet (analyzer: &mut Analyzer, allow_int_to_ptr: bool, a_tk: GlobalKey
   if ty_will_coerce(analyzer, allow_int_to_ptr, a_tk, b_tk) { Some(b_tk) }
   else if ty_will_coerce(analyzer, allow_int_to_ptr, b_tk, a_tk) { Some(a_tk) }
   else { None }
+}
+
+
+// fn ty_meet_n (tys: &[Type]) -> Option<Type> {
+//   'outer:
+//   for ty_a in tys.iter() {
+//     for ty_b in tys.iter() {
+//       if !ty_will_coerce(ty_b, ty_a) { continue 'outer }
+//     }
+
+//     // if we reach here all types will coerce to ty_a
+//     return Some(ty_a)
+//   }
+//   None
+// }
+
+
+/// The result type given by `ty_meet_n`
+#[allow(missing_docs)]
+pub enum TyMeetResult {
+  Ok(GlobalKey),
+  Unresolvable,
+  None,
+}
+
+/// Get the type coerced union of N types, if one is available
+/// 
+/// Allows control of conversion from integers to pointers via `allow_int_to_ptr`
+/// 
+/// Returns `TyMeetResult`,
+/// with Ok(GlobalKey) for one solution,
+/// Unresolvable for multiple possible solutions,
+/// or None for no solution
+pub fn ty_meet_n (analyzer: &mut Analyzer, allow_int_to_ptr: bool, tks: &[GlobalKey]) -> TyMeetResult {
+  let mut solution = None;
+
+  'outer:
+  for &tk_a in tks.iter() {
+    for &tk_b in tks.iter() {
+      if !ty_will_coerce(analyzer, allow_int_to_ptr, tk_b, tk_a) { continue 'outer }
+    }
+
+    // if we reach here all types tk_b will coerce to tk_a
+    if let Some(existing_solution) = solution {
+      if tk_a != existing_solution {
+        // multiple possible solutions, unresolvable
+        return TyMeetResult::Unresolvable
+      }
+    } else {
+      solution.replace(tk_a);
+    }
+  }
+
+  if let Some(tk) = solution {
+    TyMeetResult::Ok(tk)
+  } else {
+    TyMeetResult::None
+  }
+}
+
+
+/// Handles type coercion, wrapping an IR node into a new IR Coerce node if necessary
+pub fn ty_handle_coercion (coerce_ty: GlobalKey, expr_ir: &mut ir::Expression) {
+  if expr_ir.ty == coerce_ty { return }
+
+  let mut new_ir = ir::Expression::new(
+    ir::ExpressionData::Number(0.into()), // placeholder data
+    coerce_ty,
+    expr_ir.origin
+  );
+
+  swap(expr_ir, &mut new_ir);
+
+  expr_ir.data = ir::ExpressionData::Coerce(box new_ir);
+}
+
+
+/// Finalizes speculative coercible literal types to their concrete type
+pub fn ty_finalize_coercible (analyzer: &mut Analyzer, expr_ir: &mut ir::Expression) {
+  let concrete_ty = if expr_ir.ty == analyzer.context.int_ty {
+    analyzer.context.concrete_int_ty
+  } else if expr_ir.ty == analyzer.context.float_ty {
+    analyzer.context.concrete_float_ty
+  } else {
+    return
+  };
+
+  ty_handle_coercion(concrete_ty, expr_ir)
 }
 
 

@@ -138,7 +138,7 @@ impl PrefixParselet {
     macro_rules! pfx { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( PrefixParselet { predicate: $predicate, function: $function } ),* ] } }
 
     pfx! [
-      |token| token.kind() == TokenKind::Identifier => pfx_path_or_ident,
+      |token| matches!(token.data, TokenData::Identifier(_) | TokenData::Operator(DoubleColon)) => pfx_path_or_ident,
       |token| token.kind() == TokenKind::Number => pfx_number,
       |token| token.is_operator(LeftParen) => pfx_syntactic_group,
       |token| token.is_operator(LeftBracket) => pfx_block,
@@ -165,7 +165,6 @@ impl PrefixParselet {
 fn ifx_binary_operator (left: Expression, parser: &mut Parser) -> Option<Expression> {
   if let Some(&Token { data: TokenData::Operator(operator), .. }) = parser.curr_tok() {
     parser.advance();
-
     if let Some(right) = pratt(get_binary_precedence(operator), parser) {
       let origin = SourceRegion::merge(left.origin, right.origin);
 
@@ -266,16 +265,22 @@ struct InfixParselet {
 
 impl InfixParselet {
   const PARSELETS: &'static [Self] = {
-    macro_rules! ifx { ($( [$precedence: expr] $predicate: expr => $function: expr ),* $(,)?) => { &[ $( InfixParselet { precedence: $precedence, predicate: $predicate, function: $function } ),* ] } }
+    macro_rules! ifx { ($( ($precedence: expr) [$($predicate: expr),+] => $function: expr ),* $(,)?) => {
+      &[ $( InfixParselet {
+        precedence: get_binary_precedence($precedence),
+        predicate: |token| token.is_any_operator_of(&[$($predicate),+]).is_some(),
+        function: $function
+      } ),* ]
+    } }
 
     ifx! [
-      [10] |token| token.is_operator(LeftParen) => ifx_call,
-      [30] |token| token.is_any_operator_of(&[ Equal, NotEqual, Lesser, Greater, LesserOrEqual, GreaterOrEqual ]).is_some() => ifx_binary_operator,
-      [50] |token| token.is_any_operator_of(&[ Add, Sub ]).is_some() => ifx_binary_operator,
-      [60] |token| token.is_any_operator_of(&[ Mul, Div, Rem ]).is_some() => ifx_binary_operator,
+      (LeftParen) [ LeftParen ] => ifx_call,
+      (Equal) [ Equal, NotEqual, Lesser, Greater, LesserOrEqual, GreaterOrEqual ] => ifx_binary_operator,
+      (Add) [ Add, Sub ] => ifx_binary_operator,
+      (Mul) [ Mul, Div, Rem ] => ifx_binary_operator,
     ]
   };
-
+  
   fn get_precedence_and_function (token: &Token) -> Option<(usize, ParseletInfixFunction<Expression, Expression>)> {
     for parselet in Self::PARSELETS.iter() {
       if (parselet.predicate)(token) {

@@ -147,6 +147,28 @@ impl Display for Path {
 }
 
 
+/// A declaration of a field or function parameter
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalDeclaration {
+  pub identifier: Identifier,
+  pub ty: TypeExpression,
+  pub origin: SourceRegion,
+}
+
+impl LocalDeclaration {
+  /// Create a new LocalDeclaration
+  pub fn new (identifier: Identifier, ty: TypeExpression, origin: SourceRegion) -> Self {
+    Self { identifier, ty, origin }
+  }
+
+  /// Create a new LocalDeclaration with no SourceRegion origin
+  pub fn no_src (identifier: Identifier, ty: TypeExpression) -> Self {
+    Self { identifier, ty, origin: SourceRegion::ANONYMOUS }
+  }
+}
+
+
 /// An enum containing the particular variant of an expression referencing a type
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq)]
@@ -518,7 +540,7 @@ pub enum ItemData {
 
   Module { identifier: Identifier, items: Vec<Item>, inline: bool },
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
-  Function { identifier: Identifier, parameters: Vec<(Identifier, TypeExpression)>, return_type: Option<TypeExpression>, body: Option<Block> },
+  Function { identifier: Identifier, parameters: Vec<LocalDeclaration>, return_type: Option<TypeExpression>, body: Option<Block> },
 }
 
 impl ItemData {

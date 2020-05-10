@@ -21,7 +21,7 @@ fn main () -> std::io::Result<()> {
   SOURCE_MANAGER.init();
 
 
-  let source = SOURCE_MANAGER.load("./test_scripts/item_analysis.ms")?;
+  let source = SOURCE_MANAGER.load("./test_scripts/body_analysis.ms")?;
 
 
   let mut lexer = Lexer::new(source);

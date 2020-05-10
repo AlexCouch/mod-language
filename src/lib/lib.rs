@@ -3,11 +3,16 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+#![feature(try_trait)]
 #![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(track_caller)]
 #![feature(stmt_expr_attributes)]
 #![feature(or_patterns)]
+#![feature(option_expect_none)]
+#![feature(const_fn)]
+#![feature(const_loop)]
+#![feature(const_if_match)]
 
 extern crate self as mod_language;
 

@@ -440,18 +440,20 @@ pub const BINARY_PRECEDENCES: &[(Operator, usize)] = {
     (Mul, 60),
     (Div, 60),
     (Rem, 60),
+
+    (LeftParen, 70),
   ]
 };
 
 /// Use a lookup table to get the Pratt operator precedence of a binary operator
-pub fn get_binary_precedence (operator: Operator) -> usize {
-  let mut iter = BINARY_PRECEDENCES.iter();
-  
+pub const fn get_binary_precedence (operator: Operator) -> usize {
+  let mut i = 0;
+
   loop {
-    let (precedent_op, precedence) = iter.next().unwrap();
-    
-    if *precedent_op == operator {
-      break *precedence
-    }
+    let (op, prec) = BINARY_PRECEDENCES[i];
+
+    if op as u8 == operator as u8 { return prec }
+
+    i += 1;
   }
 }

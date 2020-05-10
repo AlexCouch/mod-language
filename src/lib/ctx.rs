@@ -18,6 +18,7 @@ use crate::{
   collections::{ SlotMap, },
   source::{ SourceRegion, },
   common::{ Identifier, },
+  ir,
 };
 
 
@@ -32,28 +33,22 @@ pub struct Context {
   pub core_mod: GlobalKey,
   /// The root module for the library represented by a Context
   pub lib_mod: GlobalKey,
-  /// The return type of functions that do not return a value
-  pub void_ty: GlobalKey,
   /// The key given as a result of a type error
   pub err_ty: GlobalKey,
+  /// The return type of functions that do not return a value
+  pub void_ty: GlobalKey,
   /// The type of logical expressions
   pub bool_ty: GlobalKey,
   /// Coercible type representing integer literals
   pub int_ty: GlobalKey,
+  /// Concrete type the coercible integer type becomes without inferrence
+  pub concrete_int_ty: GlobalKey,
   /// Coercible type representing floating point literals
   pub float_ty: GlobalKey,
+  /// Concrete type the coercible floating point type becomes without inferrence
+  pub concrete_float_ty: GlobalKey,
   /// Anonymous type lookup helper
   pub anon_types: HashMap<TypeData, GlobalKey>,
-
-  /// All local contexts discovered by a semantic analyzer
-  pub local_contexts: SlotMap<ContextKey, LocalContext>,
-  /// Bindings from a global variable or function GlobalKey to its associated LocalContext's ContextKey
-  pub local_context_lookup: HashMap<GlobalKey, ContextKey>,
-}
-
-make_key_type! {
-  /// A SlotMap key representing a LocalContext
-  pub struct ContextKey;
 }
 
 impl Default for Context {
@@ -64,6 +59,8 @@ impl Context {
   /// Create a new semantic analysis context, and initialize it with the core primitives, module, and namespace, as well as an empty library root module
   pub fn new () -> Self {
     const PRIMITIVE_TYPES: &[(&str, TypeData)] = &[
+      ("void", TypeData::Primitive(PrimitiveType::Void)),
+      ("bool", TypeData::Primitive(PrimitiveType::Bool)),
       ("u8",   TypeData::Primitive(PrimitiveType::Integer { signed: false, bit_size: 8 })),
       ("u16",  TypeData::Primitive(PrimitiveType::Integer { signed: false, bit_size: 16 })),
       ("u32",  TypeData::Primitive(PrimitiveType::Integer { signed: false, bit_size: 32 })),
@@ -72,6 +69,8 @@ impl Context {
       ("s16",  TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 16 })),
       ("s32",  TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 32 })),
       ("s64",  TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 64 })),
+      ("f32",  TypeData::Primitive(PrimitiveType::FloatingPoint { bit_size: 32 })),
+      ("f64",  TypeData::Primitive(PrimitiveType::FloatingPoint { bit_size: 64 })),
     ];
 
     let mut items = SlotMap::default();
@@ -86,19 +85,15 @@ impl Context {
       core_mod.export_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
     }
 
-    let void_ty = items.insert(Type::new(Some("void".into()), SourceRegion::ANONYMOUS, Some(TypeData::Primitive(PrimitiveType::Void))).into());
-    core_ns.set_entry_bound("void", void_ty, SourceRegion::ANONYMOUS);
-    core_mod.local_bindings.set_entry_bound("void", void_ty, SourceRegion::ANONYMOUS);
-    core_mod.export_bindings.set_entry_bound("void", void_ty, SourceRegion::ANONYMOUS);
-
-    let bool_ty = items.insert(Type::new(Some("bool".into()), SourceRegion::ANONYMOUS, Some(TypeData::Primitive(PrimitiveType::Bool))).into());
-    core_ns.set_entry_bound("bool", bool_ty, SourceRegion::ANONYMOUS);
-    core_mod.local_bindings.set_entry_bound("bool", bool_ty, SourceRegion::ANONYMOUS);
-    core_mod.export_bindings.set_entry_bound("bool", bool_ty, SourceRegion::ANONYMOUS);
-
+    
     let err_ty = items.insert(Type::new(Some("err_ty".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
+    let void_ty = core_ns.get_entry("void").unwrap();
+    let bool_ty = core_ns.get_entry("bool").unwrap();
     let int_ty = items.insert(Type::new(Some("int".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::Integer))).into());
+    let concrete_int_ty = core_ns.get_entry("s32").unwrap();
     let float_ty = items.insert(Type::new(Some("float".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::FloatingPoint))).into());
+    let concrete_float_ty = core_ns.get_entry("f32").unwrap();
+
 
     let core_key = items.insert(core_mod.into());
     core_ns.set_entry_bound("core", core_key, SourceRegion::ANONYMOUS);
@@ -114,27 +109,38 @@ impl Context {
       core_mod: core_key,
       lib_mod: lib_key,
 
-      void_ty,
       err_ty,
+      void_ty,
       bool_ty,
       int_ty,
+      concrete_int_ty,
       float_ty,
+      concrete_float_ty,
 
       anon_types: HashMap::default(),
-
-      local_contexts: SlotMap::default(),
-      local_context_lookup: HashMap::default(),
     }
   }
 }
 
 
 /// A layer of semantic distinction for identifiers in a compilation context
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Namespace<K: std::hash::Hash + Eq + Copy> {
   entries: HashMap<Identifier, K>,
   bind_locations: HashMap<K, SourceRegion>,
 }
+
+impl<K: std::hash::Hash + Eq + Copy> Namespace<K> {
+  /// Create a new empty Namespace
+  pub fn new () -> Self {
+    Self {
+      entries: HashMap::default(),
+      bind_locations: HashMap::default(),
+    }
+  }
+}
+
+impl<K: std::hash::Hash + Eq + Copy> Default for Namespace<K> { #[inline] fn default () -> Self { Self::new() } }
 
 
 /// A variant of namespace using GlobalKey as its K type
@@ -489,6 +495,8 @@ pub struct Global {
   pub ty: Option<GlobalKey>,
   /// The SourceRegion at which a Global was defined
   pub origin: SourceRegion,
+  /// The initializer IR expression for a Global if it has one
+  pub initializer: Option<ir::Expression>
 }
 
 impl Global {
@@ -498,6 +506,7 @@ impl Global {
       canonical_name,
       ty,
       origin,
+      initializer: None,
     }
   }
 }
@@ -507,10 +516,16 @@ impl Global {
 pub struct Function {
   /// The canonical, original name of a Function
   pub canonical_name: Identifier,
+  /// The parameter identifiers and type keys associated with a Function, if it has been defined, and has any
+  pub params: Vec<(Identifier, GlobalKey, SourceRegion)>,
+  /// The return type key associated with a Function, if it has been defined, and has any
+  pub return_ty: Option<GlobalKey>,
   /// The Type associated with a Function, if it has been defined
   pub ty: Option<GlobalKey>,
   /// The SourceRegion at which a Function was defined
   pub origin: SourceRegion,
+  /// The IR associated with a Function's body, if it has one
+  pub body: Option<ir::Block>
 }
 
 impl Function {
@@ -518,8 +533,11 @@ impl Function {
   pub fn new (canonical_name: Identifier, origin: SourceRegion, ty: Option<GlobalKey>) -> Self {
     Self {
       canonical_name,
+      params: Vec::new(),
+      return_ty: None,
       ty,
       origin,
+      body: None
     }
   }
 }
@@ -527,7 +545,6 @@ impl Function {
 
 /// A top-level item known by a semantic analyzer
 #[allow(missing_docs)]
-#[allow(clippy::large_enum_variant)] // This is unavoidable in this instance
 #[derive(Debug, Clone)]
 pub enum GlobalItem {
   Module(Module),
@@ -608,55 +625,89 @@ impl PartialEq<GlobalKey> for MultiKey { #[inline] fn eq (&self, other: &GlobalK
 impl From<LocalKey> for MultiKey { #[inline] fn from (key: LocalKey) -> Self { Self::LocalKey(key) } }
 impl From<GlobalKey> for MultiKey { #[inline] fn from (key: GlobalKey) -> Self { Self::GlobalKey(key) } }
 
-/// A layer of namespacing in a local context
-#[derive(Debug, Clone)]
-pub struct StackFrame {
-  parent: Option<FrameKey>,
-  namespace: LocalNamespace,
-  descendents: Vec<FrameKey>,
-}
-
-make_key_type! {
-  /// A SlotMap Key representing a StackFrame
-  pub struct FrameKey;
-}
-
-// TODO is this dumb as hell?
-// Maybe i should just go ahead and discard stack frames that are dead
-// And generate a regular IR instead of this complicated monstrosity
 
 /// A function or global initializer expression's contextual information
 #[derive(Debug, Clone)]
 pub struct LocalContext {
-  /// All local variables known by a LocalContext
+  /// All local variables known by a LocalContext,
+  /// not all of which may be accessible from the namespace stack
   pub variables: SlotMap<LocalKey, LocalItem>,
-  /// Storage for all StackFrames in the tree of a LocalContext
-  pub stack_frames: SlotMap<FrameKey, StackFrame>,
-  /// The FrameKey of the root StackFrame of the tree of a LocalContext
-  pub root_stack_frame: FrameKey,
-  /// The FrameKey of the active StackFrame of a LocalContext
-  pub active_frame: FrameKey,
+  /// The number of function parameter variables registered in a LocalContext
+  pub parameter_count: usize,
+  /// The number of local variables registered in a LocalContext
+  pub local_count: usize,
+  /// The stack of namespaces in scope for a LocalContext,
+  /// identifier lookup reverse iterates this stack to find variables,
+  /// ending at the global namespace
+  pub stack_frames: Vec<LocalNamespace>,
 }
 
+impl Default for LocalContext { #[inline] fn default () -> Self { Self::new() } }
+
 impl LocalContext {
-  // TODO create an initialize context
-  // TODO create stack frames in active frame
-
-  /// Try to lookup a local variable by traversing down the tree from a LocalContext's active StackFrame
-  pub fn get_variable<I: AsRef<str>> (&self, ident: &I) -> Option<MultiKey> {
-    let mut active_frame = unsafe { self.stack_frames.get_unchecked(self.active_frame) };
-
-    loop {
-      let entry = active_frame.namespace.get_entry(ident);
-
-      if entry.is_some() {
-        break entry
-      } else if let Some(parent_key) = active_frame.parent {
-        active_frame = unsafe { self.stack_frames.get_unchecked(parent_key) };
-      } else {
-        break None
-      }
+  /// Create a new LocalContext with a single empty stack frame
+  pub fn new () -> Self {
+    Self {
+      variables: SlotMap::default(),
+      parameter_count: 0,
+      local_count: 0,
+      stack_frames: vec![ Namespace::default() ]
     }
+  }
+
+  /// Create a local variable in a LocalContext
+  pub fn create_variable (&mut self,
+    canonical_name: Identifier,
+    ty: GlobalKey,
+    is_parameter: bool,
+    origin: SourceRegion,
+  ) -> LocalKey {
+    let count = if is_parameter { &mut self.parameter_count } else { &mut self.local_count };
+
+    let index = *count;
+
+    *count += 1;
+
+    let key = self.variables.insert(LocalItem {
+      canonical_name: canonical_name.clone(),
+      ty,
+      is_parameter,
+      index
+    });
+
+    self.set_variable(canonical_name, key.into(), origin);
+
+    key
+  }
+
+  /// Set the value of a local variable in the current stack frame of a LocalContext
+  pub fn set_variable<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, value: MultiKey, origin: SourceRegion) {
+    self.stack_frames.last_mut().unwrap().set_entry_bound(ident, value, origin)
+  }
+  
+  /// Try to lookup a local variable by traversing down the stack from a LocalContext's top namespace
+  pub fn get_variable<I: AsRef<str>> (&self, ident: &I) -> Option<MultiKey> {
+    for ns in self.stack_frames.iter().rev() {
+      let ns_entry = ns.get_entry(ident);
+
+      if ns_entry.is_some() { return ns_entry }
+    }
+
+    None
+  }
+
+  /// Create a new stack frame namespace in a LocalContext
+  pub fn push_stack_frame (&mut self) {
+    self.stack_frames.push(Namespace::default())
+  }
+
+  /// Pop a namespace off the frame stack in a LocalContext
+  /// 
+  /// Panics if there is only a single stack frame left
+  pub fn pop_stack_frame (&mut self) -> LocalNamespace {
+    assert!(self.stack_frames.len() > 1, "Internal error, cannot pop final stack frame of LocalContext");
+
+    self.stack_frames.pop().unwrap()
   }
 }
 

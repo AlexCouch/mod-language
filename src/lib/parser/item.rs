@@ -5,7 +5,7 @@ use crate::{
   source::{ SourceRegion, SOURCE_MANAGER, },
   common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, Identifier, },
   token::{ Token, TokenData, },
-  ast::{ Item, ItemData, ExportData, Path, },
+  ast::{ Item, ItemData, ExportData, Path, LocalDeclaration, },
   lexer::{ Lexer, },
 };
 
@@ -477,7 +477,7 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
     parser.advance();
 
     loop {
-      if let Some(&Token { data: TokenData::Identifier(ref param_ident), .. }) = parser.curr_tok() {
+      if let Some(&Token { data: TokenData::Identifier(ref param_ident), origin: param_start }) = parser.curr_tok() {
         let parameter_name = param_ident.clone();
 
         parser.advance();
@@ -486,19 +486,17 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
           parser.advance();
 
           if let Some(parameter_type) = type_expression(parser) {
-            if let Some(&Token { data: TokenData::Operator(op), origin: params_end }) = parser.curr_tok() {
+            if let Some(&Token { data: TokenData::Operator(op), origin: param_end }) = parser.curr_tok() {
+              parameters.push(LocalDeclaration::new(parameter_name, parameter_type, SourceRegion::merge(param_start, param_end)));
+              
               if op == Comma {
                 parser.advance();
                 
-                parameters.push((parameter_name, parameter_type));
-
                 continue
               } else if op == RightParen {
                 parser.advance();
 
-                parameters.push((parameter_name, parameter_type));
-
-                end_region = params_end;
+                end_region = param_end;
 
                 break;
               }

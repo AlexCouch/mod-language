@@ -33,7 +33,7 @@ pub fn eval_global_ident (analyzer: &Analyzer, identifier: &Identifier, origin: 
 /// bubbling to the global context if necessary,
 /// and get a MultiKey representing the value referenced
 pub fn eval_local_ident (analyzer: &mut Analyzer, identifier: &Identifier, origin: SourceRegion) -> Option<MultiKey> {
-  Some(if let Some(local) = analyzer.get_active_local_context().get_variable(identifier) {
+  Some(if let Some(local) = analyzer.get_local_context().get_variable(identifier) {
     local
   } else {
     let module = analyzer.get_active_module();

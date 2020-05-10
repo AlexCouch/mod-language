@@ -7,7 +7,7 @@ use crate::{
 use super::{ Analyzer, };
 
 
-pub mod alias;
+pub mod support;
 
 pub mod eval_helpers;
 pub mod ty_helpers;

@@ -6,7 +6,7 @@ use crate::{
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Item, },
-  ctx::{ Context, Module, GlobalItem, GlobalKey, LocalContext, ContextKey, },
+  ctx::{ Context, Module, GlobalItem, GlobalKey, LocalContext, },
 };
 
 
@@ -20,7 +20,7 @@ pub struct Analyzer {
   /// A stack of active modules being analyzed
   pub active_modules: Vec<GlobalKey>,
   /// The key of the local context being analyzed, if any
-  pub active_local_context: Option<ContextKey>,
+  pub local_context: Option<LocalContext>,
 }
 
 
@@ -38,7 +38,7 @@ impl Analyzer {
     Self {
       context,
       active_modules,
-      active_local_context: None,
+      local_context: None,
     }
   }
 
@@ -85,18 +85,38 @@ impl Analyzer {
     unsafe { self.context.items.get_unchecked_mut(self.get_active_module_key()).mut_module_unchecked() }
   }
 
+
+  /// Create a new LocalContext
+  /// 
+  /// Panics if there is already a local context
+  #[track_caller]
+  pub fn create_local_context (&mut self) -> &mut LocalContext {
+    self.local_context.replace(LocalContext::default()).expect_none("Internal error, cannot create LocalContext, one already exists");
+    unsafe { self.local_context.as_mut().unwrap_unchecked() }
+  }
+
+  /// Remove the LocalContext
+  /// 
+  /// Panics if there is not a local context
+  #[track_caller]
+  pub fn remove_local_context (&mut self) -> LocalContext {
+    self.local_context.take().expect("Internal error, cannot remove LocalContext, it does not exist")
+  }
+
   /// Get an immutable reference to the active local context
   /// 
-  /// Panics if there is no active local context
-  pub fn get_active_local_context (&self) -> &LocalContext {
-    unsafe { self.context.local_contexts.get_unchecked(self.active_local_context.expect("Internal error, cannot get LocalContext")) }
+  /// Panics if there is no local context
+  #[track_caller]
+  pub fn get_local_context (&self) -> &LocalContext {
+    self.local_context.as_ref().expect("Internal error, cannot get LocalContext")
   }
 
   /// Get a mutable reference to the active local context
   /// 
-  /// Panics if there is no active local context
-  pub fn get_active_local_context_mut (&mut self) -> &mut LocalContext {
-    unsafe { self.context.local_contexts.get_unchecked_mut(self.active_local_context.expect("Internal error, cannot get LocalContext")) }
+  /// Panics if there is no local context
+  #[track_caller]
+  pub fn get_local_context_mut (&mut self) -> &mut LocalContext {
+    self.local_context.as_mut().expect("Internal error, cannot get LocalContext")
   }
 
 

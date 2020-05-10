@@ -96,11 +96,11 @@ impl Message {
     let mut start_index = origin.start.index.min(chars.len() - 1);
 
     if start_index != 0 {
-      if chars[start_index] == '\n' {
+      if matches!(chars[start_index], '\r'|'\n') {
         start_index += 1;
       } else {
         while start_index > 0 {
-          if chars[start_index - 1] != '\n' {
+          if !matches!(chars[start_index - 1], '\r'|'\n') {
             start_index -= 1;
           } else {
             break
@@ -112,11 +112,11 @@ impl Message {
     let mut end_index = origin.end.index.min(chars.len());
 
     if end_index != chars.len() {
-      if chars[end_index] == '\n' {
+      if matches!(chars[end_index], '\r'|'\n') {
         end_index -= 1;
       } else {
         while end_index < chars.len() - 1 {
-          if chars[end_index + 1] != '\n' {
+          if !matches!(chars[end_index + 1], '\r'|'\n') {
             end_index += 1;
           } else {
             break
@@ -125,7 +125,7 @@ impl Message {
       }
     }
 
-    let slice = &chars[start_index..end_index];
+    let slice = &chars[start_index..(end_index + 1).min(chars.len())];
     
     let mut num_lines = 1usize;
 

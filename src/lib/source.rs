@@ -66,6 +66,24 @@ impl SourceRegion {
       Self::ANONYMOUS
     }
   }
+
+  /// Create a new SourceRegion from the start of an existing one
+  pub fn clip_to_start (&self) -> Self {
+    Self { 
+      source: self.source,
+      start: self.start,
+      end: self.start,
+    }
+  }
+
+  /// Create a new SourceRegion from the end of an existing one
+  pub fn clip_to_end (&self) -> Self {
+    Self { 
+      source: self.source,
+      start: self.end,
+      end: self.end,
+    }
+  }
 }
 
 impl Debug for SourceLocation {

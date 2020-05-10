@@ -8,13 +8,14 @@ use std::{
 use crate::{
   common::{ Operator, Number, },
   source::{ SourceRegion, },
-  ctx::{ GlobalKey, LocalKey, MultiKey, },
+  ctx::{ GlobalKey, LocalItem, },
 };
 
 
 // IR only represents up to the block level, representation of things like Module, Import, etc are left to Context
 
 /// The top level IR item
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Block {
   pub statements: Vec<Statement>,
@@ -54,6 +55,7 @@ impl Block {
 
 
 /// An individual conditional Block and its predicate Expression
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct ConditionalBranch {
   pub condition: Expression,
@@ -91,6 +93,7 @@ impl ConditionalBranch {
 
 
 /// A set of 1 or more sequenced ConditionalBranches and an optional else Block
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Conditional {
   pub if_branch: ConditionalBranch,
@@ -134,10 +137,10 @@ impl Conditional {
 
 /// Data enum for an IR Statement
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StatementData {
   Expression(Expression),
-  Declaration { key: LocalKey, ty: GlobalKey, initializer: Option<Expression> },
+  Declaration { ty: GlobalKey, initializer: Option<Expression> },
   Assignment { target: Expression, value: Expression },
   ModAssignment { target: Expression, value: Expression, operator: Operator },
 
@@ -155,6 +158,7 @@ impl StatementData {
 }
 
 /// Mid level IR item, semantic statements
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Statement {
   pub data: StatementData,
@@ -181,14 +185,24 @@ impl Statement {
 }
 
 
+/// Enum for reference expressions in an IR
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Reference {
+  Global(GlobalKey),
+  Local { is_parameter: bool, index: usize },
+}
+
+impl From<GlobalKey> for Reference { #[inline] fn from (key: GlobalKey) -> Self { Self::Global(key) } }
+impl From<&LocalItem> for Reference { #[inline] fn from (local: &LocalItem) -> Self { Self::Local { is_parameter: local.is_parameter, index: local.index } } }
 
 /// Data enum for an IR Expression
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionData {
   Coerce(Box<Expression>),
 
-  Reference(MultiKey),
+  Reference(Reference),
 
   Number(Number),
 
@@ -210,6 +224,7 @@ pub enum ExpressionData {
 }
 
 /// Lower level IR item, semantic expressions
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Expression {
   pub data: ExpressionData,
@@ -217,7 +232,14 @@ pub struct Expression {
   pub origin: SourceRegion,
 }
 
-impl Debug for Expression { #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) } }
+impl Debug for Expression {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    f.debug_struct("")
+      .field("data", &self.data)
+      .field("ty", &self.ty)
+      .finish()
+  }
+}
 impl PartialEq for Expression { #[inline] fn eq (&self, other: &Self) -> bool { self.data == other.data } }
 impl Deref for Expression {
   type Target = ExpressionData;
