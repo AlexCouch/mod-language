@@ -1,7 +1,3 @@
-
-
-#![allow(dead_code)]
-
 //! Contextual types used by the semantic analysis system
 
 use core::{

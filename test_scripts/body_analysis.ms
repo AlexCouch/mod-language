@@ -23,11 +23,3 @@ fn test_branch -> bool {
     5
   }
 }
-
-fn err -> bool {
-  if 1 {
-    true
-  } else {
-    false
-  }
-}
