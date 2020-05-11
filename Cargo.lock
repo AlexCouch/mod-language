@@ -37,7 +37,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "mod_language"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "backtrace 0.3.46 (registry+https://github.com/rust-lang/crates.io-index)",
  "mod_utilities 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
