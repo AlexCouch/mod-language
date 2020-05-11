@@ -272,7 +272,7 @@ impl Session {
       content
     );
 
-    #[cfg(debug_assertions)] {
+    #[cfg(feature = "backtrace")] {
       let bt = backtrace::Backtrace::new();
 
       println!("New session message caught:\n{}\nat {:?}", &msg, bt);
