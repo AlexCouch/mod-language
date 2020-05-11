@@ -23,5 +23,3 @@ fn test_branch -> bool {
     5
   }
 }
-
-error
