@@ -69,29 +69,30 @@ impl Context {
       ("f64",  TypeData::Primitive(PrimitiveType::FloatingPoint { bit_size: 64 })),
     ];
 
-    let mut items = SlotMap::default();
-    let mut core_mod = Module::new(None, "core".into(), SourceRegion::ANONYMOUS);
+    let mut items: SlotMap<GlobalKey, GlobalItem> = SlotMap::default();
+    let core_key = items.insert(Module::new(None, "core".into(), SourceRegion::ANONYMOUS).into());
     let mut core_ns  = Namespace::default();
 
     for &(name, ref td) in PRIMITIVE_TYPES.iter() {
-      let key = items.insert(Type::new(Some(name.into()), SourceRegion::ANONYMOUS, Some(td.clone())).into());
+      let key = items.insert(Type::new(Some(core_key), Some(name.into()), SourceRegion::ANONYMOUS, Some(td.clone())).into());
 
       core_ns.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
+      
+      let core_mod = unsafe { items.get_unchecked_mut(core_key).mut_module_unchecked() };
       core_mod.local_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
       core_mod.export_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
     }
 
     
-    let err_ty = items.insert(Type::new(Some("err_ty".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
+    let err_ty = items.insert(Type::new(None, Some("err_ty".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
+    let int_ty = items.insert(Type::new(None, Some("int".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::Integer))).into());
+    let float_ty = items.insert(Type::new(None, Some("float".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::FloatingPoint))).into());
     let void_ty = core_ns.get_entry("void").unwrap();
     let bool_ty = core_ns.get_entry("bool").unwrap();
-    let int_ty = items.insert(Type::new(Some("int".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::Integer))).into());
     let concrete_int_ty = core_ns.get_entry("s32").unwrap();
-    let float_ty = items.insert(Type::new(Some("float".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::FloatingPoint))).into());
     let concrete_float_ty = core_ns.get_entry("f32").unwrap();
 
 
-    let core_key = items.insert(core_mod.into());
     core_ns.set_entry_bound("core", core_key, SourceRegion::ANONYMOUS);
 
     let lib_mod = Module::new(None, "lib".into(), SourceRegion::ANONYMOUS);
@@ -291,7 +292,7 @@ impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for NamespaceIterMut<'a, K> {
 #[derive(Debug, Clone)]
 pub struct Module {
   /// Immediate hierarchical ancestor of a Module, if any
-  pub parent: Option<GlobalKey>,
+  pub parent_module: Option<GlobalKey>,
   /// The canonical, original name of a Module
   pub canonical_name: Identifier,
   /// Namespaced bindings available locally, inside a Module
@@ -304,9 +305,9 @@ pub struct Module {
 
 impl Module {
   /// Create a new semantic analysis Module, and initialize its parent key
-  pub fn new (parent: Option<GlobalKey>, canonical_name: Identifier, origin: SourceRegion) -> Self {
+  pub fn new (parent_module: Option<GlobalKey>, canonical_name: Identifier, origin: SourceRegion) -> Self {
     Self {
-      parent,
+      parent_module,
       canonical_name,
       local_bindings: Namespace::default(),
       export_bindings: Namespace::default(),
@@ -388,6 +389,8 @@ impl TypeData {
 /// Any Type known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Type {
+  /// The module a Type was defined in, if it is not an anonymous type
+  pub parent_module: Option<GlobalKey>,
   /// The canonical, original name of a Type
   pub canonical_name: Option<Identifier>,
   /// The unique data associated with a Type, if it has been defined
@@ -398,8 +401,9 @@ pub struct Type {
 
 impl Type {
   /// Create a new Type and initialize its canonical name, origin, and optionally its data
-  pub fn new (canonical_name: Option<Identifier>, origin: SourceRegion, data: Option<TypeData>) -> Self {
+  pub fn new (parent_module: Option<GlobalKey>, canonical_name: Option<Identifier>, origin: SourceRegion, data: Option<TypeData>) -> Self {
     Self {
+      parent_module,
       canonical_name,
       data,
       origin,
@@ -485,6 +489,8 @@ impl<'a> Display for TypeDisplay<'a> {
 /// Any Global known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Global {
+  /// The module a Global was defined in
+  pub parent_module: GlobalKey,
   /// The canonical, original name of a Global
   pub canonical_name: Identifier,
   /// The Type associated with a Global, if it has been defined
@@ -497,8 +503,9 @@ pub struct Global {
 
 impl Global {
   /// Create a new Global and initialize its canonical name, origin, and optionally its type
-  pub fn new (canonical_name: Identifier, origin: SourceRegion, ty: Option<GlobalKey>) -> Self {
+  pub fn new (parent_module: GlobalKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<GlobalKey>) -> Self {
     Self {
+      parent_module,
       canonical_name,
       ty,
       origin,
@@ -510,6 +517,8 @@ impl Global {
 /// Any Function known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Function {
+  /// The module a Function was defined in
+  pub parent_module: GlobalKey,
   /// The canonical, original name of a Function
   pub canonical_name: Identifier,
   /// The parameter identifiers and type keys associated with a Function, if it has been defined, and has any
@@ -526,8 +535,9 @@ pub struct Function {
 
 impl Function {
   /// Create a new Function and initialize its canonical name, origin, and optionally its type
-  pub fn new (canonical_name: Identifier, origin: SourceRegion, ty: Option<GlobalKey>) -> Self {
+  pub fn new (parent_module: GlobalKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<GlobalKey>) -> Self {
     Self {
+      parent_module,
       canonical_name,
       params: Vec::new(),
       return_ty: None,

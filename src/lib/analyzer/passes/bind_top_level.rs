@@ -101,6 +101,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Ali
     ItemData::Global { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),
       Global::new(
+        analyzer.get_active_module_key(),
         identifier.to_owned(),
         item.origin,
         None
@@ -111,6 +112,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Ali
     ItemData::Function { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),
       Function::new(
+        analyzer.get_active_module_key(),
         identifier.to_owned(),
         item.origin,
         None
@@ -123,4 +125,3 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Ali
     => unreachable!("Internal error, export node contains invalid descendent")
   }
 }
-
