@@ -477,10 +477,10 @@ impl Conditional {
 }
 
 
-/// Data associated with an alias, either an import or an export
+/// Data associated with a pseudonym, either an alias or an export
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct AliasData {
+pub struct PseudonymData {
   pub path: Path,
   pub new_name: Option<Identifier>,
 }
@@ -490,7 +490,7 @@ pub struct AliasData {
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq)]
 pub enum ExportData {
-  List(Vec<AliasData>),
+  List(Vec<PseudonymData>),
   Inline(Box<Item>),
 }
 
@@ -499,7 +499,7 @@ pub enum ExportData {
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
-  Import { data: Vec<AliasData>, terminal: bool },
+  Alias { data: Vec<PseudonymData>, terminal: bool },
   Export { data: ExportData, terminal: bool },
 
   Namespace { identifier: Identifier, items: Vec<Item>, inline: bool },
@@ -519,7 +519,7 @@ impl ItemData {
 
       ItemData::Function { body, .. } => body.is_none(),
 
-      | ItemData::Import { terminal, .. }
+      | ItemData::Alias { terminal, .. }
       | ItemData::Export { terminal, .. } => !*terminal,
     }
   }

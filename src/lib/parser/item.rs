@@ -5,7 +5,7 @@ use crate::{
   source::{ SourceRegion, SOURCE_MANAGER, },
   common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, Identifier, },
   token::{ Token, TokenData, },
-  ast::{ Item, ItemData, ExportData, AliasData, LocalDeclaration, },
+  ast::{ Item, ItemData, ExportData, PseudonymData, LocalDeclaration, },
   lexer::{ Lexer, },
 };
 
@@ -17,7 +17,7 @@ pub fn item (parser: &mut Parser) -> Option<Item> {
   let curr_tok = parser.curr_tok()?;
 
   let parselet: Option<ParseletFunction<Item>> = match curr_tok.data {
-    TokenData::Keyword(Import) => Some(itm_import),
+    TokenData::Keyword(Alias) => Some(itm_alias),
     TokenData::Keyword(Export) => Some(itm_export),
     _ => ItemParselet::get_function(curr_tok)
   };
@@ -42,7 +42,7 @@ fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, S
 
       Ok(Some((new_name, SourceRegion::merge(origin, new_name_origin))))
     } else {
-      parser.error("Expected identifier to follow aliasing keyword `as`".to_owned());
+      parser.error("Expected identifier to follow pseudonyming keyword `as`".to_owned());
 
       Err(())
     }
@@ -51,7 +51,7 @@ fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, S
   }
 }
 
-fn get_single_alias (parser: &mut Parser) -> Option<(AliasData, SourceRegion)> {
+fn get_single_pseudonym (parser: &mut Parser) -> Option<(PseudonymData, SourceRegion)> {
   let (path_or_ident, origin) = path(parser)?;
   
   let path = match path_or_ident {
@@ -73,12 +73,12 @@ fn get_single_alias (parser: &mut Parser) -> Option<(AliasData, SourceRegion)> {
     return None
   }
 
-  Some((AliasData { path, new_name }, origin))
+  Some((PseudonymData { path, new_name }, origin))
 }
 
 
-fn itm_import (parser: &mut Parser) -> Option<Item> {
-  if let Some(&Token { data: TokenData::Keyword(Import), origin: start_region }) = parser.curr_tok() {
+fn itm_alias (parser: &mut Parser) -> Option<Item> {
+  if let Some(&Token { data: TokenData::Keyword(Alias), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
     let (refs, end_region, terminal) = if let Some(Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
@@ -105,7 +105,7 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
           // Refs
           _ => {
             if ref_ok {
-              if let Some((imp, _)) = get_single_alias(parser) {
+              if let Some((imp, _)) = get_single_pseudonym(parser) {
                 refs.push(imp);
 
                 if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
@@ -117,7 +117,7 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
                 continue
               }
             } else {
-              parser.error("Expected , to separate import references or } to end block".to_owned());
+              parser.error("Expected , to separate alias references or } to end block".to_owned());
             }
     
             if parser.synchronize(sync::close_pair_or(sync::operator(LeftBracket), sync::operator(RightBracket), sync::operator(Comma))) {
@@ -137,21 +137,21 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
 
       (refs, end, true)
     } else if let Some(&Token { data: TokenData::Identifier(_) | TokenData::Operator(DoubleColon), .. }) = parser.curr_tok() {
-      if let Some((imp, origin)) = get_single_alias(parser) {
+      if let Some((imp, origin)) = get_single_pseudonym(parser) {
         (vec![ imp ], origin, false)
       } else {
         return None
       }
     } else {
-      parser.error("Expected identifier or path, or a list of these, to follow `import` keyword".to_owned());
+      parser.error("Expected identifier or path, or a list of these, to follow `alias` keyword".to_owned());
 
       return None
     };
 
-    return Some(Item::new(ItemData::Import { data: refs, terminal }, SourceRegion::merge(start_region, end_region)))
+    return Some(Item::new(ItemData::Alias { data: refs, terminal }, SourceRegion::merge(start_region, end_region)))
   }
 
-  unreachable!("Internal error, import item parselet called on non-import token");
+  unreachable!("Internal error, alias item parselet called on non-alias token");
 }
 
 fn itm_export (parser: &mut Parser) -> Option<Item> {
@@ -182,7 +182,7 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
           // Refs
           _ => {
             if ref_ok {
-              if let Some((imp, _)) = get_single_alias(parser) {
+              if let Some((imp, _)) = get_single_pseudonym(parser) {
                 refs.push(imp);
 
                 if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
@@ -214,14 +214,14 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
 
       (refs, end, true)
     } else if let Some(&Token { data: TokenData::Identifier(_) | TokenData::Operator(DoubleColon), .. }) = parser.curr_tok() {
-      if let Some((imp, origin)) = get_single_alias(parser) {
+      if let Some((imp, origin)) = get_single_pseudonym(parser) {
         (vec![ imp ], origin, false)
       } else {
         return None
       }
     } else {
       let curr_tok = if let Some(tok) = parser.curr_tok() { tok } else {
-        parser.error("Expected an alias, list of aliases, or inline item to follow `export` keyword".to_owned());
+        parser.error("Expected a pseudonym, list of pseudonyms, or inline item to follow `export` keyword".to_owned());
         return None
       };
 
@@ -334,7 +334,7 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
 
         let local_region = SourceRegion::merge(start_region, end_region);
 
-        let local_error = |msg| parser.error_at(local_region, format!("Cannot import subnamespace `{}`: {}", identifier, msg));
+        let local_error = |msg| parser.error_at(local_region, format!("Cannot alias subnamespace `{}`: {}", identifier, msg));
 
         let sub_ns_path = if dir_exists && !file_exists {
           sub_dir_ns_path
@@ -361,7 +361,7 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
           Err(e) => {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
               local_error(format!(
-                "File [{}] has already been loaded during this session, it cannot be imported twice",
+                "File [{}] has already been loaded during this session, it cannot be aliased twice",
                 sub_ns_path.display()
               ))
             } else {

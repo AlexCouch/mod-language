@@ -1,31 +1,31 @@
 use crate::{
   common::{ Identifier, },
-  ast::{ self, Item, ItemData, ExportData, AliasData, },
+  ast::{ self, Item, ItemData, ExportData, PseudonymData, },
   ctx::{ ContextKey, Namespace, Global, Function, },
 };
 
 use super::{
   Analyzer,
-  support_structures::{ Alias, AliasKind, },
+  support_structures::{ Pseudonym, PseudonymKind, },
 };
 
 
 
 /// Binds top level items to their identifiers
-pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Vec<Alias>) {
+pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut Vec<Pseudonym>) {
   for item in items.iter() {
     match &item.data {
-      ItemData::Import { data, .. } => {
+      ItemData::Alias { data, .. } => {
         let destination_namespace = analyzer.get_active_namespace_key();
 
-        for AliasData { path, new_name } in data.iter() {
-          let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty import path with no alias") }.to_owned();
+        for PseudonymData { path, new_name } in data.iter() {
+          let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty alias path with no pseudonym") }.to_owned();
           
           let relative_to = if path.absolute { analyzer.context.lib_ns } else { destination_namespace };
 
-          aliases.push(Alias {
+          pseudonyms.push(Pseudonym {
             destination_namespace,
-            kind: AliasKind::Import,
+            kind: PseudonymKind::Alias,
             absolute: path.absolute,
             relative_to,
             chain: path.chain.clone(),
@@ -40,14 +40,14 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
           ExportData::List(exports) => {
             let destination_namespace = analyzer.get_active_namespace_key();
 
-            for ast::AliasData { path, new_name } in exports.iter() {
-              let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty export path with no alias") }.to_owned();
+            for ast::PseudonymData { path, new_name } in exports.iter() {
+              let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty export path with no pseudonym") }.to_owned();
               
               let relative_to = if path.absolute { analyzer.context.lib_ns } else { destination_namespace };
 
-              aliases.push(Alias {
+              pseudonyms.push(Pseudonym {
                 destination_namespace,
-                kind: AliasKind::Export,
+                kind: PseudonymKind::Export,
                 absolute: path.absolute,
                 relative_to,
                 chain: path.chain.clone(),
@@ -58,7 +58,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
           },
 
           ExportData::Inline(item) => {
-            let (identifier, key) = bind_item(analyzer, item, aliases);
+            let (identifier, key) = bind_item(analyzer, item, pseudonyms);
 
             analyzer.get_active_namespace_mut().export_bindings.set_entry_bound(identifier.to_owned(), key, item.origin);
           },
@@ -69,14 +69,14 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
       | ItemData::Global   { .. }
       | ItemData::Function { .. }
       => {
-        bind_item(analyzer, item, aliases);
+        bind_item(analyzer, item, pseudonyms);
       }
     }
   }
 }
 
 
-fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Alias>) -> (&'a Identifier, ContextKey) {
+fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, pseudonyms: &mut Vec<Pseudonym>) -> (&'a Identifier, ContextKey) {
   match &item.data {
     ItemData::Namespace { identifier, items, .. } => {
       let new_ns = analyzer.create_item(
@@ -91,7 +91,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Ali
 
       analyzer.push_active_namespace(new_ns);
 
-      bind_top_level(analyzer, items, aliases);
+      bind_top_level(analyzer, items, pseudonyms);
 
       analyzer.pop_active_namespace();
 
@@ -120,7 +120,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Ali
       item.origin
     )),
 
-    | ItemData::Import { .. }
+    | ItemData::Alias { .. }
     | ItemData::Export { .. }
     => unreachable!("Internal error, export node contains invalid descendent")
   }

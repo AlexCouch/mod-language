@@ -1,6 +1,6 @@
 ns A {
-  import ::B::C::D;
-  import {
+  alias ::B::C::D;
+  alias {
     D::X,
     D::Y,
   }
@@ -13,13 +13,13 @@ export ns B {
 
 export ns C {
   export ns D {
-    import core::s32 as X;
+    alias core::s32 as X;
     export X;
     export fn Y { }
     export global Z: s32 = 99;
   }
 }
 
-import A::X;
+alias A::X;
 export X as Y;
 export s32 as i32;

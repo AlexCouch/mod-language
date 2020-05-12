@@ -12,7 +12,7 @@ use crate::{
 };
 
 
-// IR only represents up to the block level, representation of things like Namespace, Import, etc are left to Context
+// IR only represents up to the block level, representation of things like Namespace, Alias, etc are left to Context
 
 /// The top level IR item
 #[derive(Clone)]

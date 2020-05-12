@@ -16,7 +16,7 @@ use super::{
 pub fn type_link_top_level (analyzer: &mut Analyzer, items: &[Item]) {
   for item in items.iter() {
     match &item.data {
-      | ItemData::Import { .. }
+      | ItemData::Alias { .. }
       | ItemData::Export { data: ExportData::List(_), .. } 
       => continue,
 
@@ -81,7 +81,7 @@ fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
       fn_data.return_ty = return_type;
     }
     
-    | ItemData::Import { .. }
+    | ItemData::Alias { .. }
     | ItemData::Export { .. }
     => unreachable!()
   }

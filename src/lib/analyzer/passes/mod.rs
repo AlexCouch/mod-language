@@ -15,8 +15,8 @@ pub mod ty_helpers;
 mod bind_top_level;
 pub use bind_top_level::*;
 
-mod resolve_aliases;
-pub use resolve_aliases::*;
+mod resolve_pseudonyms;
+pub use resolve_pseudonyms::*;
 
 mod type_link_top_level;
 pub use type_link_top_level::*;
@@ -30,11 +30,11 @@ impl Analyzer {
   /// Runs each pass of analysis session in sequence
   pub fn run_passes (&mut self, ast: &mut Vec<Item>) {
     {
-      let mut aliases = Vec::new();
+      let mut pseudonyms = Vec::new();
 
-      bind_top_level(self, ast, &mut aliases);
+      bind_top_level(self, ast, &mut pseudonyms);
 
-      resolve_aliases(self, &mut aliases);
+      resolve_pseudonyms(self, &mut pseudonyms);
     }
 
     type_link_top_level(self, ast);

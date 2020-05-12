@@ -1,4 +1,4 @@
-//! Types used in resolution of Aliases: Imports, Exports and (TODO) Typealiases
+//! Types used in resolution of Pseudonymes: Aliass, Exports and (TODO) Typepseudonyms
 
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
@@ -10,26 +10,26 @@ use crate::{
   ctx::{ ContextKey, },
 };
 
-/// Variant data for an Alias
+/// Variant data for an Pseudonym
 #[repr(u8)]
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AliasKind {
-  Import,
+pub enum PseudonymKind {
+  Alias,
   Export,
 }
 
-impl Display for AliasKind {
+impl Display for PseudonymKind {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    write!(f, "{}", match self { AliasKind::Import => "Import", AliasKind::Export => "Export" })
+    write!(f, "{}", match self { PseudonymKind::Alias => "Alias", PseudonymKind::Export => "Export" })
   }
 }
   
-/// A placeholder structure for delayed evaluation of imports and exports
+/// A placeholder structure for delayed evaluation of aliass and exports
 #[allow(missing_docs)]
-pub struct Alias {
+pub struct Pseudonym {
   pub destination_namespace: ContextKey,
-  pub kind: AliasKind,
+  pub kind: PseudonymKind,
   pub new_name: Identifier,
   pub absolute: bool,
   pub relative_to: ContextKey,

@@ -195,7 +195,7 @@ impl From<f64> for Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Keyword {
-  Import,
+  Alias,
   Export,
   Namespace,
   Global,
@@ -212,15 +212,15 @@ impl Keyword {
     use Keyword::*;
 
     match self {
-      Import   => "import",
-      Export   => "export",
-      Namespace   => "ns",
-      Global   => "global",
-      Function => "fn",
-      From     => "from",
-      If       => "if",
-      Else     => "else",
-      Let      => "let",
+      Alias     => "alias",
+      Export    => "export",
+      Namespace => "ns",
+      Global    => "global",
+      Function  => "fn",
+      From      => "from",
+      If        => "if",
+      Else      => "else",
+      Let       => "let",
     }
   }
 }
@@ -332,16 +332,16 @@ impl Operator {
 /// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
 pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
   &[
-    ("import", Either::A(Keyword::Import)),
     ("export", Either::A(Keyword::Export)),
     ("global", Either::A(Keyword::Global)),
+    ("alias",  Either::A(Keyword::Alias)),
     ("from",   Either::A(Keyword::From)),
     ("else",   Either::A(Keyword::Else)),
     ("let",    Either::A(Keyword::Let)),
     ("not",    Either::B(Operator::Not)),
     ("and",    Either::B(Operator::And)),
     ("xor",    Either::B(Operator::Xor)),
-    ("ns",    Either::A(Keyword::Namespace)),
+    ("ns",     Either::A(Keyword::Namespace)),
     ("fn",     Either::A(Keyword::Function)),
     ("if",     Either::A(Keyword::If)),
     ("or",     Either::B(Operator::Or)),
