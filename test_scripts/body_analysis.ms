@@ -1,4 +1,4 @@
-mod X {
+ns X {
   export global A: s32;
 }
 

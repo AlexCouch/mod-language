@@ -2,7 +2,7 @@ use crate::{
   util::{ some, },
   common::{ Number, },
   ast::{ self, Item, ItemData, ExportData, },
-  ctx::{ GlobalItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
+  ctx::{ ContextItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
   ir,
 };
 
@@ -25,7 +25,7 @@ pub fn generate_bodies (analyzer: &mut Analyzer, items: &mut Vec<Item>) {
       
       ItemData::Export { data: ExportData::Inline(item), .. } => generate_item(analyzer, item),
       
-      | ItemData::Module   { .. }
+      | ItemData::Namespace   { .. }
       | ItemData::Global   { .. }
       | ItemData::Function { .. }
       => generate_item(analyzer, item)
@@ -36,14 +36,14 @@ pub fn generate_bodies (analyzer: &mut Analyzer, items: &mut Vec<Item>) {
 
 fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
   match &mut item.data {
-    ItemData::Module { identifier, items, .. } => {
-      analyzer.push_active_module(analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap());
+    ItemData::Namespace { identifier, items, .. } => {
+      analyzer.push_active_namespace(analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap());
       generate_bodies(analyzer, items);
-      analyzer.pop_active_module();
+      analyzer.pop_active_namespace();
     },
 
     ItemData::Global { identifier, initializer, .. } => {
-      let global_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+      let global_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
 
       if let Some(initializer_expr) = initializer {
         analyzer.create_local_context();
@@ -80,7 +80,7 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
     },
 
     ItemData::Function { identifier, body, .. } => {
-      let function_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+      let function_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
 
       if let Some(body_block) = body {
         // its possible some shadowing error has overwritten this def and if so we just return
@@ -388,8 +388,8 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
           Some(ir::Expression::new(ir::ExpressionData::Reference(local.into()), local.ty, expr.origin))
         },
 
-        MultiKey::GlobalKey(global_key) => {
-          let global: &GlobalItem = analyzer.context.items.get(global_key).unwrap();
+        MultiKey::ContextKey(global_key) => {
+          let global: &ContextItem = analyzer.context.items.get(global_key).unwrap();
 
           let ty = ty_from_global_item(global);
 

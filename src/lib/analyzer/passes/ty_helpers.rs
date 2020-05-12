@@ -8,7 +8,7 @@ use std::{
 use crate::{
   common::{ Operator, },
   source::{ SourceRegion, },
-  ctx::{ Type, Global, Function, GlobalItem, GlobalKey, TypeData, PrimitiveType, CoercibleType, TypeDisplay, },
+  ctx::{ Type, Global, Function, ContextItem, ContextKey, TypeData, PrimitiveType, CoercibleType, TypeDisplay, },
   ir,
 };
 
@@ -19,7 +19,7 @@ use super::{
 
 
 /// Get the result type of a unary expression from an operand type and an operator
-pub fn ty_from_unary (analyzer: &mut Analyzer, operand_tk: GlobalKey, operator: Operator, origin: SourceRegion) -> Option<GlobalKey> {
+pub fn ty_from_unary (analyzer: &mut Analyzer, operand_tk: ContextKey, operator: Operator, origin: SourceRegion) -> Option<ContextKey> {
   let operand_ty = analyzer.context.items.get(operand_tk).unwrap().ref_type().unwrap();
 
   let operand_td = operand_ty.data.as_ref()?;
@@ -73,7 +73,7 @@ pub fn ty_from_unary (analyzer: &mut Analyzer, operand_tk: GlobalKey, operator: 
 /// Determine if a type will coerce into another type
 /// 
 /// Allows control of conversion from integers to pointers via `allow_int_to_ptr`
-pub fn ty_will_coerce (analyzer: &Analyzer, allow_int_to_ptr: bool, from_tk: GlobalKey, into_tk: GlobalKey) -> bool {
+pub fn ty_will_coerce (analyzer: &Analyzer, allow_int_to_ptr: bool, from_tk: ContextKey, into_tk: ContextKey) -> bool {
   if from_tk == into_tk { return true }
   
   let from_ty = analyzer.context.items.get(from_tk).unwrap().ref_type().unwrap();
@@ -132,7 +132,7 @@ pub fn ty_will_coerce (analyzer: &Analyzer, allow_int_to_ptr: bool, from_tk: Glo
 /// Get the type coerced union of two types, if one is available
 /// 
 /// Allows control of conversion from integers to pointers via `allow_int_to_ptr`
-pub fn ty_meet (analyzer: &mut Analyzer, allow_int_to_ptr: bool, a_tk: GlobalKey, b_tk: GlobalKey) -> Option<GlobalKey> {
+pub fn ty_meet (analyzer: &mut Analyzer, allow_int_to_ptr: bool, a_tk: ContextKey, b_tk: ContextKey) -> Option<ContextKey> {
   if ty_will_coerce(analyzer, allow_int_to_ptr, a_tk, b_tk) { Some(b_tk) }
   else if ty_will_coerce(analyzer, allow_int_to_ptr, b_tk, a_tk) { Some(a_tk) }
   else { None }
@@ -145,7 +145,7 @@ pub fn ty_meet (analyzer: &mut Analyzer, allow_int_to_ptr: bool, a_tk: GlobalKey
 /// 
 /// Returns `TyMeetResult`,
 /// see its documentation for more information on possible results
-pub fn ty_meet_n (analyzer: &mut Analyzer, allow_int_to_ptr: bool, tks: &[GlobalKey]) -> TyMeetResult {
+pub fn ty_meet_n (analyzer: &mut Analyzer, allow_int_to_ptr: bool, tks: &[ContextKey]) -> TyMeetResult {
   let mut solution = None;
 
   'outer:
@@ -174,7 +174,7 @@ pub fn ty_meet_n (analyzer: &mut Analyzer, allow_int_to_ptr: bool, tks: &[Global
 
 
 /// Handles type coercion, wrapping an IR node into a new IR Coerce node if necessary
-pub fn ty_handle_coercion (coerce_ty: GlobalKey, expr_ir: &mut ir::Expression) {
+pub fn ty_handle_coercion (coerce_ty: ContextKey, expr_ir: &mut ir::Expression) {
   if expr_ir.ty == coerce_ty { return }
 
   let mut new_ir = ir::Expression::new(
@@ -204,7 +204,7 @@ pub fn ty_finalize_coercible (analyzer: &mut Analyzer, expr_ir: &mut ir::Express
 
 
 /// Get result type of a binary expression from its (pre-coerced if needed) operand union type and an operator
-pub fn ty_from_binary (analyzer: &mut Analyzer, operand_tk: GlobalKey, operator: Operator, origin: SourceRegion) -> Option<GlobalKey> {
+pub fn ty_from_binary (analyzer: &mut Analyzer, operand_tk: ContextKey, operator: Operator, origin: SourceRegion) -> Option<ContextKey> {
   let operand_ty = analyzer.context.items.get(operand_tk).unwrap().ref_type().unwrap();
 
   let operand_td = operand_ty.data.as_ref()?;
@@ -241,23 +241,23 @@ pub fn ty_from_binary (analyzer: &mut Analyzer, operand_tk: GlobalKey, operator:
 }
 
 
-/// Extract the Type GlobalKey from a GlobalItem, if it is a value item
-pub fn ty_from_global_item (global_item: &GlobalItem) -> Option<GlobalKey> {
+/// Extract the Type ContextKey from a ContextItem, if it is a value item
+pub fn ty_from_global_item (global_item: &ContextItem) -> Option<ContextKey> {
   match global_item {
-    | &GlobalItem::Global(Global { ty, .. })
-    | &GlobalItem::Function(Function { ty, .. })
+    | &ContextItem::Global(Global { ty, .. })
+    | &ContextItem::Function(Function { ty, .. })
     => ty,
 
-    | GlobalItem::Module { .. }
-    | GlobalItem::Type   { .. }
+    | ContextItem::Namespace { .. }
+    | ContextItem::Type   { .. }
     => None
   }
 }
 
 
-/// Get a GlobalKey for an anonymous (unnamed) TypeData,
+/// Get a ContextKey for an anonymous (unnamed) TypeData,
 /// either by getting an existing key or registering a new one
-pub fn ty_from_anon_data (analyzer: &mut Analyzer, type_data: TypeData, origin: SourceRegion) -> GlobalKey {
+pub fn ty_from_anon_data (analyzer: &mut Analyzer, type_data: TypeData, origin: SourceRegion) -> ContextKey {
   assert!(type_data.is_anon(), "Internal error, non-anonymous TypeData passed to eval_anon_tdata");
 
   if let Some(existing_key) = analyzer.context.anon_types.get(&type_data) {

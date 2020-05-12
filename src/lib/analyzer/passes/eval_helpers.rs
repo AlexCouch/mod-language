@@ -4,7 +4,7 @@ use crate::{
   common::{ Identifier, },
   source::{ SourceRegion, },
   ast::{ TypeExpression, TypeExpressionData, Path, },
-  ctx::{ GlobalItem, GlobalKey, TypeData,  MultiKey, },
+  ctx::{ ContextItem, ContextKey, TypeData,  MultiKey, },
 };
 
 use super::{
@@ -14,16 +14,16 @@ use super::{
 
 
 
-/// Get the GlobalKey associated with an Identifier in the current context
-pub fn eval_global_ident (analyzer: &Analyzer, identifier: &Identifier, origin: SourceRegion) -> Option<GlobalKey> {
-  let module = analyzer.get_active_module();
+/// Get the ContextKey associated with an Identifier in the current context
+pub fn eval_global_ident (analyzer: &Analyzer, identifier: &Identifier, origin: SourceRegion) -> Option<ContextKey> {
+  let namespace = analyzer.get_active_namespace();
 
-  Some(if let Some(local) = module.local_bindings.get_entry(identifier) {
+  Some(if let Some(local) = namespace.local_bindings.get_entry(identifier) {
     local
-  } else if let Some(core) = analyzer.context.core_ns.get_entry(identifier) {
+  } else if let Some(core) = analyzer.context.core_bs.get_entry(identifier) {
     core
   } else {
-    analyzer.error(origin, format!("Module `{}` does not have access to an item named `{}`", module.canonical_name, identifier));
+    analyzer.error(origin, format!("Namespace `{}` does not have access to an item named `{}`", namespace.canonical_name, identifier));
     return None
   })
 }
@@ -36,11 +36,11 @@ pub fn eval_local_ident (analyzer: &mut Analyzer, identifier: &Identifier, origi
   Some(if let Some(local) = analyzer.get_local_context().get_variable(identifier) {
     local
   } else {
-    let module = analyzer.get_active_module();
+    let namespace = analyzer.get_active_namespace();
 
-    if let Some(global) = module.local_bindings.get_entry(identifier) {
+    if let Some(global) = namespace.local_bindings.get_entry(identifier) {
       global
-    } else if let Some(core) = analyzer.context.core_ns.get_entry(identifier) {
+    } else if let Some(core) = analyzer.context.core_bs.get_entry(identifier) {
       core
     } else {
       analyzer.error(origin, format!("Cannot find item or local variable named `{}`", identifier));
@@ -50,14 +50,14 @@ pub fn eval_local_ident (analyzer: &mut Analyzer, identifier: &Identifier, origi
 }
 
 
-/// Get the GlobalKey associated with a Path in the current Context
-pub fn eval_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) -> Option<GlobalKey> {
+/// Get the ContextKey associated with a Path in the current Context
+pub fn eval_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) -> Option<ContextKey> {
   let mut base_name = Identifier::default();
                 
   let base_key = if path.absolute {
-    analyzer.context.lib_mod
+    analyzer.context.lib_ns
   } else {
-    analyzer.get_active_module_key()
+    analyzer.get_active_namespace_key()
   };
 
   let mut resolved_key = base_key;
@@ -65,26 +65,26 @@ pub fn eval_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) ->
   for ident in path.iter() {
     let base = analyzer.context.items.get(resolved_key).expect("Internal error, invalid lowered key during path resolution");
 
-    if let GlobalItem::Module(module) = base {
-      base_name.set(&module.canonical_name);
+    if let ContextItem::Namespace(namespace) = base {
+      base_name.set(&namespace.canonical_name);
 
       resolved_key = if !path.absolute && resolved_key == base_key {
-        if let Some(local) = module.local_bindings.get_entry(ident) {
+        if let Some(local) = namespace.local_bindings.get_entry(ident) {
           local
-        } else if let Some(core) = analyzer.context.core_ns.get_entry(ident) {
+        } else if let Some(core) = analyzer.context.core_bs.get_entry(ident) {
           core
         } else {
-          analyzer.error(origin, format!("Module `{}` does not have access to an item named `{}`", base_name, ident));
+          analyzer.error(origin, format!("Namespace `{}` does not have access to an item named `{}`", base_name, ident));
           return None
         }
-      } else if let Some(exported_key) = module.export_bindings.get_entry(ident) {
+      } else if let Some(exported_key) = namespace.export_bindings.get_entry(ident) {
         exported_key
       } else {
-        analyzer.error(origin, format!("Module `{}` does not export an item named `{}`", base_name, ident));
+        analyzer.error(origin, format!("Namespace `{}` does not export an item named `{}`", base_name, ident));
         return None
       };
     } else {
-      analyzer.error(origin, format!("{} is not a Module and has no exports", ident));
+      analyzer.error(origin, format!("{} is not a Namespace and has no exports", ident));
       return None
     }
   }
@@ -93,8 +93,8 @@ pub fn eval_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) ->
 }
 
 
-/// Evaluate a TypeExpression in the active context and get a GlobalKey representing the type referenced by it
-pub fn eval_texpr (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Option<GlobalKey> {
+/// Evaluate a TypeExpression in the active context and get a ContextKey representing the type referenced by it
+pub fn eval_texpr (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Option<ContextKey> {
   match &texpr.data {
     TypeExpressionData::Path(path) => {
       let key = eval_path(analyzer, path, texpr.origin)?;

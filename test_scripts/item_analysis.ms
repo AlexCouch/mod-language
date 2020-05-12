@@ -1,4 +1,4 @@
-mod A {
+ns A {
   import ::B::C::D;
   import {
     D::X,
@@ -7,12 +7,12 @@ mod A {
   export { X, Y, D::Z }
 }
 
-export mod B {
+export ns B {
   export ::C;
 }
 
-export mod C {
-  export mod D {
+export ns C {
+  export ns D {
     import core::s32 as X;
     export X;
     export fn Y { }

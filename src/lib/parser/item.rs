@@ -246,8 +246,8 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
 }
 
 
-fn itm_module (parser: &mut Parser) -> Option<Item> {
-  if let Some(&Token { data: TokenData::Keyword(Module), origin: start_region }) = parser.curr_tok() {
+fn itm_namespace (parser: &mut Parser) -> Option<Item> {
+  if let Some(&Token { data: TokenData::Keyword(Namespace), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
     if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: end_region }) = parser.curr_tok() {
@@ -266,13 +266,13 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
           match parser.curr_tok() {
             // The end of the stream
             None => {
-              parser.error("Unexpected end of input while parsing module".to_owned());
+              parser.error("Unexpected end of input while parsing namespace".to_owned());
             },
 
             // The end of the block
             Some(&Token { data: TokenData::Operator(RightBracket), origin: end_region }) => {
               parser.advance();
-              return Some(Item::new(ItemData::Module { identifier, items, inline: true }, SourceRegion::merge(start_region, end_region)));
+              return Some(Item::new(ItemData::Namespace { identifier, items, inline: true }, SourceRegion::merge(start_region, end_region)));
             },
 
             // Items
@@ -293,7 +293,7 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
                   continue
                 } // else { Error message already provided by item }
               } else {
-                parser.error("Expected a ; to separate items or } to end module".to_owned());
+                parser.error("Expected a ; to separate items or } to end namespace".to_owned());
               }
 
               // If we reach here there was some kind of error, either we didnt have a semi after the last item, or our item call had an error,
@@ -319,55 +319,55 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
           }
         }
       } else {
-        let curr_source_key = start_region.source.expect("Internal error: Module item has no source origin");
-        let curr_source = SOURCE_MANAGER.get(curr_source_key).expect("Internal error: Module item has invalid source origin");
+        let curr_source_key = start_region.source.expect("Internal error: Namespace item has no source origin");
+        let curr_source = SOURCE_MANAGER.get(curr_source_key).expect("Internal error: Namespace item has invalid source origin");
 
         let curr_path = &curr_source.path;
         let curr_dir = curr_path.parent().expect("Internal error: Source file path has no directory");
 
-        let sub_mod_path: std::path::PathBuf = [ curr_dir, identifier.as_ref().as_ref() ].iter().collect::<std::path::PathBuf>();
-        let sub_dir_mod_path: std::path::PathBuf = sub_mod_path.join("mod.ms");
-        let sub_file_mod_path: std::path::PathBuf = sub_mod_path.with_extension("ms");
+        let sub_ns_path: std::path::PathBuf = [ curr_dir, identifier.as_ref().as_ref() ].iter().collect::<std::path::PathBuf>();
+        let sub_dir_ns_path: std::path::PathBuf = sub_ns_path.join("ns.ms");
+        let sub_file_ns_path: std::path::PathBuf = sub_ns_path.with_extension("ms");
 
-        let dir_exists = sub_dir_mod_path.exists();
-        let file_exists = sub_file_mod_path.exists();
+        let dir_exists = sub_dir_ns_path.exists();
+        let file_exists = sub_file_ns_path.exists();
 
         let local_region = SourceRegion::merge(start_region, end_region);
 
-        let local_error = |msg| parser.error_at(local_region, format!("Cannot import submodule `{}`: {}", identifier, msg));
+        let local_error = |msg| parser.error_at(local_region, format!("Cannot import subnamespace `{}`: {}", identifier, msg));
 
-        let sub_mod_path = if dir_exists && !file_exists {
-          sub_dir_mod_path
+        let sub_ns_path = if dir_exists && !file_exists {
+          sub_dir_ns_path
         } else if file_exists && !dir_exists {
-          sub_file_mod_path
+          sub_file_ns_path
         } else {
           if file_exists && dir_exists {
             local_error(format!(
               "A file exists at both [{}] and [{}], please remove one to resolve the ambiguity",
-              sub_dir_mod_path.display(), sub_file_mod_path.display()
+              sub_dir_ns_path.display(), sub_file_ns_path.display()
             ))
           } else {
             local_error(format!(
               "Expected a file at either [{}] or [{}], but neither exists",
-              sub_dir_mod_path.display(), sub_file_mod_path.display()
+              sub_dir_ns_path.display(), sub_file_ns_path.display()
             ))
           }
 
           return None
         };
 
-        let sub_source_key = match SOURCE_MANAGER.load(&sub_mod_path) {
+        let sub_source_key = match SOURCE_MANAGER.load(&sub_ns_path) {
           Ok(key) => key,
           Err(e) => {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
               local_error(format!(
                 "File [{}] has already been loaded during this session, it cannot be imported twice",
-                sub_mod_path.display()
+                sub_ns_path.display()
               ))
             } else {
               local_error(format!(
                 "Unexpected error loading file [{}] from disk: {}",
-                sub_mod_path.display(), e
+                sub_ns_path.display(), e
               ))
             }
 
@@ -379,7 +379,7 @@ fn itm_module (parser: &mut Parser) -> Option<Item> {
         let sub_stream = sub_lexer.lex_stream();
         let mut sub_parser = Parser::new(&sub_stream);
 
-        return Some(Item::new(ItemData::Module { identifier, items: sub_parser.parse_ast(), inline: false }, local_region));
+        return Some(Item::new(ItemData::Namespace { identifier, items: sub_parser.parse_ast(), inline: false }, local_region));
       }
     }
   }
@@ -555,7 +555,7 @@ macro_rules! itm { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $(
 
 impl ItemParselet {
   const PARSELETS: &'static [Self] = itm! [
-    |token| token.is_keyword(Module)   => itm_module,
+    |token| token.is_keyword(Namespace)   => itm_namespace,
     |token| token.is_keyword(Global)   => itm_global,
     |token| token.is_keyword(Function) => itm_function,
   ];

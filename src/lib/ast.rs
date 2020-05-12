@@ -502,7 +502,7 @@ pub enum ItemData {
   Import { data: Vec<AliasData>, terminal: bool },
   Export { data: ExportData, terminal: bool },
 
-  Module { identifier: Identifier, items: Vec<Item>, inline: bool },
+  Namespace { identifier: Identifier, items: Vec<Item>, inline: bool },
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
   Function { identifier: Identifier, parameters: Vec<LocalDeclaration>, return_type: Option<TypeExpression>, body: Option<Block> },
 }
@@ -515,7 +515,7 @@ impl ItemData {
       | ItemData::Global { .. }
       => true,
 
-      ItemData::Module { inline, .. } => !*inline,
+      ItemData::Namespace { inline, .. } => !*inline,
 
       ItemData::Function { body, .. } => body.is_none(),
 

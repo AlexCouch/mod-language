@@ -6,7 +6,7 @@ use crate::{
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Item, },
-  ctx::{ Context, Module, GlobalItem, GlobalKey, LocalContext, },
+  ctx::{ Context, Namespace, ContextItem, ContextKey, LocalContext, },
 };
 
 
@@ -17,8 +17,8 @@ pub mod passes;
 pub struct Analyzer {
   /// All contextual information used by a semantic analyzer
   pub context: Context,
-  /// A stack of active modules being analyzed
-  pub active_modules: Vec<GlobalKey>,
+  /// A stack of active namespaces being analyzed
+  pub active_namespaces: Vec<ContextKey>,
   /// The local context being analyzed, if any
   pub local_context: Option<LocalContext>,
 }
@@ -33,11 +33,11 @@ impl Analyzer {
   /// Create a new semantic analyzer
   pub fn new () -> Self {
     let context = Context::default();
-    let active_modules = vec![ context.lib_mod ];
+    let active_namespaces = vec![ context.lib_ns ];
 
     Self {
       context,
-      active_modules,
+      active_namespaces,
       local_context: None,
     }
   }
@@ -51,38 +51,38 @@ impl Analyzer {
   }
 
   
-  /// Push a new active module key and namespace on an Analyzer's stack
-  pub fn push_active_module (&mut self, key: GlobalKey) {
-    self.active_modules.push(key);
+  /// Push a new active namespace key on an Analyzer's stack
+  pub fn push_active_namespace (&mut self, key: ContextKey) {
+    self.active_namespaces.push(key);
   }
 
-  /// Pops and returns active module key and namespace from an Analyzer's stack
+  /// Pops and returns active namespace key from an Analyzer's stack
   ///
-  /// Panics if there is only one (the root) active module and namespace left on the stack,
-  /// or if the item namespaces and active modules counts are not identical
-  pub fn pop_active_module (&mut self) -> GlobalKey {
+  /// Panics if there is only one (the root) active namespace left on the stack,
+  /// or if the active namespaces counts are not identical
+  pub fn pop_active_namespace (&mut self) -> ContextKey {
     assert!(
-      self.active_modules.len() > 1,
-      "Internal error, cannot pop lib module"
+      self.active_namespaces.len() > 1,
+      "Internal error, cannot pop lib namespace"
     );
 
-    unsafe { self.active_modules.pop().unwrap_unchecked() }
+    unsafe { self.active_namespaces.pop().unwrap_unchecked() }
   }
 
 
-  /// Get they key of the active Module in an Analyzer
-  pub fn get_active_module_key (&self) -> GlobalKey {
-    unsafe { *self.active_modules.last().unwrap_unchecked() }
+  /// Get they key of the active Namespace in an Analyzer
+  pub fn get_active_namespace_key (&self) -> ContextKey {
+    unsafe { *self.active_namespaces.last().unwrap_unchecked() }
   }
 
-  /// Get an immutable reference to the active Module in an Analyzer
-  pub fn get_active_module (&self) -> &Module {
-    unsafe { self.context.items.get_unchecked(self.get_active_module_key()).ref_module_unchecked() }
+  /// Get an immutable reference to the active Namespace in an Analyzer
+  pub fn get_active_namespace (&self) -> &Namespace {
+    unsafe { self.context.items.get_unchecked(self.get_active_namespace_key()).ref_namespace_unchecked() }
   }
   
-  /// Get a mutable reference to the active Module in an Analyzer
-  pub fn get_active_module_mut (&mut self) -> &mut Module {
-    unsafe { self.context.items.get_unchecked_mut(self.get_active_module_key()).mut_module_unchecked() }
+  /// Get a mutable reference to the active Namespace in an Analyzer
+  pub fn get_active_namespace_mut (&mut self) -> &mut Namespace {
+    unsafe { self.context.items.get_unchecked_mut(self.get_active_namespace_key()).mut_namespace_unchecked() }
   }
 
 
@@ -120,26 +120,26 @@ impl Analyzer {
   }
 
 
-  /// Create a new top level item in the active module of an Analyzer
+  /// Create a new top level item in the active namespace of an Analyzer
   /// 
   /// Creates an error if there is an existing item with the same identifier
   /// 
-  /// Returns the GlobalKey associated with the new item
-  pub fn create_item<I: Into<GlobalItem>> (&mut self, identifier: Identifier, new_item: I, origin: SourceRegion) -> GlobalKey {
+  /// Returns the ContextKey associated with the new item
+  pub fn create_item<I: Into<ContextItem>> (&mut self, identifier: Identifier, new_item: I, origin: SourceRegion) -> ContextKey {
     let new_item = new_item.into();
 
-    if let Some(shadowed_key) = self.get_active_module().local_bindings.get_entry(&identifier) {
+    if let Some(shadowed_key) = self.get_active_namespace().local_bindings.get_entry(&identifier) {
       let shadowed_kind = self.context.items.get(shadowed_key).expect("Internal error, shadowed item does not exist").kind();
-      let shadowed_location = self.get_active_module().local_bindings.get_bind_location(shadowed_key).expect("Internal error, shadowed item has no bind location");
+      let shadowed_location = self.get_active_namespace().local_bindings.get_bind_location(shadowed_key).expect("Internal error, shadowed item has no bind location");
 
       self.error(origin, format!(
         "{} `{}` shadows existing {} in `{}`, defined at [{}]",
-        new_item.kind(), identifier, shadowed_kind, self.get_active_module().canonical_name, shadowed_location
+        new_item.kind(), identifier, shadowed_kind, self.get_active_namespace().canonical_name, shadowed_location
       ));
     }
 
     let key = (|| {
-      if let GlobalItem::Type(ty) = &new_item {
+      if let ContextItem::Type(ty) = &new_item {
         if let Some(td) = &ty.data {
           if td.is_anon() {
             return if let Some(existing_key) = self.context.anon_types.get(td) {
@@ -157,7 +157,7 @@ impl Analyzer {
       self.context.items.insert(new_item)
     })();
 
-    self.get_active_module_mut().local_bindings.set_entry_bound(identifier, key, origin);
+    self.get_active_namespace_mut().local_bindings.set_entry_bound(identifier, key, origin);
 
     key
   }

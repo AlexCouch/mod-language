@@ -8,11 +8,11 @@ use std::{
 use crate::{
   common::{ Operator, Number, },
   source::{ SourceRegion, },
-  ctx::{ GlobalKey, LocalItem, },
+  ctx::{ ContextKey, LocalItem, },
 };
 
 
-// IR only represents up to the block level, representation of things like Module, Import, etc are left to Context
+// IR only represents up to the block level, representation of things like Namespace, Import, etc are left to Context
 
 /// The top level IR item
 #[derive(Clone)]
@@ -140,7 +140,7 @@ impl Conditional {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementData {
   Expression(Expression),
-  Declaration { ty: GlobalKey, initializer: Option<Expression> },
+  Declaration { ty: ContextKey, initializer: Option<Expression> },
   Assignment { target: Expression, value: Expression },
   ModAssignment { target: Expression, value: Expression, operator: Operator },
 
@@ -189,11 +189,11 @@ impl Statement {
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reference {
-  Global(GlobalKey),
+  Global(ContextKey),
   Local { is_parameter: bool, index: usize },
 }
 
-impl From<GlobalKey> for Reference { #[inline] fn from (key: GlobalKey) -> Self { Self::Global(key) } }
+impl From<ContextKey> for Reference { #[inline] fn from (key: ContextKey) -> Self { Self::Global(key) } }
 impl From<&LocalItem> for Reference { #[inline] fn from (local: &LocalItem) -> Self { Self::Local { is_parameter: local.is_parameter, index: local.index } } }
 
 /// Data enum for an IR Expression
@@ -228,7 +228,7 @@ pub enum ExpressionData {
 #[allow(missing_docs)]
 pub struct Expression {
   pub data: ExpressionData,
-  pub ty: GlobalKey,
+  pub ty: ContextKey,
   pub origin: SourceRegion,
 }
 
@@ -248,12 +248,12 @@ impl Deref for Expression {
 
 impl Expression {
   /// Create a new Expression
-  pub fn new (data: ExpressionData, ty: GlobalKey, origin: SourceRegion) -> Self {
+  pub fn new (data: ExpressionData, ty: ContextKey, origin: SourceRegion) -> Self {
     Self { data, ty, origin }
   }
 
   /// Create a new Expression with no SourceRegion origin
-  pub fn no_src (data: ExpressionData, ty: GlobalKey) -> Self {
+  pub fn no_src (data: ExpressionData, ty: ContextKey) -> Self {
     Self { data, ty, origin: SourceRegion::ANONYMOUS }
   }
 }

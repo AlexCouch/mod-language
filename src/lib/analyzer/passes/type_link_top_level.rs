@@ -22,7 +22,7 @@ pub fn type_link_top_level (analyzer: &mut Analyzer, items: &[Item]) {
 
       ItemData::Export { data: ExportData::Inline(item), .. } => type_link_item(analyzer, item),
 
-      | ItemData::Module   { .. }
+      | ItemData::Namespace   { .. }
       | ItemData::Global   { .. }
       | ItemData::Function { .. }
       => type_link_item(analyzer, item)
@@ -33,14 +33,14 @@ pub fn type_link_top_level (analyzer: &mut Analyzer, items: &[Item]) {
 
 fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
   match &item.data {
-    ItemData::Module { identifier, items, .. } => {
-      analyzer.push_active_module(analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap());
+    ItemData::Namespace { identifier, items, .. } => {
+      analyzer.push_active_namespace(analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap());
       type_link_top_level(analyzer, items);
-      analyzer.pop_active_module();
+      analyzer.pop_active_namespace();
     },
 
     ItemData::Global { identifier, explicit_type, .. } => {
-      let global_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+      let global_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
 
       // its possible some shadowing error has overwritten this def and if so we just return
       some!(analyzer.context.items.get(global_key).unwrap().ref_global());
@@ -51,7 +51,7 @@ fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
     },
 
     ItemData::Function { identifier, parameters, return_type, .. } => {
-      let function_key = analyzer.get_active_module().local_bindings.get_entry(identifier).unwrap();
+      let function_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
       
       // its possible some shadowing error has overwritten this def and if so we just return
       some!(analyzer.context.items.get(function_key).unwrap().ref_function());

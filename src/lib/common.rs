@@ -197,7 +197,7 @@ impl From<f64> for Number {
 pub enum Keyword {
   Import,
   Export,
-  Module,
+  Namespace,
   Global,
   Function,
   From,
@@ -214,7 +214,7 @@ impl Keyword {
     match self {
       Import   => "import",
       Export   => "export",
-      Module   => "mod",
+      Namespace   => "ns",
       Global   => "global",
       Function => "fn",
       From     => "from",
@@ -341,7 +341,7 @@ pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
     ("not",    Either::B(Operator::Not)),
     ("and",    Either::B(Operator::And)),
     ("xor",    Either::B(Operator::Xor)),
-    ("mod",    Either::A(Keyword::Module)),
+    ("ns",    Either::A(Keyword::Namespace)),
     ("fn",     Either::A(Keyword::Function)),
     ("if",     Either::A(Keyword::If)),
     ("or",     Either::B(Operator::Or)),
@@ -412,7 +412,7 @@ pub const ITEM_KEYWORDS: &[Keyword] = {
   use Keyword::*;
 
   &[
-    Module,
+    Namespace,
     Global,
     Function,
   ]

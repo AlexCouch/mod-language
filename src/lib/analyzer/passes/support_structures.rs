@@ -7,7 +7,7 @@ use std::{
 use crate::{
   common::{ Identifier, },
   source::{ SourceRegion, },
-  ctx::{ GlobalKey, },
+  ctx::{ ContextKey, },
 };
 
 /// Variant data for an Alias
@@ -28,11 +28,11 @@ impl Display for AliasKind {
 /// A placeholder structure for delayed evaluation of imports and exports
 #[allow(missing_docs)]
 pub struct Alias {
-  pub destination_module: GlobalKey,
+  pub destination_namespace: ContextKey,
   pub kind: AliasKind,
   pub new_name: Identifier,
   pub absolute: bool,
-  pub relative_to: GlobalKey,
+  pub relative_to: ContextKey,
   pub chain: Vec<Identifier>,
   pub origin: SourceRegion,
 }
@@ -52,7 +52,7 @@ impl Default for Expect { #[inline] fn default () -> Self { Self::Allow } }
 /// The result type given by `ty_helpers::ty_meet_n`
 pub enum TyMeetResult {
   /// There was a single, viable type which all types could coerce to
-  Ok(GlobalKey),
+  Ok(ContextKey),
   /// There were multiple viable types which all types could coerce to,
   /// which is unresolvable in the current type system
   Unresolvable,

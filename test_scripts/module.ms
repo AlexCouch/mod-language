@@ -1,12 +1,12 @@
-mod a {
-  mod submodule_x;
-  mod submodule_y;
+ns a {
+  ns subnamespace_x;
+  ns subnamespace_y;
   fn func () {
 
   }
 }
 
-mod b {
+ns b {
   fn func {
 
   }

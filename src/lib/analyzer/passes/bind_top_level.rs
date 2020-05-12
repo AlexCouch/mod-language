@@ -1,7 +1,7 @@
 use crate::{
   common::{ Identifier, },
   ast::{ self, Item, ItemData, ExportData, AliasData, },
-  ctx::{ GlobalKey, Module, Global, Function, },
+  ctx::{ ContextKey, Namespace, Global, Function, },
 };
 
 use super::{
@@ -16,15 +16,15 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
   for item in items.iter() {
     match &item.data {
       ItemData::Import { data, .. } => {
-        let destination_module = analyzer.get_active_module_key();
+        let destination_namespace = analyzer.get_active_namespace_key();
 
         for AliasData { path, new_name } in data.iter() {
           let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty import path with no alias") }.to_owned();
           
-          let relative_to = if path.absolute { analyzer.context.lib_mod } else { destination_module };
+          let relative_to = if path.absolute { analyzer.context.lib_ns } else { destination_namespace };
 
           aliases.push(Alias {
-            destination_module,
+            destination_namespace,
             kind: AliasKind::Import,
             absolute: path.absolute,
             relative_to,
@@ -38,15 +38,15 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
       ItemData::Export { data, .. } => {
         match data {
           ExportData::List(exports) => {
-            let destination_module = analyzer.get_active_module_key();
+            let destination_namespace = analyzer.get_active_namespace_key();
 
             for ast::AliasData { path, new_name } in exports.iter() {
               let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty export path with no alias") }.to_owned();
               
-              let relative_to = if path.absolute { analyzer.context.lib_mod } else { destination_module };
+              let relative_to = if path.absolute { analyzer.context.lib_ns } else { destination_namespace };
 
               aliases.push(Alias {
-                destination_module,
+                destination_namespace,
                 kind: AliasKind::Export,
                 absolute: path.absolute,
                 relative_to,
@@ -60,12 +60,12 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
           ExportData::Inline(item) => {
             let (identifier, key) = bind_item(analyzer, item, aliases);
 
-            analyzer.get_active_module_mut().export_bindings.set_entry_bound(identifier.to_owned(), key, item.origin);
+            analyzer.get_active_namespace_mut().export_bindings.set_entry_bound(identifier.to_owned(), key, item.origin);
           },
         }
       },
 
-      | ItemData::Module   { .. }
+      | ItemData::Namespace   { .. }
       | ItemData::Global   { .. }
       | ItemData::Function { .. }
       => {
@@ -76,32 +76,32 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
 }
 
 
-fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Alias>) -> (&'a Identifier, GlobalKey) {
+fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Alias>) -> (&'a Identifier, ContextKey) {
   match &item.data {
-    ItemData::Module { identifier, items, .. } => {
-      let new_mod = analyzer.create_item(
+    ItemData::Namespace { identifier, items, .. } => {
+      let new_ns = analyzer.create_item(
         identifier.to_owned(),
-        Module::new(
-          Some(analyzer.get_active_module_key()),
+        Namespace::new(
+          Some(analyzer.get_active_namespace_key()),
           identifier.to_owned(),
           item.origin
         ),
         item.origin
       );
 
-      analyzer.push_active_module(new_mod);
+      analyzer.push_active_namespace(new_ns);
 
       bind_top_level(analyzer, items, aliases);
 
-      analyzer.pop_active_module();
+      analyzer.pop_active_namespace();
 
-      (identifier, new_mod)
+      (identifier, new_ns)
     },
 
     ItemData::Global { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),
       Global::new(
-        analyzer.get_active_module_key(),
+        analyzer.get_active_namespace_key(),
         identifier.to_owned(),
         item.origin,
         None
@@ -112,7 +112,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, aliases: &mut Vec<Ali
     ItemData::Function { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),
       Function::new(
-        analyzer.get_active_module_key(),
+        analyzer.get_active_namespace_key(),
         identifier.to_owned(),
         item.origin,
         None

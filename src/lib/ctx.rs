@@ -22,29 +22,29 @@ use crate::{
 #[derive(Debug)]
 pub struct Context {
   /// Storage for all top-level items discovered by a semantic analyzer
-  pub items: SlotMap<GlobalKey, GlobalItem>,
-  /// The namespace containing compiler intrinsics for a Context
-  pub core_ns: GlobalNamespace,
-  /// The module containing compiler intrinsics for a Context
-  pub core_mod: GlobalKey,
-  /// The root module for the library represented by a Context
-  pub lib_mod: GlobalKey,
+  pub items: SlotMap<ContextKey, ContextItem>,
+  /// The Bindspace containing compiler intrinsics for a Context
+  pub core_bs: GlobalBindspace,
+  /// The Namespace containing compiler intrinsics for a Context
+  pub core_ns: ContextKey,
+  /// The root Namespace for the library represented by a Context
+  pub lib_ns: ContextKey,
   /// The key given as a result of a type error
-  pub err_ty: GlobalKey,
+  pub err_ty: ContextKey,
   /// The return type of functions that do not return a value
-  pub void_ty: GlobalKey,
+  pub void_ty: ContextKey,
   /// The type of logical expressions
-  pub bool_ty: GlobalKey,
+  pub bool_ty: ContextKey,
   /// Coercible type representing integer literals
-  pub int_ty: GlobalKey,
+  pub int_ty: ContextKey,
   /// Concrete type the coercible integer type becomes without inferrence
-  pub concrete_int_ty: GlobalKey,
+  pub concrete_int_ty: ContextKey,
   /// Coercible type representing floating point literals
-  pub float_ty: GlobalKey,
+  pub float_ty: ContextKey,
   /// Concrete type the coercible floating point type becomes without inferrence
-  pub concrete_float_ty: GlobalKey,
+  pub concrete_float_ty: ContextKey,
   /// Anonymous type lookup helper
-  pub anon_types: HashMap<TypeData, GlobalKey>,
+  pub anon_types: HashMap<TypeData, ContextKey>,
 }
 
 impl Default for Context {
@@ -52,7 +52,7 @@ impl Default for Context {
 }
 
 impl Context {
-  /// Create a new semantic analysis context, and initialize it with the core primitives, module, and namespace, as well as an empty library root module
+  /// Create a new semantic analysis context, and initialize it with the core primitives, namespace, and Bindspace, as well as an empty library root namespace
   pub fn new () -> Self {
     const PRIMITIVE_TYPES: &[(&str, TypeData)] = &[
       ("void", TypeData::Primitive(PrimitiveType::Void)),
@@ -69,42 +69,42 @@ impl Context {
       ("f64",  TypeData::Primitive(PrimitiveType::FloatingPoint { bit_size: 64 })),
     ];
 
-    let mut items: SlotMap<GlobalKey, GlobalItem> = SlotMap::default();
-    let core_key = items.insert(Module::new(None, "core".into(), SourceRegion::ANONYMOUS).into());
-    let mut core_ns  = Namespace::default();
+    let mut items: SlotMap<ContextKey, ContextItem> = SlotMap::default();
+    let core_key = items.insert(Namespace::new(None, "core".into(), SourceRegion::ANONYMOUS).into());
+    let mut core_bs  = Bindspace::default();
 
     for &(name, ref td) in PRIMITIVE_TYPES.iter() {
       let key = items.insert(Type::new(Some(core_key), Some(name.into()), SourceRegion::ANONYMOUS, Some(td.clone())).into());
 
-      core_ns.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
+      core_bs.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
       
-      let core_mod = unsafe { items.get_unchecked_mut(core_key).mut_module_unchecked() };
-      core_mod.local_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
-      core_mod.export_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
+      let core_ns = unsafe { items.get_unchecked_mut(core_key).mut_namespace_unchecked() };
+      core_ns.local_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
+      core_ns.export_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
     }
 
     
     let err_ty = items.insert(Type::new(None, Some("err_ty".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
     let int_ty = items.insert(Type::new(None, Some("int".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::Integer))).into());
     let float_ty = items.insert(Type::new(None, Some("float".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::FloatingPoint))).into());
-    let void_ty = core_ns.get_entry("void").unwrap();
-    let bool_ty = core_ns.get_entry("bool").unwrap();
-    let concrete_int_ty = core_ns.get_entry("s32").unwrap();
-    let concrete_float_ty = core_ns.get_entry("f32").unwrap();
+    let void_ty = core_bs.get_entry("void").unwrap();
+    let bool_ty = core_bs.get_entry("bool").unwrap();
+    let concrete_int_ty = core_bs.get_entry("s32").unwrap();
+    let concrete_float_ty = core_bs.get_entry("f32").unwrap();
 
 
-    core_ns.set_entry_bound("core", core_key, SourceRegion::ANONYMOUS);
+    core_bs.set_entry_bound("core", core_key, SourceRegion::ANONYMOUS);
 
-    let lib_mod = Module::new(None, "lib".into(), SourceRegion::ANONYMOUS);
-    let lib_key = items.insert(lib_mod.into());
-    core_ns.set_entry_bound("lib", lib_key, SourceRegion::ANONYMOUS);
+    let lib_ns = Namespace::new(None, "lib".into(), SourceRegion::ANONYMOUS);
+    let lib_key = items.insert(lib_ns.into());
+    core_bs.set_entry_bound("lib", lib_key, SourceRegion::ANONYMOUS);
 
     Self {
       items,
 
-      core_ns,
-      core_mod: core_key,
-      lib_mod: lib_key,
+      core_bs,
+      core_ns: core_key,
+      lib_ns: lib_key,
 
       err_ty,
       void_ty,
@@ -122,13 +122,13 @@ impl Context {
 
 /// A layer of semantic distinction for identifiers in a compilation context
 #[derive(Debug, Clone)]
-pub struct Namespace<K: std::hash::Hash + Eq + Copy> {
+pub struct Bindspace<K: std::hash::Hash + Eq + Copy> {
   entries: HashMap<Identifier, K>,
   bind_locations: HashMap<K, SourceRegion>,
 }
 
-impl<K: std::hash::Hash + Eq + Copy> Namespace<K> {
-  /// Create a new empty Namespace
+impl<K: std::hash::Hash + Eq + Copy> Bindspace<K> {
+  /// Create a new empty Bindspace
   pub fn new () -> Self {
     Self {
       entries: HashMap::default(),
@@ -137,44 +137,44 @@ impl<K: std::hash::Hash + Eq + Copy> Namespace<K> {
   }
 }
 
-impl<K: std::hash::Hash + Eq + Copy> Default for Namespace<K> { #[inline] fn default () -> Self { Self::new() } }
+impl<K: std::hash::Hash + Eq + Copy> Default for Bindspace<K> { #[inline] fn default () -> Self { Self::new() } }
 
 
-/// A variant of namespace using GlobalKey as its K type
-pub type GlobalNamespace = Namespace<GlobalKey>;
+/// A variant of Bindspace using ContextKey as its K type
+pub type GlobalBindspace = Bindspace<ContextKey>;
 
-/// A variant of namespace using MultiKey as its K type
-pub type LocalNamespace = Namespace<MultiKey>;
+/// A variant of Bindspace using MultiKey as its K type
+pub type LocalBindspace = Bindspace<MultiKey>;
 
-impl<K: std::hash::Hash + Eq + Copy> Namespace<K> {
-  /// Get the location, if any, a Namespace entry was bound at
+impl<K: std::hash::Hash + Eq + Copy> Bindspace<K> {
+  /// Get the location, if any, a Bindspace entry was bound at
   pub fn get_bind_location (&self, key: K) -> Option<SourceRegion> {
     self.bind_locations.get(&key).unref()
   }
 
-  /// Determine if a Namespace entry has a binding location
+  /// Determine if a Bindspace entry has a binding location
   pub fn has_bind_location (&self, key: K) -> bool {
     self.bind_locations.contains_key(&key)
   }
 
-  /// Register a binding location for a Namespace entry
+  /// Register a binding location for a Bindspace entry
   pub fn set_bind_location (&mut self, key: K, location: SourceRegion) {
     self.bind_locations.insert(key, location);
   }
   
-  /// Get the entry, if any, associated with an identifier in a Namespace
+  /// Get the entry, if any, associated with an identifier in a Bindspace
   pub fn get_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> Option<K> {
     self.entries.get(ident.as_ref()).unref()
   }
 
-  /// Get the entry associated with an identifier in a Namespace
+  /// Get the entry associated with an identifier in a Bindspace
   /// # Safety
   /// It is up to the caller to determine whether the identifier provided is bound
   pub unsafe fn get_entry_unchecked<I: AsRef<str> + ?Sized> (&self, ident: &I) -> K {
     *self.entries.get(ident.as_ref()).unwrap_unchecked()
   }
 
-  /// Determine if a namespace entry has a binding location
+  /// Determine if a Bindspace entry has a binding location
   pub fn has_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> bool {
     self.entries.contains_key(ident.as_ref())
   }
@@ -189,76 +189,76 @@ impl<K: std::hash::Hash + Eq + Copy> Namespace<K> {
     None
   }
 
-  /// Determine if a Namespace contains a given key
+  /// Determine if a Bindspace contains a given key
   pub fn has_entry_key (&self, key: K) -> bool {
     self.get_entry_ident(key).is_some()
   }
 
-  /// Register a new namespace entry
+  /// Register a new Bindspace entry
   pub fn set_entry<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: K) {
     self.entries.insert(ident.into(), key);
   }
 
-  /// Register a new namespace entry, and immediately bind its source location
+  /// Register a new Bindspace entry, and immediately bind its source location
   pub fn set_entry_bound<I: Into<Identifier> + AsRef<str>> (&mut self, ident: I, key: K, location: SourceRegion) {
     self.set_entry(ident, key);
     self.set_bind_location(key, location);
   }
 
-  /// Get a key/loc iterator over the bind pairs in a namespace
+  /// Get a key/loc iterator over the bind pairs in a Bindspace
   pub fn bind_iter (&self) -> HashMapIter<K, SourceRegion> {
     self.bind_locations.iter()
   }
 
-  /// Get a mutable key/loc iterator over the bind pairs in a namespace
+  /// Get a mutable key/loc iterator over the bind pairs in a Bindspace
   pub fn bind_iter_mut (&mut self) -> HashMapIterMut<K, SourceRegion> {
     self.bind_locations.iter_mut()
   }
 
-  /// Get an iterator over the identifiers in a namespace
+  /// Get an iterator over the identifiers in a Bindspace
   pub fn ident_iter (&self) -> HashMapKeys<Identifier, K> {
     self.entries.keys()
   }
 
-  /// Get an iterator over the keys in a namespace
+  /// Get an iterator over the keys in a Bindspace
   pub fn key_iter (&self) -> HashMapValues<Identifier, K> {
     self.entries.values()
   }
 
-  /// Get a key/value iterator over the entry pairs in a namespace
+  /// Get a key/value iterator over the entry pairs in a Bindspace
   pub fn entry_iter (&self) -> HashMapIter<Identifier, K> {
     self.entries.iter()
   }
 
-  /// Get a mutable key/value iterator over the entry pairs in a namespace
+  /// Get a mutable key/value iterator over the entry pairs in a Bindspace
   pub fn entry_iter_mut (&mut self) -> HashMapIterMut<Identifier, K> {
     self.entries.iter_mut()
   }
 
-  /// Get an immutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-  pub fn iter (&self) -> NamespaceIter<K> {
-    NamespaceIter {
+  /// Get an immutable key/value/sourceregion iterator over the entry pairs and bind locations in a Bindspace
+  pub fn iter (&self) -> BindspaceIter<K> {
+    BindspaceIter {
       bind_locations: &self.bind_locations,
       entry_iter: self.entries.iter()
     }
   }
 
-  /// Get a mutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-  pub fn iter_mut (&mut self) -> NamespaceIterMut<K> {
-    NamespaceIterMut {
+  /// Get a mutable key/value/sourceregion iterator over the entry pairs and bind locations in a Bindspace
+  pub fn iter_mut (&mut self) -> BindspaceIterMut<K> {
+    BindspaceIterMut {
       bind_locations: &self.bind_locations,
       entry_iter: self.entries.iter_mut()
     }
   }
 }
 
-/// An immutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-pub struct NamespaceIter<'a, K: std::hash::Hash + Eq + Copy> {
+/// An immutable key/value/sourceregion iterator over the entry pairs and bind locations in a Bindspace
+pub struct BindspaceIter<'a, K: std::hash::Hash + Eq + Copy> {
   bind_locations: &'a HashMap<K, SourceRegion>,
   entry_iter: HashMapIter<'a, Identifier, K>,
 }
 
-impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for NamespaceIter<'a, K> {
+impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for BindspaceIter<'a, K> {
   type Item = (&'a Identifier, &'a K, &'a SourceRegion);
 
   fn next (&mut self) -> Option<Self::Item> {
@@ -268,13 +268,13 @@ impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for NamespaceIter<'a, K> {
   }
 }
 
-/// A mutable key/value/sourceregion iterator over the entry pairs and bind locations in a namespace
-pub struct NamespaceIterMut<'a, K: std::hash::Hash + Eq + Copy> {
+/// A mutable key/value/sourceregion iterator over the entry pairs and bind locations in a Bindspace
+pub struct BindspaceIterMut<'a, K: std::hash::Hash + Eq + Copy> {
   bind_locations: &'a HashMap<K, SourceRegion>,
   entry_iter: HashMapIterMut<'a, Identifier, K>,
 }
 
-impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for NamespaceIterMut<'a, K> {
+impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for BindspaceIterMut<'a, K> {
   type Item = (&'a Identifier, &'a mut K, &'a SourceRegion);
 
   fn next (&mut self) -> Option<Self::Item> {
@@ -288,29 +288,29 @@ impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for NamespaceIterMut<'a, K> {
 
 
 /// The basic unit of source for a semantic analyzer,
-/// serves as a container for types, values, and other modules
+/// serves as a container for types, values, and other namespaces
 #[derive(Debug, Clone)]
-pub struct Module {
-  /// Immediate hierarchical ancestor of a Module, if any
-  pub parent_module: Option<GlobalKey>,
-  /// The canonical, original name of a Module
+pub struct Namespace {
+  /// Immediate hierarchical ancestor of a Namespace, if any
+  pub parent_namespace: Option<ContextKey>,
+  /// The canonical, original name of a Namespace
   pub canonical_name: Identifier,
-  /// Namespaced bindings available locally, inside a Module
-  pub local_bindings: GlobalNamespace,
-  /// Namespaced bindings available publicly, outside a Module
-  pub export_bindings: GlobalNamespace,
-  /// The SourceRegion at which a Module was defined
+  /// Bindspace entries available locally, inside a Namespace
+  pub local_bindings: GlobalBindspace,
+  /// Bindspace entries available publicly, outside a Namespace
+  pub export_bindings: GlobalBindspace,
+  /// The SourceRegion at which a Namespace was defined
   pub origin: SourceRegion,
 }
 
-impl Module {
-  /// Create a new semantic analysis Module, and initialize its parent key
-  pub fn new (parent_module: Option<GlobalKey>, canonical_name: Identifier, origin: SourceRegion) -> Self {
+impl Namespace {
+  /// Create a new semantic analysis Namespace, and initialize its parent key
+  pub fn new (parent_namespace: Option<ContextKey>, canonical_name: Identifier, origin: SourceRegion) -> Self {
     Self {
-      parent_module,
+      parent_namespace,
       canonical_name,
-      local_bindings: Namespace::default(),
-      export_bindings: Namespace::default(),
+      local_bindings: Bindspace::default(),
+      export_bindings: Bindspace::default(),
       origin,
     }
   }
@@ -359,13 +359,13 @@ pub enum TypeData {
   /// these are used by literal values
   Coercible(CoercibleType),
   /// A pointer to another type
-  Pointer(GlobalKey),
+  Pointer(ContextKey),
   /// A function pointer
   Function {
     /// The type(s) of any parameters accepted by a function
-    parameter_types: Vec<GlobalKey>,
+    parameter_types: Vec<ContextKey>,
     /// The type of value returned by a function, if any
-    return_type: Option<GlobalKey>
+    return_type: Option<ContextKey>
   },
 }
 
@@ -389,8 +389,8 @@ impl TypeData {
 /// Any Type known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Type {
-  /// The module a Type was defined in, if it is not an anonymous type
-  pub parent_module: Option<GlobalKey>,
+  /// The namespace a Type was defined in, if it is not an anonymous type
+  pub parent_namespace: Option<ContextKey>,
   /// The canonical, original name of a Type
   pub canonical_name: Option<Identifier>,
   /// The unique data associated with a Type, if it has been defined
@@ -401,9 +401,9 @@ pub struct Type {
 
 impl Type {
   /// Create a new Type and initialize its canonical name, origin, and optionally its data
-  pub fn new (parent_module: Option<GlobalKey>, canonical_name: Option<Identifier>, origin: SourceRegion, data: Option<TypeData>) -> Self {
+  pub fn new (parent_namespace: Option<ContextKey>, canonical_name: Option<Identifier>, origin: SourceRegion, data: Option<TypeData>) -> Self {
     Self {
-      parent_module,
+      parent_namespace,
       canonical_name,
       data,
       origin,
@@ -420,14 +420,14 @@ impl Type {
 /// A wrapper structure for printing types for the user
 pub struct TypeDisplay<'a> {
   /// The type being displayed
-  pub ty_key: GlobalKey,
+  pub ty_key: ContextKey,
   /// The context the type is found in
   pub context: &'a Context,
 }
 
 impl<'a> TypeDisplay<'a> {
-  /// Create a new TypeDisplay with the same Context as an existing one, but a new GlobalKey
-  pub fn descend (&self, ty_key: GlobalKey) -> Self {
+  /// Create a new TypeDisplay with the same Context as an existing one, but a new ContextKey
+  pub fn descend (&self, ty_key: ContextKey) -> Self {
     Self {
       ty_key,
       context: self.context,
@@ -442,7 +442,7 @@ impl<'a> Display for TypeDisplay<'a> {
         .get(self.ty_key)
         .expect("Internal error, tried to display invalid type")
         .ref_type()
-        .expect("Internal error, cannot use TypeDisplay for other variants of GlobalItem");
+        .expect("Internal error, cannot use TypeDisplay for other variants of ContextItem");
     
     if let Some(canonical_name) = &ty.canonical_name {
       write!(f, "{}", canonical_name)?;
@@ -489,12 +489,12 @@ impl<'a> Display for TypeDisplay<'a> {
 /// Any Global known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Global {
-  /// The module a Global was defined in
-  pub parent_module: GlobalKey,
+  /// The namespace a Global was defined in
+  pub parent_namespace: ContextKey,
   /// The canonical, original name of a Global
   pub canonical_name: Identifier,
   /// The Type associated with a Global, if it has been defined
-  pub ty: Option<GlobalKey>,
+  pub ty: Option<ContextKey>,
   /// The SourceRegion at which a Global was defined
   pub origin: SourceRegion,
   /// The initializer IR expression for a Global if it has one
@@ -503,9 +503,9 @@ pub struct Global {
 
 impl Global {
   /// Create a new Global and initialize its canonical name, origin, and optionally its type
-  pub fn new (parent_module: GlobalKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<GlobalKey>) -> Self {
+  pub fn new (parent_namespace: ContextKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
     Self {
-      parent_module,
+      parent_namespace,
       canonical_name,
       ty,
       origin,
@@ -517,16 +517,16 @@ impl Global {
 /// Any Function known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Function {
-  /// The module a Function was defined in
-  pub parent_module: GlobalKey,
+  /// The namespace a Function was defined in
+  pub parent_namespace: ContextKey,
   /// The canonical, original name of a Function
   pub canonical_name: Identifier,
   /// The parameter identifiers and type keys associated with a Function, if it has been defined, and has any
-  pub params: Vec<(Identifier, GlobalKey, SourceRegion)>,
+  pub params: Vec<(Identifier, ContextKey, SourceRegion)>,
   /// The return type key associated with a Function, if it has been defined, and has any
-  pub return_ty: Option<GlobalKey>,
+  pub return_ty: Option<ContextKey>,
   /// The Type associated with a Function, if it has been defined
-  pub ty: Option<GlobalKey>,
+  pub ty: Option<ContextKey>,
   /// The SourceRegion at which a Function was defined
   pub origin: SourceRegion,
   /// The IR associated with a Function's body, if it has one
@@ -535,9 +535,9 @@ pub struct Function {
 
 impl Function {
   /// Create a new Function and initialize its canonical name, origin, and optionally its type
-  pub fn new (parent_module: GlobalKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<GlobalKey>) -> Self {
+  pub fn new (parent_namespace: ContextKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
     Self {
-      parent_module,
+      parent_namespace,
       canonical_name,
       params: Vec::new(),
       return_ty: None,
@@ -552,8 +552,8 @@ impl Function {
 /// A top-level item known by a semantic analyzer
 #[allow(missing_docs)]
 #[derive(Debug, Clone)]
-pub enum GlobalItem {
-  Module(Module),
+pub enum ContextItem {
+  Namespace(Namespace),
   Type(Type),
   Global(Global),
   Function(Function),
@@ -565,30 +565,30 @@ pub enum GlobalItem {
 #[derive(Debug, Clone)]
 pub struct LocalItem {
   pub canonical_name: Identifier,
-  pub ty: GlobalKey,
+  pub ty: ContextKey,
   pub is_parameter: bool,
   pub index: usize,
 }
 
-/// A reference to either a GlobalItem or a LocalItem
+/// A reference to either a ContextItem or a LocalItem
 #[allow(missing_docs)]
 pub enum MultiRef<'a> {
   LocalItem(&'a LocalItem),
-  GlobalItem(&'a GlobalItem),
+  ContextItem(&'a ContextItem),
 }
 
 impl<'a> From<&'a LocalItem> for MultiRef<'a> { #[inline] fn from (item: &'a LocalItem) -> Self { Self::LocalItem(item) } }
-impl<'a> From<&'a GlobalItem> for MultiRef<'a> { #[inline] fn from (item: &'a GlobalItem) -> Self { Self::GlobalItem(item) } }
+impl<'a> From<&'a ContextItem> for MultiRef<'a> { #[inline] fn from (item: &'a ContextItem) -> Self { Self::ContextItem(item) } }
 
-/// A mutable reference to either a GlobalItem or a LocalItem
+/// A mutable reference to either a ContextItem or a LocalItem
 #[allow(missing_docs)]
 pub enum MultiMut<'a> {
   LocalItem(&'a mut LocalItem),
-  GlobalItem(&'a mut GlobalItem),
+  ContextItem(&'a mut ContextItem),
 }
 
 impl<'a> From<&'a mut LocalItem> for MultiMut<'a> { #[inline] fn from (item: &'a mut LocalItem) -> Self { Self::LocalItem(item) } }
-impl<'a> From<&'a mut GlobalItem> for MultiMut<'a> { #[inline] fn from (item: &'a mut GlobalItem) -> Self { Self::GlobalItem(item) } }
+impl<'a> From<&'a mut ContextItem> for MultiMut<'a> { #[inline] fn from (item: &'a mut ContextItem) -> Self { Self::ContextItem(item) } }
 
 make_key_type! {
   /// A SlotMap Key representing a LocalItem
@@ -600,7 +600,7 @@ make_key_type! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MultiKey {
   LocalKey(LocalKey),
-  GlobalKey(GlobalKey),
+  ContextKey(ContextKey),
 }
 
 impl MultiKey {
@@ -615,37 +615,37 @@ impl MultiKey {
   pub unsafe fn local_unchecked (self) -> LocalKey { if cfg!(debug_assertions) { self.local().unwrap() } else if let Self::LocalKey(key) = self { key } else { unreachable_unchecked() } }
 
   /// Convert a MultiKey to its variant
-  pub fn namespace (self) -> Option<GlobalKey> { if let Self::GlobalKey(key) = self { Some(key) } else { None } }
+  pub fn bindspace (self) -> Option<ContextKey> { if let Self::ContextKey(key) = self { Some(key) } else { None } }
 
   /// Convert a MultiKey to its variant
   /// 
   /// # Safety
   /// This function only checks the validity of this conversion if debug_assertions are enabled,
   /// it is up to the caller to determine the safety of this operation
-  pub unsafe fn namespace_unchecked (self) -> GlobalKey { if cfg!(debug_assertions) { self.namespace().unwrap() } else if let Self::GlobalKey(key) = self { key } else { unreachable_unchecked() } }
+  pub unsafe fn bindspace_unchecked (self) -> ContextKey { if cfg!(debug_assertions) { self.bindspace().unwrap() } else if let Self::ContextKey(key) = self { key } else { unreachable_unchecked() } }
 }
 
 impl PartialEq<LocalKey> for MultiKey { #[inline] fn eq (&self, other: &LocalKey) -> bool { if let Self::LocalKey(key) = self { key == other } else { false } } }
-impl PartialEq<GlobalKey> for MultiKey { #[inline] fn eq (&self, other: &GlobalKey) -> bool { if let Self::GlobalKey(key) = self { key == other } else { false } } }
+impl PartialEq<ContextKey> for MultiKey { #[inline] fn eq (&self, other: &ContextKey) -> bool { if let Self::ContextKey(key) = self { key == other } else { false } } }
 
 impl From<LocalKey> for MultiKey { #[inline] fn from (key: LocalKey) -> Self { Self::LocalKey(key) } }
-impl From<GlobalKey> for MultiKey { #[inline] fn from (key: GlobalKey) -> Self { Self::GlobalKey(key) } }
+impl From<ContextKey> for MultiKey { #[inline] fn from (key: ContextKey) -> Self { Self::ContextKey(key) } }
 
 
 /// A function or global initializer expression's contextual information
 #[derive(Debug, Clone)]
 pub struct LocalContext {
   /// All local variables known by a LocalContext,
-  /// not all of which may be accessible from the namespace stack
+  /// not all of which may be accessible from the Bindspace stack
   pub variables: SlotMap<LocalKey, LocalItem>,
   /// The number of function parameter variables registered in a LocalContext
   pub parameter_count: usize,
   /// The number of local variables registered in a LocalContext
   pub local_count: usize,
-  /// The stack of namespaces in scope for a LocalContext,
+  /// The stack of Bindspaces in scope for a LocalContext,
   /// identifier lookup reverse iterates this stack to find variables,
-  /// ending at the global namespace
-  pub stack_frames: Vec<LocalNamespace>,
+  /// ending at the global Bindspace
+  pub stack_frames: Vec<LocalBindspace>,
 }
 
 impl Default for LocalContext { #[inline] fn default () -> Self { Self::new() } }
@@ -657,14 +657,14 @@ impl LocalContext {
       variables: SlotMap::default(),
       parameter_count: 0,
       local_count: 0,
-      stack_frames: vec![ Namespace::default() ]
+      stack_frames: vec![ Bindspace::default() ]
     }
   }
 
   /// Create a local variable in a LocalContext
   pub fn create_variable (&mut self,
     canonical_name: Identifier,
-    ty: GlobalKey,
+    ty: ContextKey,
     is_parameter: bool,
     origin: SourceRegion,
   ) -> LocalKey {
@@ -691,137 +691,137 @@ impl LocalContext {
     self.stack_frames.last_mut().unwrap().set_entry_bound(ident, value, origin)
   }
   
-  /// Try to lookup a local variable by traversing down the stack from a LocalContext's top namespace
+  /// Try to lookup a local variable by traversing down the stack from a LocalContext's top Bindspace
   pub fn get_variable<I: AsRef<str>> (&self, ident: &I) -> Option<MultiKey> {
-    for ns in self.stack_frames.iter().rev() {
-      let ns_entry = ns.get_entry(ident);
+    for bs in self.stack_frames.iter().rev() {
+      let bs_entry = bs.get_entry(ident);
 
-      if ns_entry.is_some() { return ns_entry }
+      if bs_entry.is_some() { return bs_entry }
     }
 
     None
   }
 
-  /// Create a new stack frame namespace in a LocalContext
+  /// Create a new stack frame Bindspace in a LocalContext
   pub fn push_stack_frame (&mut self) {
-    self.stack_frames.push(Namespace::default())
+    self.stack_frames.push(Bindspace::default())
   }
 
-  /// Pop a namespace off the frame stack in a LocalContext
+  /// Pop a Bindspace off the frame stack in a LocalContext
   /// 
   /// Panics if there is only a single stack frame left
-  pub fn pop_stack_frame (&mut self) -> LocalNamespace {
+  pub fn pop_stack_frame (&mut self) -> LocalBindspace {
     assert!(self.stack_frames.len() > 1, "Internal error, cannot pop final stack frame of LocalContext");
 
     self.stack_frames.pop().unwrap()
   }
 }
 
-impl GlobalItem {
-  /// Get the NamespaceKind of a GlobalItem
-  pub fn kind (&self) -> NamespaceKind {
+impl ContextItem {
+  /// Get the ContextItemKind of a ContextItem
+  pub fn kind (&self) -> ContextItemKind {
     match self {
-      Self::Module(_)   => NamespaceKind::Module,
-      Self::Type(_)     => NamespaceKind::Type,
-      Self::Global(_)   => NamespaceKind::Global,
-      Self::Function(_) => NamespaceKind::Function,
+      Self::Namespace(_)   => ContextItemKind::Namespace,
+      Self::Type(_)     => ContextItemKind::Type,
+      Self::Global(_)   => ContextItemKind::Global,
+      Self::Function(_) => ContextItemKind::Function,
     }
   }
 
 
-  /// Convert a reference to a GlobalItem into an optional reference to a Module
-  #[inline] pub fn ref_module (&self) -> Option<&Module> { match self { Self::Module(item) => Some(item), _ => None } }
+  /// Convert a reference to a ContextItem into an optional reference to a Namespace
+  #[inline] pub fn ref_namespace (&self) -> Option<&Namespace> { match self { Self::Namespace(item) => Some(item), _ => None } }
 
-  /// Convert a reference to a GlobalItem into an optional reference to a Module
+  /// Convert a reference to a ContextItem into an optional reference to a Namespace
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
-  #[inline] pub unsafe fn ref_module_unchecked (&self) -> &Module { if cfg!(debug_assertions) { self.ref_module().unwrap() } else if let Self::Module(item) = self { item } else { unreachable_unchecked() } }
+  #[inline] pub unsafe fn ref_namespace_unchecked (&self) -> &Namespace { if cfg!(debug_assertions) { self.ref_namespace().unwrap() } else if let Self::Namespace(item) = self { item } else { unreachable_unchecked() } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Module
-  #[inline] pub fn mut_module (&mut self) -> Option<&mut Module> { match self { Self::Module(item) => Some(item), _ => None } }
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Namespace
+  #[inline] pub fn mut_namespace (&mut self) -> Option<&mut Namespace> { match self { Self::Namespace(item) => Some(item), _ => None } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Module
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Namespace
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
-  #[inline] pub unsafe fn mut_module_unchecked (&mut self) -> &mut Module { if cfg!(debug_assertions) { self.mut_module().unwrap() } else if let Self::Module(item) = self { item } else { unreachable_unchecked() } }
+  #[inline] pub unsafe fn mut_namespace_unchecked (&mut self) -> &mut Namespace { if cfg!(debug_assertions) { self.mut_namespace().unwrap() } else if let Self::Namespace(item) = self { item } else { unreachable_unchecked() } }
   
-  /// Convert a reference to a GlobalItem into an optional reference to a Type
+  /// Convert a reference to a ContextItem into an optional reference to a Type
   #[inline] pub fn ref_type (&self) -> Option<&Type> { match self { Self::Type(item) => Some(item), _ => None } }
 
-  /// Convert a reference to a GlobalItem into an optional reference to a Type
+  /// Convert a reference to a ContextItem into an optional reference to a Type
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
   #[inline] pub unsafe fn ref_type_unchecked (&self) -> &Type { if cfg!(debug_assertions) { self.ref_type().unwrap() } else if let Self::Type(item) = self { item } else { unreachable_unchecked() } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Type
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Type
   #[inline] pub fn mut_type (&mut self) -> Option<&mut Type> { match self { Self::Type(item) => Some(item), _ => None } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Type
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Type
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
   #[inline] pub unsafe fn mut_type_unchecked (&mut self) -> &mut Type { if cfg!(debug_assertions) { self.mut_type().unwrap() } else if let Self::Type(item) = self { item } else { unreachable_unchecked() } }
   
-  /// Convert a reference to a GlobalItem into an optional reference to a Global
+  /// Convert a reference to a ContextItem into an optional reference to a Global
   #[inline] pub fn ref_global (&self) -> Option<&Global> { match self { Self::Global(item) => Some(item), _ => None } }
 
-  /// Convert a reference to a GlobalItem into an optional reference to a Global
+  /// Convert a reference to a ContextItem into an optional reference to a Global
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
   #[inline] pub unsafe fn ref_global_unchecked (&self) -> &Global { if cfg!(debug_assertions) { self.ref_global().unwrap() } else if let Self::Global(item) = self { item } else { unreachable_unchecked() } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Global
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Global
   #[inline] pub fn mut_global (&mut self) -> Option<&mut Global> { match self { Self::Global(item) => Some(item), _ => None } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Global
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Global
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
   #[inline] pub unsafe fn mut_global_unchecked (&mut self) -> &mut Global { if cfg!(debug_assertions) { self.mut_global().unwrap() } else if let Self::Global(item) = self { item } else { unreachable_unchecked() } }
   
-  /// Convert a reference to a GlobalItem into an optional reference to a Function
+  /// Convert a reference to a ContextItem into an optional reference to a Function
   #[inline] pub fn ref_function (&self) -> Option<&Function> { match self { Self::Function(item) => Some(item), _ => None } }
 
-  /// Convert a reference to a GlobalItem into an optional reference to a Function
+  /// Convert a reference to a ContextItem into an optional reference to a Function
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
   #[inline] pub unsafe fn ref_function_unchecked (&self) -> &Function { if cfg!(debug_assertions) { self.ref_function().unwrap() } else if let Self::Function(item) = self { item } else { unreachable_unchecked() } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Function
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Function
   #[inline] pub fn mut_function (&mut self) -> Option<&mut Function> { match self { Self::Function(item) => Some(item), _ => None } }
 
-  /// Convert a mutable reference to a GlobalItem into an optional mutable reference to a Function
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Function
   /// # Safety
   /// This only performs an assertion on the variant if debug_assertions is enabled,
   /// it is up to the caller to determine the safety of this transformation
   #[inline] pub unsafe fn mut_function_unchecked (&mut self) -> &mut Function { if cfg!(debug_assertions) { self.mut_function().unwrap() } else if let Self::Function(item) = self { item } else { unreachable_unchecked() } }
 }
 
-impl From<Module> for GlobalItem { #[inline] fn from (item: Module) -> GlobalItem { Self::Module(item) } }
-impl From<Type> for GlobalItem { #[inline] fn from (item: Type) -> GlobalItem { Self::Type(item) } }
-impl From<Global> for GlobalItem { #[inline] fn from (item: Global) -> GlobalItem { Self::Global(item) } }
-impl From<Function> for GlobalItem { #[inline] fn from (item: Function) -> GlobalItem { Self::Function(item) } }
+impl From<Namespace> for ContextItem { #[inline] fn from (item: Namespace) -> ContextItem { Self::Namespace(item) } }
+impl From<Type> for ContextItem { #[inline] fn from (item: Type) -> ContextItem { Self::Type(item) } }
+impl From<Global> for ContextItem { #[inline] fn from (item: Global) -> ContextItem { Self::Global(item) } }
+impl From<Function> for ContextItem { #[inline] fn from (item: Function) -> ContextItem { Self::Function(item) } }
 
 /// The kind of a top-level item known by a semantic analyzer
 #[repr(u8)]
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum NamespaceKind {
-  Module,
+pub enum ContextItemKind {
+  Namespace,
   Type,
   Global,
   Function,
 }
 
-impl Display for NamespaceKind {
+impl Display for ContextItemKind {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
     write!(f, "{}", match self {
-      Self::Module => "Module",
+      Self::Namespace => "Namespace",
       Self::Type => "Type",
       Self::Global => "Global",
       Self::Function => "Function",
@@ -831,5 +831,5 @@ impl Display for NamespaceKind {
 
 make_key_type! {
   /// A key referring to a top-level item in a semantic analyzer
-  pub struct GlobalKey;
+  pub struct ContextKey;
 }
