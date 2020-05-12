@@ -200,7 +200,6 @@ pub enum Keyword {
   Namespace,
   Global,
   Function,
-  From,
   If,
   Else,
   Let,
@@ -217,7 +216,6 @@ impl Keyword {
       Namespace => "ns",
       Global    => "global",
       Function  => "fn",
-      From      => "from",
       If        => "if",
       Else      => "else",
       Let       => "let",
@@ -335,7 +333,6 @@ pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
     ("export", Either::A(Keyword::Export)),
     ("global", Either::A(Keyword::Global)),
     ("alias",  Either::A(Keyword::Alias)),
-    ("from",   Either::A(Keyword::From)),
     ("else",   Either::A(Keyword::Else)),
     ("let",    Either::A(Keyword::Let)),
     ("not",    Either::B(Operator::Not)),
@@ -413,6 +410,8 @@ pub const ITEM_KEYWORDS: &[Keyword] = {
 
   &[
     Namespace,
+    Alias,
+    Export,
     Global,
     Function,
   ]
