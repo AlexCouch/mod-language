@@ -67,6 +67,12 @@ fn get_single_alias (parser: &mut Parser) -> Option<(AliasData, SourceRegion)> {
     (None, origin)
   };
 
+  if new_name.is_none() && path.is_empty() {
+    parser.error("Expected `as <identifier>` or at least one level descendant of path to follow absolute path operator `::`".to_owned());
+
+    return None
+  }
+
   Some((AliasData { path, new_name }, origin))
 }
 
@@ -130,8 +136,12 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
       };
 
       (refs, end, true)
-    } else if let Some((imp, origin)) = get_single_alias(parser) {
-      (vec![ imp ], origin, false)
+    } else if let Some(&Token { data: TokenData::Identifier(_) | TokenData::Operator(DoubleColon), .. }) = parser.curr_tok() {
+      if let Some((imp, origin)) = get_single_alias(parser) {
+        (vec![ imp ], origin, false)
+      } else {
+        return None
+      }
     } else {
       parser.error("Expected identifier or path, or a list of these, to follow `import` keyword".to_owned());
 
@@ -207,8 +217,6 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
       if let Some((imp, origin)) = get_single_alias(parser) {
         (vec![ imp ], origin, false)
       } else {
-        parser.error("Expected identifier or path, or a list of these, to follow `import` keyword".to_owned());
-  
         return None
       }
     } else {

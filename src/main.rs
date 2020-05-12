@@ -52,7 +52,6 @@ fn main () -> std::io::Result<()> {
 
   if !SESSION.messages().is_empty() {
     SESSION.print_messages();
-    panic!("Error parsing items");
   }
 
 
