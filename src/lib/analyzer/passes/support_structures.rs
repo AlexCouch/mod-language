@@ -1,5 +1,9 @@
 //! Types used in resolution of Aliases: Imports, Exports and (TODO) Typealiases
 
+use std::{
+  fmt::{ Display, Debug, Formatter, Result as FMTResult, },
+};
+
 use crate::{
   common::{ Identifier, },
   source::{ SourceRegion, },
@@ -7,18 +11,29 @@ use crate::{
 };
 
 /// Variant data for an Alias
+#[repr(u8)]
 #[allow(missing_docs)]
-pub enum AliasData {
-  Import { absolute: bool, relative_to: GlobalKey, chain: Vec<Identifier>, },
-  Export { base: Identifier, },
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AliasKind {
+  Import,
+  Export,
+}
+
+impl Display for AliasKind {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    write!(f, "{}", match self { AliasKind::Import => "Import", AliasKind::Export => "Export" })
+  }
 }
   
 /// A placeholder structure for delayed evaluation of imports and exports
 #[allow(missing_docs)]
 pub struct Alias {
   pub destination_module: GlobalKey,
-  pub data: AliasData,
+  pub kind: AliasKind,
   pub new_name: Identifier,
+  pub absolute: bool,
+  pub relative_to: GlobalKey,
+  pub chain: Vec<Identifier>,
   pub origin: SourceRegion,
 }
 

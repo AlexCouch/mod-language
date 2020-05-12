@@ -1,12 +1,12 @@
 use crate::{
   common::{ Identifier, },
-  ast::{ Item, ItemData, ExportData, },
+  ast::{ self, Item, ItemData, ExportData, AliasData, },
   ctx::{ GlobalKey, Module, Global, Function, },
 };
 
 use super::{
   Analyzer,
-  support_structures::{ Alias, AliasData, },
+  support_structures::{ Alias, AliasKind, },
 };
 
 
@@ -18,18 +18,17 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
       ItemData::Import { data, .. } => {
         let destination_module = analyzer.get_active_module_key();
 
-        for (base, new_name) in data.iter() {
-          let new_name = if let Some(new_name) = new_name { new_name } else { base.last().expect("Internal error, empty import path with no alias") }.to_owned();
+        for AliasData { path, new_name } in data.iter() {
+          let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty import path with no alias") }.to_owned();
           
-          let relative_to = if base.absolute { analyzer.context.lib_mod } else { destination_module };
+          let relative_to = if path.absolute { analyzer.context.lib_mod } else { destination_module };
 
           aliases.push(Alias {
             destination_module,
-            data: AliasData::Import {
-              absolute: base.absolute,
-              relative_to,
-              chain: base.chain.clone()
-            },
+            kind: AliasKind::Import,
+            absolute: path.absolute,
+            relative_to,
+            chain: path.chain.clone(),
             new_name,
             origin: item.origin,
           })
@@ -41,12 +40,17 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], aliases: &mut Ve
           ExportData::List(exports) => {
             let destination_module = analyzer.get_active_module_key();
 
-            for (base, new_name) in exports.iter() {
-              let new_name = if let Some(new_name) = new_name { new_name } else { base }.to_owned();
+            for ast::AliasData { path, new_name } in exports.iter() {
+              let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty export path with no alias") }.to_owned();
               
+              let relative_to = if path.absolute { analyzer.context.lib_mod } else { destination_module };
+
               aliases.push(Alias {
                 destination_module,
-                data: AliasData::Export { base: base.clone() },
+                kind: AliasKind::Export,
+                absolute: path.absolute,
+                relative_to,
+                chain: path.chain.clone(),
                 new_name,
                 origin: item.origin,
               })

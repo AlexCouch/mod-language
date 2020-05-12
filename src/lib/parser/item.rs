@@ -5,7 +5,7 @@ use crate::{
   source::{ SourceRegion, SOURCE_MANAGER, },
   common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, Identifier, },
   token::{ Token, TokenData, },
-  ast::{ Item, ItemData, ExportData, Path, LocalDeclaration, },
+  ast::{ Item, ItemData, ExportData, AliasData, LocalDeclaration, },
   lexer::{ Lexer, },
 };
 
@@ -51,19 +51,12 @@ fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, S
   }
 }
 
-fn get_new_name (parser: &mut Parser) -> Result<Option<Identifier>, ()> {
-  match get_new_name_and_origin(parser) {
-    Ok(opt) => Ok(opt.map(|(new_name, _)| new_name)),
-    Err(()) => Err(())
-  }
-}
-
-fn get_single_import (parser: &mut Parser) -> Option<((Path, Option<Identifier>), SourceRegion)> {
+fn get_single_alias (parser: &mut Parser) -> Option<(AliasData, SourceRegion)> {
   let (path_or_ident, origin) = path(parser)?;
   
   let path = match path_or_ident {
     Either::A(path) => path,
-    Either::B(base) => base.into()
+    Either::B(ident) => ident.into()
   };
 
   let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
@@ -74,7 +67,7 @@ fn get_single_import (parser: &mut Parser) -> Option<((Path, Option<Identifier>)
     (None, origin)
   };
 
-  Some(((path, new_name), origin))
+  Some((AliasData { path, new_name }, origin))
 }
 
 
@@ -106,7 +99,7 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
           // Refs
           _ => {
             if ref_ok {
-              if let Some((imp, _)) = get_single_import(parser) {
+              if let Some((imp, _)) = get_single_alias(parser) {
                 refs.push(imp);
 
                 if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
@@ -137,7 +130,7 @@ fn itm_import (parser: &mut Parser) -> Option<Item> {
       };
 
       (refs, end, true)
-    } else if let Some((imp, origin)) = get_single_import(parser) {
+    } else if let Some((imp, origin)) = get_single_alias(parser) {
       (vec![ imp ], origin, false)
     } else {
       parser.error("Expected identifier or path, or a list of these, to follow `import` keyword".to_owned());
@@ -155,16 +148,14 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
   if let Some(&Token { data: TokenData::Keyword(Export), origin: start_region }) = parser.curr_tok() {
     parser.advance();
 
-    if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+    let (refs, end_region, terminal) = if let Some(Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
       parser.advance();
 
       let mut refs = Vec::new();
 
       let mut ref_ok = true;
 
-      let end_region;
-
-      loop {
+      let end = loop {
         match parser.curr_tok() {
           // Unexpected end of input
           None => {
@@ -175,28 +166,22 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
           // The end of the block
           Some(&Token { data: TokenData::Operator(RightBracket), origin }) => {
             parser.advance();
-            end_region = origin;
-            break
+            break origin
           },
   
           // Refs
           _ => {
             if ref_ok {
-              if let Some(Token { data: TokenData::Identifier(base), .. }) = parser.curr_tok() {
-                let base = base.clone();
-                
-                parser.advance();
-                                
-                if let Ok(new_name) = get_new_name(parser) {
-                  refs.push((base, new_name));
+              if let Some((imp, _)) = get_single_alias(parser) {
+                refs.push(imp);
 
-                  if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
-                    parser.advance();
-                    ref_ok = true;
-                  }
-
-                  continue
+                if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
+                  parser.advance();
+                } else {
+                  ref_ok = false;
                 }
+
+                continue
               }
             } else {
               parser.error("Expected , to separate export references or } to end block".to_owned());
@@ -206,12 +191,8 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
               if let Some(&Token { data: TokenData::Operator(op), origin }) = parser.curr_tok() {
                 parser.advance();
 
-                if op == Comma {
-                  continue
-                } else { 
-                  end_region = origin;
-                  break
-                }
+                if op == Comma { continue }
+                else { break origin }
               }
             }
       
@@ -219,33 +200,27 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
             return None
           }
         }
-      }
-
-      return Some(Item::new(ItemData::Export { data: ExportData::List(refs), terminal: true }, SourceRegion::merge(start_region, end_region)))
-    } else if let Some(&Token { data: TokenData::Identifier(ref base), origin: base_end }) = parser.curr_tok() {
-      let base = base.to_owned();
-
-      parser.advance();
-
-      let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
-
-      let (new_name, end) = if let Some((new_name, end)) = new_name_and_origin {
-        (Some(new_name), end)
-      } else {
-        (None, base_end)
       };
 
-      return Some(Item::new(ItemData::Export { data: ExportData::List(vec![ (base, new_name) ]), terminal: false }, SourceRegion::merge(start_region, end)))
+      (refs, end, true)
+    } else if let Some(&Token { data: TokenData::Identifier(_) | TokenData::Operator(DoubleColon), .. }) = parser.curr_tok() {
+      if let Some((imp, origin)) = get_single_alias(parser) {
+        (vec![ imp ], origin, false)
+      } else {
+        parser.error("Expected identifier or path, or a list of these, to follow `import` keyword".to_owned());
+  
+        return None
+      }
     } else {
       let curr_tok = if let Some(tok) = parser.curr_tok() { tok } else {
-        parser.error("Expected a list, alias, or inline item to follow `export` keyword".to_owned());
+        parser.error("Expected an alias, list of aliases, or inline item to follow `export` keyword".to_owned());
         return None
       };
 
       let inline = if let Some(parselet_function) = ItemParselet::get_function(curr_tok) {
         parselet_function(parser)
       } else {
-        parser.error("No syntactic match for this token in the context of a top level item".to_owned());
+        parser.error("No syntactic match for this token in the context of an inline export".to_owned());
     
         return None
       }?;
@@ -254,7 +229,9 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
       let terminal = !inline.requires_semi();
 
       return Some(Item::new(ItemData::Export { data: ExportData::Inline(box inline), terminal }, region))
-    }
+    };
+
+    return Some(Item::new(ItemData::Export { data: ExportData::List(refs), terminal }, SourceRegion::merge(start_region, end_region)))
   }
 
   unreachable!("Internal error, export item parselet called on non-export token");

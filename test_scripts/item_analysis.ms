@@ -3,14 +3,12 @@ mod A {
   import {
     D::X,
     D::Y,
-    D::Z,
   }
-  export { X, Y, Z }
+  export { X, Y, D::Z }
 }
 
 export mod B {
-  import ::C;
-  export C;
+  export ::C;
 }
 
 export mod C {
