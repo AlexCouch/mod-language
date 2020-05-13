@@ -21,6 +21,61 @@ pub fn resolve_pseudonyms (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudon
 }
 
 
+fn resolve_pseudonym (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, pseudonym: Pseudonym) -> Option<ContextKey> {
+  let resolved_key = match &pseudonym.payload {
+    PseudonymPayload::Path(path) => resolve_path(analyzer, pseudonyms, pseudonym.relative_to, path, pseudonym.origin)?,
+    PseudonymPayload::TypeExpression(texpr) => resolve_texpr(analyzer, pseudonyms, pseudonym.relative_to, texpr)?,
+  };
+
+  let dest_ns =
+    analyzer.context.items
+      .get(pseudonym.destination_namespace)
+      .expect("Internal error, pseudonym has invalid destination namespace key")
+      .ref_namespace()
+      .expect("Internal error, pseudonym destination key does not resolve to a namespace");
+
+  match pseudonym.kind {
+    PseudonymKind::Alias => {
+      if let Some(existing_key) = dest_ns.local_bindings.get_entry(&pseudonym.new_name) {
+        let existing_origin = 
+          dest_ns.local_bindings
+            .get_bind_location(existing_key)
+            .expect("Internal error, local item has no binding source location");
+
+        analyzer.error(pseudonym.origin, format!(
+          "Namespace alias `{}` shadows an existing item, defined at [{}]",
+          pseudonym.new_name,
+          existing_origin,
+        ))
+      }
+
+      unsafe { analyzer.context.items.get_unchecked_mut(pseudonym.destination_namespace).mut_namespace_unchecked() }
+        .local_bindings.set_entry_bound(pseudonym.new_name, resolved_key, pseudonym.origin);
+    },
+
+    PseudonymKind::Export => {
+      if let Some(existing_key) = dest_ns.export_bindings.get_entry(&pseudonym.new_name) {
+        let existing_origin = 
+          dest_ns.export_bindings
+            .get_bind_location(existing_key)
+            .expect("Internal error, export item has no binding source location");
+
+        analyzer.error(pseudonym.origin, format!(
+          "Namespace export `{}` shadows an existing item, defined at [{}]",
+          pseudonym.new_name,
+          existing_origin,
+        ))
+      }
+
+      unsafe { analyzer.context.items.get_unchecked_mut(pseudonym.destination_namespace).mut_namespace_unchecked() }
+        .export_bindings.set_entry_bound(pseudonym.new_name, resolved_key, pseudonym.origin);
+    },
+  }
+
+  Some(resolved_key)
+}
+
+
 fn try_get_pseudonym (pseudonyms: &mut Vec<Pseudonym>, in_namespace: ContextKey, kind: PseudonymKind, identifier: &Identifier) -> Option<Pseudonym> {
   for (index, pseudonym) in pseudonyms.iter().enumerate() {
     if pseudonym.destination_namespace == in_namespace
@@ -34,22 +89,7 @@ fn try_get_pseudonym (pseudonyms: &mut Vec<Pseudonym>, in_namespace: ContextKey,
 }
 
 
-
-fn resolve_pseudonym (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, pseudonym: Pseudonym) -> Option<ContextKey> {
-  match &pseudonym.payload {
-    PseudonymPayload::Path(_) => resolve_pseudonym_path(analyzer, pseudonyms, pseudonym),
-    PseudonymPayload::TypeExpression(_) => resolve_pseudonym_texpr(analyzer, pseudonyms, pseudonym),
-  }
-}
-
-
-fn resolve_path (
-  analyzer: &mut Analyzer,
-  pseudonyms: &mut Vec<Pseudonym>, 
-  relative_to: ContextKey,
-  path: &Path,
-  origin: SourceRegion,
-) -> Option<ContextKey> {
+fn resolve_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relative_to: ContextKey, path: &Path, origin: SourceRegion) -> Option<ContextKey> {
   let mut base_name = Identifier::default();
               
   let mut resolved_key = relative_to;
@@ -114,78 +154,4 @@ fn resolve_texpr (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, rela
       Some(ty_from_anon_data(analyzer, TypeData::Function { parameter_types: param_keys, return_type: ret_key }, texpr.origin))
     }
   }
-}
-
-
-fn register_resolved_pseudonym (analyzer: &mut Analyzer, pseudonym: Pseudonym, resolved_key: ContextKey) {
-  let dest_ns =
-    analyzer.context.items
-      .get(pseudonym.destination_namespace)
-      .expect("Internal error, pseudonym has invalid destination namespace key")
-      .ref_namespace()
-      .expect("Internal error, pseudonym destination key does not resolve to a namespace");
-
-  match pseudonym.kind {
-    PseudonymKind::Alias => {
-      if let Some(existing_key) = dest_ns.local_bindings.get_entry(&pseudonym.new_name) {
-        let existing_origin = 
-          dest_ns.local_bindings
-            .get_bind_location(existing_key)
-            .expect("Internal error, local item has no binding source location");
-
-        analyzer.error(pseudonym.origin, format!(
-          "Namespace alias `{}` shadows an existing item, defined at [{}]",
-          pseudonym.new_name,
-          existing_origin,
-        ))
-      }
-
-      unsafe { analyzer.context.items.get_unchecked_mut(pseudonym.destination_namespace).mut_namespace_unchecked() }
-        .local_bindings.set_entry_bound(pseudonym.new_name, resolved_key, pseudonym.origin);
-    },
-
-    PseudonymKind::Export => {
-      if let Some(existing_key) = dest_ns.export_bindings.get_entry(&pseudonym.new_name) {
-        let existing_origin = 
-          dest_ns.export_bindings
-            .get_bind_location(existing_key)
-            .expect("Internal error, export item has no binding source location");
-
-        analyzer.error(pseudonym.origin, format!(
-          "Namespace export `{}` shadows an existing item, defined at [{}]",
-          pseudonym.new_name,
-          existing_origin,
-        ))
-      }
-
-      unsafe { analyzer.context.items.get_unchecked_mut(pseudonym.destination_namespace).mut_namespace_unchecked() }
-        .export_bindings.set_entry_bound(pseudonym.new_name, resolved_key, pseudonym.origin);
-    },
-  }
-}
-
-
-fn resolve_pseudonym_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, pseudonym: Pseudonym) -> Option<ContextKey> {
-  let resolved_key = if let PseudonymPayload::Path(path) = &pseudonym.payload {
-    resolve_path(analyzer, pseudonyms, pseudonym.relative_to, path, pseudonym.origin)?
-  } else {
-    unreachable!("Internal error, resolve_pseudonym_path called on Pseudonym with improper PseudonymPayload");
-  };
-
-  register_resolved_pseudonym(analyzer, pseudonym, resolved_key);
-
-  Some(resolved_key)
-}
-
-
-fn resolve_pseudonym_texpr (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, pseudonym: Pseudonym) -> Option<ContextKey> {
-  let resolved_key = if let PseudonymPayload::TypeExpression(texpr) = &pseudonym.payload {
-    resolve_texpr(analyzer, pseudonyms, pseudonym.relative_to, texpr)?
-  } else {
-    unreachable!("Internal error, resolve_pseudonym_texpr called on Pseudonym wiht improper PseudonymPayload");
-  };
-
-  register_resolved_pseudonym(analyzer, pseudonym, resolved_key);
-
-  Some(resolved_key)
 }
