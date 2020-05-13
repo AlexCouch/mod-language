@@ -486,6 +486,7 @@ impl Conditional {
 pub struct PseudonymData {
   pub path: Path,
   pub new_name: Option<Identifier>,
+  pub origin: SourceRegion,
 }
 
 

@@ -51,7 +51,7 @@ fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, S
   }
 }
 
-fn get_single_pseudonym (parser: &mut Parser) -> Option<(PseudonymData, SourceRegion)> {
+fn get_single_pseudonym (parser: &mut Parser) -> Option<PseudonymData> {
   let path = match path(parser)? {
     Either::A(path)  => path,
     Either::B((ident, origin)) => Path::new(false, vec![ ident ], origin),
@@ -71,7 +71,7 @@ fn get_single_pseudonym (parser: &mut Parser) -> Option<(PseudonymData, SourceRe
     return None
   }
 
-  Some((PseudonymData { path, new_name }, origin))
+  Some(PseudonymData { path, new_name, origin })
 }
 
 
@@ -103,7 +103,7 @@ fn itm_alias (parser: &mut Parser) -> Option<Item> {
           // Refs
           _ => {
             if ref_ok {
-              if let Some((imp, _)) = get_single_pseudonym(parser) {
+              if let Some(imp) = get_single_pseudonym(parser) {
                 refs.push(imp);
 
                 if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
@@ -135,7 +135,8 @@ fn itm_alias (parser: &mut Parser) -> Option<Item> {
 
       (refs, end, true)
     } else if let Some(&Token { data: TokenData::Identifier(_) | TokenData::Operator(DoubleColon), .. }) = parser.curr_tok() {
-      if let Some((imp, origin)) = get_single_pseudonym(parser) {
+      if let Some(imp) = get_single_pseudonym(parser) {
+        let origin = imp.origin;
         (vec![ imp ], origin, false)
       } else {
         return None
@@ -180,7 +181,7 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
           // Refs
           _ => {
             if ref_ok {
-              if let Some((imp, _)) = get_single_pseudonym(parser) {
+              if let Some(imp) = get_single_pseudonym(parser) {
                 refs.push(imp);
 
                 if let Some(Token { data: TokenData::Operator(Comma), .. }) = parser.curr_tok() {
@@ -212,7 +213,8 @@ fn itm_export (parser: &mut Parser) -> Option<Item> {
 
       (refs, end, true)
     } else if let Some(&Token { data: TokenData::Identifier(_) | TokenData::Operator(DoubleColon), .. }) = parser.curr_tok() {
-      if let Some((imp, origin)) = get_single_pseudonym(parser) {
+      if let Some(imp) = get_single_pseudonym(parser) {
+        let origin = imp.origin;
         (vec![ imp ], origin, false)
       } else {
         return None

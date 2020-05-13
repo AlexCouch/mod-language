@@ -1,6 +1,6 @@
 use crate::{
   common::{ Identifier, },
-  ast::{ self, Item, ItemData, ExportData, PseudonymData, Path, },
+  ast::{ Item, ItemData, ExportData, PseudonymData, Path, },
   ctx::{ ContextKey, Namespace, Type, Global, Function, },
 };
 
@@ -18,7 +18,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
       ItemData::Alias { data, .. } => {
         let destination_namespace = analyzer.get_active_namespace_key();
 
-        for PseudonymData { path, new_name } in data.iter() {
+        for &PseudonymData { ref path, ref new_name, origin } in data.iter() {
           let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty alias path with no pseudonym") }.to_owned();
           
           let relative_to = if path.absolute { analyzer.context.main_ns } else { destination_namespace };
@@ -29,7 +29,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
             payload: PseudonymPayload::Path(path.clone()),
             relative_to,
             new_name,
-            origin: item.origin,
+            origin,
           })
         }
       },
@@ -40,7 +40,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
         match data {
           ExportData::List(exports) => {
 
-            for ast::PseudonymData { path, new_name } in exports.iter() {
+            for &PseudonymData { ref path, ref new_name, origin } in exports.iter() {
               let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty export path with no pseudonym") }.to_owned();
               
               let relative_to = if path.absolute { analyzer.context.main_ns } else { destination_namespace };
@@ -51,7 +51,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
                 payload: PseudonymPayload::Path(path.clone()),
                 relative_to,
                 new_name,
-                origin: item.origin,
+                origin,
               })
             }
           },
