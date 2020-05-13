@@ -176,6 +176,15 @@ pub enum Number {
   FloatingPoint(f64),
 }
 
+impl Display for Number {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    match self {
+      Number::Integer(int) => Display::fmt(int, f),
+      Number::FloatingPoint(float) => Display::fmt(float, f),
+    }
+  }
+}
+
 impl From<u64> for Number {
   #[inline]
   fn from (i: u64) -> Self {

@@ -9,6 +9,7 @@ use mod_language::{
   parser::Parser,
   analyzer::Analyzer,
   ansi,
+  ast,
 };
 
 
@@ -35,19 +36,26 @@ fn main () -> std::io::Result<()> {
 
   let mut parser = Parser::new(&stream);
 
-  let ast = parser.parse_ast();
+  let ast_vec = parser.parse_ast();
 
   println!("Got ast, dumping to ./log/ast");
-  std::fs::write("./log/ast", format!("{:#?}", ast)).expect("Failed to dump token ast to ./log/ast");
+  std::fs::write("./log/ast", format!("{:#?}", ast_vec)).expect("Failed to dump token ast to ./log/ast");
 
 
   let analyzer = Analyzer::new();
 
-  let context = analyzer.analyze(ast);
+  let (context, transformed_ast) = analyzer.analyze(ast_vec);
 
   println!("Got context, dumping to ./log/context");
   std::fs::write("./log/context", format!("{:#?}", context)).expect("Failed to dump context to ./log/context");
 
+  println!("Got transformed ast, dumping to ./log/transformed_ast");
+  std::fs::write(
+    "./log/transformed_ast",
+    format!("{}", ast::Item::no_src(
+      ast::ItemData::Namespace { identifier: "item_analysis.md".into(), items: transformed_ast, inline: false }
+    ))
+  ).expect("Failed to dump transformed_ast to ./log/transformed_ast");
 
 
   if !SESSION.messages().is_empty() {

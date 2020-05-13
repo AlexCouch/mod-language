@@ -149,6 +149,7 @@ impl From<Path> for TypeExpressionData {
   #[inline] fn from (path: Path) -> Self { Self::Path(path) }
 }
 
+
 /// A syntactic element referencing or describing a type
 #[allow(missing_docs)]
 #[derive(Clone)]
@@ -158,7 +159,15 @@ pub struct TypeExpression {
 }
 
 impl Debug for TypeExpression {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { Debug::fmt(&self.data, f) }
+}
+
+impl Display for TypeExpression {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+}
+
+impl HierarchicalDisplay for TypeExpression {
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for TypeExpression {
@@ -247,7 +256,15 @@ pub struct Expression {
 }
 
 impl Debug for Expression {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { Debug::fmt(&self.data, f) }
+}
+
+impl Display for Expression {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+}
+
+impl HierarchicalDisplay for Expression {
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for Expression {
@@ -322,7 +339,15 @@ pub struct Statement {
 }
 
 impl Debug for Statement {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { Debug::fmt(&self.data, f) }
+}
+
+impl Display for Statement {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+}
+
+impl HierarchicalDisplay for Statement {
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for Statement {
@@ -489,6 +514,17 @@ pub struct PseudonymData {
   pub origin: SourceRegion,
 }
 
+impl PseudonymData {
+  /// Create a new PseudonymData
+  pub fn new (path: Path, new_name: Option<Identifier>, origin: SourceRegion) -> Self {
+    Self { path, new_name, origin }
+  }
+
+  /// Create a new PseudonymData with no SourceRegion
+  pub fn no_src (path: Path, new_name: Option<Identifier>) -> Self {
+    Self { path, new_name, origin: SourceRegion::ANONYMOUS }
+  }
+}
 
 /// The data associated with an Export
 #[allow(missing_docs)]
@@ -542,7 +578,15 @@ pub struct Item {
 }
 
 impl Debug for Item {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.data.fmt(f) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { Debug::fmt(&self.data, f) }
+}
+
+impl Display for Item {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+}
+
+impl HierarchicalDisplay for Item {
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for Item {
@@ -567,5 +611,416 @@ impl Item {
   /// Create a new Item with no SourceRegion origin
   pub fn no_src (data: ItemData) -> Self {
     Self { data, origin: SourceRegion::ANONYMOUS }
+  }
+}
+
+
+
+trait HierarchicalDisplay {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult;
+}
+
+
+struct Padding;
+
+impl HierarchicalDisplay for Padding {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+    for _ in 0..level {
+      write!(f, "  ")?;
+    }
+
+    Ok(())
+  }
+}
+
+
+impl Display for TypeExpressionData {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl HierarchicalDisplay for TypeExpressionData {
+  fn fmt_hierarchical (&self, f: &mut Formatter, _level: usize) -> FMTResult {
+    match self {
+      TypeExpressionData::Identifier(ident) => Display::fmt(ident, f),
+      TypeExpressionData::Path(path) => Display::fmt(path, f),
+      TypeExpressionData::Pointer(sub_texpr) => write!(f, "^{}", sub_texpr),
+      TypeExpressionData::Function { parameter_types, return_type } => {
+        write!(f, "fn")?;
+
+        if !parameter_types.is_empty() {
+          write!(f, " (")?;
+
+          let mut iter = parameter_types.iter().peekable();
+
+          while let Some(param_texpr) = iter.next() {
+            Display::fmt(param_texpr, f)?;
+
+            if iter.peek().is_some() { write!(f, ", ")?; }
+          }
+
+          write!(f, ")")?;
+        }
+
+        if let box Some(return_texpr) = return_type {
+          write!(f, " -> {}", return_texpr)?;
+        }
+
+        Ok(())
+      }
+    }
+  }
+}
+
+impl Display for ExpressionData {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl HierarchicalDisplay for ExpressionData {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+    match self {
+      ExpressionData::Identifier(ident) => Display::fmt(ident, f),
+      ExpressionData::Path(path) => Display::fmt(path, f),
+      ExpressionData::Number(number) => Display::fmt(number, f),
+      ExpressionData::Conditional(conditional) => conditional.fmt_hierarchical(f, level),
+      ExpressionData::Block(block) => block.fmt_hierarchical(f, level),
+
+      ExpressionData::Unary { operand, operator } => {
+        write!(f, "{}(", operator.value())?;
+        operand.fmt_hierarchical(f, level)?;
+        write!(f, ")")
+      }
+
+      ExpressionData::Binary { left, right, operator } => {
+        write!(f, "(")?;
+        left.fmt_hierarchical(f, level)?;
+        write!(f, ") {} (", operator.value())?;
+        right.fmt_hierarchical(f, level)?;
+        write!(f, ")")
+      },
+      
+      ExpressionData::Call { callee, arguments } => {
+        write!(f, "(")?;
+        callee.fmt_hierarchical(f, level)?;
+        write!(f, ")")?;
+
+        let mut iter = arguments.iter().peekable();
+
+        while let Some(arg_expr) = iter.next() {
+          arg_expr.fmt_hierarchical(f, level)?;
+
+          if iter.peek().is_some() { write!(f, ", ")?; }
+        }
+
+        write!(f, ")")
+      },
+    }
+  }
+}
+
+
+impl Display for StatementData {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl HierarchicalDisplay for StatementData {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+    match self {
+      StatementData::Expression(expr) => expr.fmt_hierarchical(f, level),
+      StatementData::Block(block) => block.fmt_hierarchical(f, level),
+      StatementData::Conditional(conditional) => conditional.fmt_hierarchical(f, level),
+
+      StatementData::Declaration { identifier, explicit_type, initializer } => {
+        write!(f, "let {}", identifier)?;
+
+        if let Some(explicit_texpr) = explicit_type {
+          write!(f, ": {}", explicit_texpr)?;
+        }
+
+        if let Some(initializer_expr) = initializer {
+          write!(f, " = ")?;
+          initializer_expr.fmt_hierarchical(f, level)?;
+        }
+
+        Ok(())
+      },
+
+      StatementData::Assignment { target, value } => {
+        target.fmt_hierarchical(f, level)?;
+
+        write!(f, " = ")?;
+
+        value.fmt_hierarchical(f, level)
+      },
+
+      StatementData::ModAssignment { target, value, operator } => {
+        target.fmt_hierarchical(f, level)?;
+
+        write!(f, " {} ", operator.value())?;
+
+        value.fmt_hierarchical(f, level)
+      },
+
+      StatementData::Return(value) => {
+        write!(f, "return")?;
+
+        if let Some(value_expr) = value {
+          value_expr.fmt_hierarchical(f, level)?;
+        }
+
+        Ok(())
+      },
+    }
+  }
+}
+
+
+
+impl Display for Block {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl HierarchicalDisplay for Block {
+  fn fmt_hierarchical (&self, f: &mut Formatter, mut level: usize) -> FMTResult {
+    write!(f, "{{\n")?;
+    level += 1;
+
+    for stmt in self.statements.iter() {    
+      Padding.fmt_hierarchical(f, level)?;
+
+      stmt.fmt_hierarchical(f, level)?;
+
+      if stmt.requires_semi() {
+        write!(f, ";")?;
+      }
+
+      write!(f, "\n")?;
+    }
+
+    if let Some(trail_expr) = &self.trailing_expression {
+      trail_expr.fmt_hierarchical(f, level)?;
+    }
+
+    level -= 1;
+    Padding.fmt_hierarchical(f, level)?;
+    write!(f, "}}")
+  }
+}
+
+
+
+impl Display for ConditionalBranch {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl HierarchicalDisplay for ConditionalBranch {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+    write!(f, "if ")?;
+
+    self.condition.fmt_hierarchical(f, level)?;
+
+    self.body.fmt_hierarchical(f, level)
+  }
+}
+
+
+impl Display for Conditional {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl HierarchicalDisplay for Conditional {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+    self.if_branch.fmt_hierarchical(f, level)?;
+
+    for elif in self.else_if_branches.iter() {
+      write!(f, "else ")?;
+      elif.fmt_hierarchical(f, level)?;
+    }
+
+    if let Some(els) = &self.else_block {
+      write!(f, "else ")?;
+      els.fmt_hierarchical(f, level)?
+    }
+
+    Ok(())
+  }
+}
+
+
+
+impl Display for ItemData {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl HierarchicalDisplay for ItemData {
+  fn fmt_hierarchical (&self, f: &mut Formatter, mut level: usize) -> FMTResult {
+    match self {
+      ItemData::Alias { data, .. } => {
+        write!(f, "alias {{\n")?;
+        level += 1;
+
+        let mut iter = data.iter().peekable();
+        
+        while let Some(PseudonymData { path, new_name, .. }) = iter.next() {
+          Padding.fmt_hierarchical(f, level)?;
+
+          write!(f, "{}", path)?;
+
+          if let Some(ident) = new_name {
+            write!(f, " as {}", ident)?;
+          }
+
+          if iter.peek().is_some() {
+            write!(f, ",")?;
+          }
+
+          write!(f, "\n")?;
+        }
+
+        level -= 1;
+        Padding.fmt_hierarchical(f, level)?;
+        write!(f, "}}")
+      },
+
+      ItemData::Export { data, .. } => {
+        write!(f, "export ")?;
+
+        match data {
+          ExportData::Inline(item) => item.fmt_hierarchical(f, level),
+          ExportData::List(entries) => {
+            write!(f, "{{\n")?;
+            level += 1;
+
+            let mut iter = entries.iter().peekable();
+        
+            while let Some(PseudonymData { path, new_name, .. }) = iter.next() {
+              Padding.fmt_hierarchical(f, level)?;
+
+              write!(f, "{}", path)?;
+
+              if let Some(ident) = new_name {
+                write!(f, " as {}", ident)?;
+              }
+
+              if iter.peek().is_some() {
+                write!(f, ",")?;
+              }
+
+              write!(f, "\n")?;
+            }
+
+            level -= 1;
+            Padding.fmt_hierarchical(f, level)?;
+            write!(f, "}}")
+          }
+        }
+      },
+
+      ItemData::Namespace { identifier, items, .. } => {
+        write!(f, "ns {} {{\n", identifier)?;
+        level += 1;
+
+        let mut iter = items.iter().peekable();
+    
+        while let Some(item) = iter.next() {
+          Padding.fmt_hierarchical(f, level)?;
+
+          item.fmt_hierarchical(f, level)?;
+
+          if iter.peek().is_some()
+          && !matches!(&item.data, // these items will never require semis the way we are printing them
+              ItemData::Namespace { .. }
+            | ItemData::Alias     { .. }
+            | ItemData::Struct    { .. }
+            | ItemData::Export { data: ExportData::List(_), .. }
+          )
+          && item.requires_semi() {
+            write!(f, ";")?;
+          }
+
+          write!(f, "\n")?;
+        }
+
+        level -= 1;
+        Padding.fmt_hierarchical(f, level)?;
+        write!(f, "}}")
+      },
+
+      ItemData::Type { identifier, type_expression } => {
+        write!(f, "type {}: ", identifier)?;
+        type_expression.fmt_hierarchical(f, level)
+      },
+
+      ItemData::Struct { identifier, fields, .. } => {
+        write!(f, "struct {} {{\n", identifier)?;
+        level += 1;
+
+        let mut iter = fields.iter().peekable();
+    
+        while let Some(LocalDeclaration { identifier, ty, .. }) = iter.next() {
+          Padding.fmt_hierarchical(f, level)?;
+
+          write!(f, "{}: ", identifier)?;
+
+          ty.fmt_hierarchical(f, level)?;
+
+          if iter.peek().is_some() {
+            write!(f, ",")?;
+          }
+
+          write!(f, "\n")?;
+        }
+
+        level -= 1;
+        Padding.fmt_hierarchical(f, level)?;
+        write!(f, "}}")
+      },
+
+      ItemData::Global { identifier, explicit_type, initializer } => {
+        write!(f, "global {}: ", identifier)?;
+
+        explicit_type.fmt_hierarchical(f, level)?;
+
+        if let Some(initializer_expr) = initializer {
+          write!(f, " = ")?;
+          initializer_expr.fmt_hierarchical(f, level)?;
+        }
+
+        Ok(())
+      },
+
+      ItemData::Function { identifier, parameters, return_type, body } => {
+        write!(f, "fn {}", identifier)?;
+
+        if !parameters.is_empty() {
+          write!(f, " (")?;
+
+          let mut iter = parameters.iter().peekable();
+          
+          while let Some(LocalDeclaration { identifier, ty, .. }) = iter.next() {
+            write!(f, "{}: ", identifier)?;
+
+            ty.fmt_hierarchical(f, level)?;
+
+            if iter.peek().is_some() {
+              write!(f, ", ")?;
+            }
+          }
+
+          write!(f, ")")?;
+        }
+
+        if let Some(return_texpr) = return_type {
+          write!(f, " -> ")?;
+          return_texpr.fmt_hierarchical(f, level)?;
+        }
+
+        if let Some(body_block) = body {
+          write!(f, " ")?;
+          body_block.fmt_hierarchical(f, level)?;
+        }
+
+        Ok(())
+      }
+    }
   }
 }
