@@ -32,15 +32,12 @@ pub fn type_expression (parser: &mut Parser) -> Option<TypeExpression> {
 
 
 fn tpx_path_or_ident (parser: &mut Parser) -> Option<TypeExpression> {
-  let (path_or_ident, origin) = path(parser)?;
+  let (origin, data) = match path(parser)? {
+    Either::A(path)  => (path.origin, TypeExpressionData::Path(path)),
+    Either::B((ident, origin)) => (origin, TypeExpressionData::Identifier(ident)),
+  };
 
-  Some(TypeExpression::new(
-    match path_or_ident {
-      Either::A(path)  => TypeExpressionData::Path(path),
-      Either::B(ident) => TypeExpressionData::Identifier(ident),
-    },
-    origin
-  ))
+  Some(TypeExpression::new(data, origin))
 }
 
 fn tpx_pointer (parser: &mut Parser) -> Option<TypeExpression> {

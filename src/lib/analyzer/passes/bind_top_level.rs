@@ -1,6 +1,6 @@
 use crate::{
   common::{ Identifier, },
-  ast::{ self, Item, ItemData, ExportData, PseudonymData, },
+  ast::{ self, Item, ItemData, ExportData, PseudonymData, Path, },
   ctx::{ ContextKey, Namespace, Type, Global, Function, },
 };
 
@@ -62,7 +62,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
             pseudonyms.push(Pseudonym {
               destination_namespace,
               kind: PseudonymKind::Export,
-              payload: PseudonymPayload::Path(identifier.clone().into()),
+              payload: PseudonymPayload::Path(Path::new(false, vec![ identifier.clone() ], type_item.origin)),
               relative_to: destination_namespace,
               new_name: identifier.clone(),
               origin: item.origin,

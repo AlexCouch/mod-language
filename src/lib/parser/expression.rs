@@ -55,15 +55,12 @@ pub fn expression (parser: &mut Parser) -> Option<Expression> {
 
 
 fn pfx_path_or_ident (parser: &mut Parser) -> Option<Expression> {
-  let (path_or_ident, origin) = path(parser)?;
+  let (origin, data) = match path(parser)? {
+    Either::A(path)  => (path.origin, ExpressionData::Path(path)),
+    Either::B((ident, origin)) => (origin, ExpressionData::Identifier(ident)),
+  };
 
-  Some(Expression::new(
-    match path_or_ident {
-      Either::A(path)  => ExpressionData::Path(path),
-      Either::B(ident) => ExpressionData::Identifier(ident),
-    },
-    origin
-  ))
+  Some(Expression::new(data, origin))
 }
 
 fn pfx_number (parser: &mut Parser) -> Option<Expression> {

@@ -13,41 +13,52 @@ use crate::{
 
 /// A series of identifiers representing a hierarchical path
 #[allow(missing_docs)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone)]
 pub struct Path {
   pub absolute: bool,
   pub chain: Vec<Identifier>,
+  pub origin: SourceRegion,
+}
+
+impl PartialEq for Path {
+  #[inline] fn eq (&self, other: &Self) -> bool { self.absolute == other.absolute && self.chain == other.chain }
 }
 
 impl Path {
-  /// Create a new Path and its chain hash
-  pub fn new (absolute: bool, chain: Vec<Identifier>) -> Self {
+  /// Create a new Path 
+  pub fn new (absolute: bool, chain: Vec<Identifier>, origin: SourceRegion) -> Self {
     Self {
       absolute,
       chain,
+      origin
     }
   }
 
-  
-  /// Create a new Path and its chain hash by extending an existing Path and rehashing
-  pub fn extend<I: Into<Identifier>> (&self, extension: I) -> Self {
-    let mut chain = self.chain.clone();
-    chain.push(extension.into());
-    Self::new(self.absolute, chain)
+  /// Create a new Path with an anonymous source origin
+  pub fn no_src (absolute: bool, chain: Vec<Identifier>) -> Self {
+    Self::new(absolute, chain, SourceRegion::ANONYMOUS)
   }
 
   
-  /// Update a Path and its chain hash by extending and rehashing
+  /// Create a new Path by extending an existing Path
+  pub fn extend<I: Into<Identifier>> (&self, extension: I) -> Self {
+    let mut chain = self.chain.clone();
+    chain.push(extension.into());
+    Self::new(self.absolute, chain, self.origin)
+  }
+
+  
+  /// Update a Path by extending
   pub fn extend_in_place<I: Into<Identifier>> (&mut self, extension: I) {
     self.chain.push(extension.into());
   }
 
-  /// Create a new Path and its chain hash by extending an existing Path and rehashing
+  /// Create a new Path by extending an existing Path
   pub fn extend_multi<I: IntoIterator<Item = Identifier>> (&self, extension: I) -> Self {
-    Self::new(self.absolute, self.chain.iter().map(|i| i.to_owned()).chain(extension.into_iter()).collect())
+    Self::new(self.absolute, self.chain.iter().map(|i| i.to_owned()).chain(extension.into_iter()).collect(), self.origin)
   }
 
-  /// Update a Path and its chain hash by extending and rehashing
+  /// Update a Path by extending
   pub fn extend_in_place_multi<I: IntoIterator<Item = Identifier>> (&mut self, extension: I) {
     for ident in extension.into_iter() {
       self.chain.push(ident)
@@ -72,13 +83,6 @@ impl Deref for Path {
   #[inline] fn deref (&self) -> &Self::Target { &self.chain }
 }
 
-impl<T: Into<Identifier>> From<T> for Path {
-  #[inline] fn from (i: T) -> Self { Self::new(false, vec![ i.into() ]) }
-}
-
-impl<T: Into<Identifier>> From<Vec<T>> for Path {
-  #[inline] fn from (vec: Vec<T>) -> Self { Self::new(false, vec.into_iter().map(|i| i.into()).collect()) }
-}
 
 impl Display for Path {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
@@ -145,10 +149,6 @@ impl From<Path> for TypeExpressionData {
   #[inline] fn from (path: Path) -> Self { Self::Path(path) }
 }
 
-impl From<Vec<Identifier>> for TypeExpressionData {
-  #[inline] fn from (path: Vec<Identifier>) -> Self { Self::Path(path.into()) }
-}
-
 /// A syntactic element referencing or describing a type
 #[allow(missing_docs)]
 #[derive(Clone)]
@@ -189,7 +189,7 @@ impl TypeExpression {
 
 /// An enum containing the particular variant of an expression
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionData {
   Identifier(Identifier),
   Path(Path),
@@ -225,9 +225,6 @@ impl From<Path> for ExpressionData {
   #[inline] fn from (path: Path) -> Self { Self::Path(path) }
 }
 
-impl From<Vec<Identifier>> for ExpressionData {
-  #[inline] fn from (path: Vec<Identifier>) -> Self { Self::Path(path.into()) }
-}
 
 impl From<Number> for ExpressionData {
   #[inline] fn from (num: Number) -> Self { Self::Number(num) }
@@ -242,6 +239,7 @@ impl From<f64> for ExpressionData {
 }
 
 /// A syntactic element forming a sequence of actions or a reference
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Expression {
   pub data: ExpressionData,
@@ -281,7 +279,7 @@ impl Expression {
 
 /// An enum containing the particular variant of a statement
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StatementData {
   Expression(Expression),
   Declaration { identifier: Identifier, explicit_type: Option<TypeExpression>, initializer: Option<Expression> },
@@ -316,6 +314,7 @@ impl StatementData {
 }
 
 /// A syntactic element forming a single action or control flow choice
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Statement {
   pub data: StatementData,
@@ -361,6 +360,7 @@ impl Statement {
 
 
 /// A series of Statements and an optional trailing Expression
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Block {
   pub statements: Vec<Statement>,
@@ -399,6 +399,7 @@ impl Block {
 }
 
 /// An individual conditional Block and its predicate Expression
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct ConditionalBranch {
   pub condition: Expression,
@@ -437,6 +438,7 @@ impl ConditionalBranch {
 }
 
 /// A set of 1 or more sequenced ConditionalBranches and an optional else Block
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Conditional {
   pub if_branch: ConditionalBranch,
@@ -480,7 +482,7 @@ impl Conditional {
 
 /// Data associated with a pseudonym, either an alias or an export
 #[allow(missing_docs)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PseudonymData {
   pub path: Path,
   pub new_name: Option<Identifier>,
@@ -489,7 +491,7 @@ pub struct PseudonymData {
 
 /// The data associated with an Export
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExportData {
   List(Vec<PseudonymData>),
   Inline(Box<Item>),
@@ -497,7 +499,7 @@ pub enum ExportData {
 
 
 /// An enum containing the particular variant of an Item
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
   Alias { data: Vec<PseudonymData>, terminal: bool },
@@ -531,6 +533,7 @@ impl ItemData {
 }
 
 /// A syntactic element forming a single top-level entity such as a function or global variable
+#[derive(Clone)]
 #[allow(missing_docs)]
 pub struct Item {
   pub data: ItemData,

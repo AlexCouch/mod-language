@@ -5,7 +5,7 @@ use crate::{
   source::{ SourceRegion, SOURCE_MANAGER, },
   common::{ Keyword::*, Operator::*, ITEM_KEYWORDS, Identifier, },
   token::{ Token, TokenData, },
-  ast::{ Item, ItemData, ExportData, PseudonymData, LocalDeclaration, },
+  ast::{ Item, ItemData, ExportData, PseudonymData, LocalDeclaration, Path, },
   lexer::{ Lexer, },
 };
 
@@ -52,19 +52,17 @@ fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, S
 }
 
 fn get_single_pseudonym (parser: &mut Parser) -> Option<(PseudonymData, SourceRegion)> {
-  let (path_or_ident, origin) = path(parser)?;
-  
-  let path = match path_or_ident {
-    Either::A(path) => path,
-    Either::B(ident) => ident.into()
+  let path = match path(parser)? {
+    Either::A(path)  => path,
+    Either::B((ident, origin)) => Path::new(false, vec![ ident ], origin),
   };
 
   let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
       
   let (new_name, origin) = if let Some((new_name, new_origin)) = new_name_and_origin {
-    (Some(new_name), SourceRegion::merge(origin, new_origin))
+    (Some(new_name), SourceRegion::merge(path.origin, new_origin))
   } else {
-    (None, origin)
+    (None, path.origin)
   };
 
   if new_name.is_none() && path.is_empty() {

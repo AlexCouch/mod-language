@@ -1,6 +1,5 @@
 use crate::{
   common::{ Identifier, },
-  source::{ SourceRegion, },
   ctx::{ ContextKey, ContextItem, TypeData, },
   ast::{ TypeExpression, TypeExpressionData, Path, },
 };
@@ -23,7 +22,7 @@ pub fn resolve_pseudonyms (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudon
 
 fn resolve_pseudonym (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, pseudonym: Pseudonym) -> Option<ContextKey> {
   let resolved_key = match &pseudonym.payload {
-    PseudonymPayload::Path(path) => resolve_path(analyzer, pseudonyms, pseudonym.relative_to, path, pseudonym.origin)?,
+    PseudonymPayload::Path(path) => resolve_path(analyzer, pseudonyms, pseudonym.relative_to, path)?,
     PseudonymPayload::TypeExpression(texpr) => resolve_texpr(analyzer, pseudonyms, pseudonym.relative_to, texpr)?,
   };
 
@@ -89,7 +88,7 @@ fn try_get_pseudonym (pseudonyms: &mut Vec<Pseudonym>, in_namespace: ContextKey,
 }
 
 
-fn resolve_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relative_to: ContextKey, path: &Path, origin: SourceRegion) -> Option<ContextKey> {
+fn resolve_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relative_to: ContextKey, path: &Path) -> Option<ContextKey> {
   let mut base_name = Identifier::default();
               
   let mut resolved_key = relative_to;
@@ -110,7 +109,7 @@ fn resolve_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relat
         } else if let Some(core) = analyzer.context.core_bs.get_entry(ident) {
           core
         } else {
-          analyzer.error(origin, format!("Namespace `{}` does not have access to an item named `{}`", base_name, ident));
+          analyzer.error(path.origin, format!("Namespace `{}` does not have access to an item named `{}`", base_name, ident));
           return None
         }
       } else if let Some(exported_key) = namespace.export_bindings.get_entry(ident) {
@@ -120,11 +119,11 @@ fn resolve_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relat
         // TODO should unresolved pseudonyms link an error item? (probably)
         resolve_pseudonym(analyzer, pseudonyms, pseudonym)?
       } else {
-        analyzer.error(origin, format!("Namespace `{}` does not export an item named `{}`", base_name, ident));
+        analyzer.error(path.origin, format!("Namespace `{}` does not export an item named `{}`", base_name, ident));
         return None
       };
     } else {
-      analyzer.error(origin, format!("{} is not a Namespace and has no exports", ident));
+      analyzer.error(path.origin, format!("{} is not a Namespace and has no exports", ident));
       return None
     }
   }
@@ -135,8 +134,8 @@ fn resolve_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relat
 
 fn resolve_texpr (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relative_to: ContextKey, texpr: &TypeExpression) -> Option<ContextKey> {
   match &texpr.data {
-    TypeExpressionData::Identifier(ident) => resolve_path(analyzer, pseudonyms, relative_to, &Path::from(ident.clone()), texpr.origin),
-    TypeExpressionData::Path(path) => resolve_path(analyzer, pseudonyms, relative_to, &path, texpr.origin),
+    TypeExpressionData::Identifier(ident) => resolve_path(analyzer, pseudonyms, relative_to, &Path::new(false, vec![ ident.clone() ], texpr.origin)),
+    TypeExpressionData::Path(path) => resolve_path(analyzer, pseudonyms, relative_to, &path),
     TypeExpressionData::Pointer(box sub_texpr) => {
       let sub_key = resolve_texpr(analyzer, pseudonyms, relative_to, sub_texpr)?;
 
