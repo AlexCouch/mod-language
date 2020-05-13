@@ -23,26 +23,36 @@ use crate::{
 pub struct Context {
   /// Storage for all top-level items discovered by a semantic analyzer
   pub items: SlotMap<ContextKey, ContextItem>,
-  /// The Bindspace containing compiler intrinsics for a Context
+
+  /// The Bindspace containing compiler intrinsics for a Context, as well as Modules encountered during analysis
   pub core_bs: GlobalBindspace,
   /// The Namespace containing compiler intrinsics for a Context
   pub core_ns: ContextKey,
-  /// The root Namespace for the library represented by a Context
-  pub lib_ns: ContextKey,
+  /// The Module containing compiler intrinsics for a Context,
+  pub core_mod: ContextKey,
+
+  /// The root Namespace for the module represented by a Context
+  pub main_ns: ContextKey,
+  /// The root Module represented by a Context
+  pub main_mod: ContextKey,
+
   /// The key given as a result of a type error
   pub err_ty: ContextKey,
+  /// Coercible type representing integer literals
+  pub int_ty: ContextKey,
+  /// Coercible type representing floating point literals
+  pub float_ty: ContextKey,
+
   /// The return type of functions that do not return a value
   pub void_ty: ContextKey,
   /// The type of logical expressions
   pub bool_ty: ContextKey,
-  /// Coercible type representing integer literals
-  pub int_ty: ContextKey,
+
   /// Concrete type the coercible integer type becomes without inferrence
   pub concrete_int_ty: ContextKey,
-  /// Coercible type representing floating point literals
-  pub float_ty: ContextKey,
   /// Concrete type the coercible floating point type becomes without inferrence
   pub concrete_float_ty: ContextKey,
+
   /// Anonymous type lookup helper
   pub anon_types: HashMap<TypeData, ContextKey>,
 }
@@ -52,66 +62,83 @@ impl Default for Context {
 }
 
 impl Context {
-  /// Create a new semantic analysis context, and initialize it with the core primitives, namespace, and Bindspace, as well as an empty library root namespace
+  /// Create a new semantic analysis context, and initialize it with the core primitives,
+  /// namespace, and bindspace, module, as well as a root module
   pub fn new () -> Self {
     const PRIMITIVE_TYPES: &[(&str, TypeData)] = &[
       ("void", TypeData::Primitive(PrimitiveType::Void)),
+      
       ("bool", TypeData::Primitive(PrimitiveType::Bool)),
+
       ("u8",   TypeData::Primitive(PrimitiveType::Integer { signed: false, bit_size: 8 })),
       ("u16",  TypeData::Primitive(PrimitiveType::Integer { signed: false, bit_size: 16 })),
       ("u32",  TypeData::Primitive(PrimitiveType::Integer { signed: false, bit_size: 32 })),
       ("u64",  TypeData::Primitive(PrimitiveType::Integer { signed: false, bit_size: 64 })),
+
       ("s8",   TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 8 })),
       ("s16",  TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 16 })),
       ("s32",  TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 32 })),
       ("s64",  TypeData::Primitive(PrimitiveType::Integer { signed: true,  bit_size: 64 })),
+
       ("f32",  TypeData::Primitive(PrimitiveType::FloatingPoint { bit_size: 32 })),
       ("f64",  TypeData::Primitive(PrimitiveType::FloatingPoint { bit_size: 64 })),
     ];
 
     let mut items: SlotMap<ContextKey, ContextItem> = SlotMap::default();
-    let core_key = items.insert(Namespace::new(None, "core".into(), SourceRegion::ANONYMOUS).into());
-    let mut core_bs  = Bindspace::default();
+    let core_ns = items.insert(Namespace::new(ContextKey::default(), None, "core".into(), SourceRegion::ANONYMOUS).into());
+    let core_mod = items.insert(Module::new("core".into(), false, core_ns).into());
+
+    unsafe { items.get_unchecked_mut(core_ns).mut_namespace_unchecked() }.parent_module = core_mod;
+
+    let mut core_bs = Bindspace::default();
 
     for &(name, ref td) in PRIMITIVE_TYPES.iter() {
-      let key = items.insert(Type::new(Some(core_key), Some(name.into()), SourceRegion::ANONYMOUS, Some(td.clone())).into());
+      let key = items.insert(Type::new(Some(core_mod), Some(core_ns), Some(name.into()), SourceRegion::ANONYMOUS, Some(td.clone())).into());
 
       core_bs.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
       
-      let core_ns = unsafe { items.get_unchecked_mut(core_key).mut_namespace_unchecked() };
+      let core_ns = unsafe { items.get_unchecked_mut(core_ns).mut_namespace_unchecked() };
       core_ns.local_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
       core_ns.export_bindings.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
     }
 
-    
-    let err_ty = items.insert(Type::new(None, Some("err_ty".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
-    let int_ty = items.insert(Type::new(None, Some("int".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::Integer))).into());
-    let float_ty = items.insert(Type::new(None, Some("float".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::FloatingPoint))).into());
+    let err_ty = items.insert(Type::new(None, None, Some("{{ type error }}".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
+    let int_ty = items.insert(Type::new(None, None, Some("int".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::Integer))).into());
+    let float_ty = items.insert(Type::new(None, None, Some("float".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::FloatingPoint))).into());
+
     let void_ty = core_bs.get_entry("void").unwrap();
     let bool_ty = core_bs.get_entry("bool").unwrap();
+
     let concrete_int_ty = core_bs.get_entry("s32").unwrap();
     let concrete_float_ty = core_bs.get_entry("f32").unwrap();
 
+    core_bs.set_entry_bound("core", core_ns, SourceRegion::ANONYMOUS);
 
-    core_bs.set_entry_bound("core", core_key, SourceRegion::ANONYMOUS);
+    let main_ns = items.insert(Namespace::new(ContextKey::default(), None, "module".into(), SourceRegion::ANONYMOUS).into());
+    core_bs.set_entry_bound("module", main_ns, SourceRegion::ANONYMOUS);
 
-    let lib_ns = Namespace::new(None, "lib".into(), SourceRegion::ANONYMOUS);
-    let lib_key = items.insert(lib_ns.into());
-    core_bs.set_entry_bound("lib", lib_key, SourceRegion::ANONYMOUS);
+    let main_mod = items.insert(Module::new("main".into(), true, main_ns).into());
+
+    unsafe { items.get_unchecked_mut(main_ns).mut_namespace_unchecked() }.parent_module = main_mod;
 
     Self {
       items,
 
       core_bs,
-      core_ns: core_key,
-      lib_ns: lib_key,
+      core_ns,
+      core_mod,
+
+      main_ns,
+      main_mod,
 
       err_ty,
+      int_ty,
+      float_ty,
+
       void_ty,
       bool_ty,
-      int_ty,
+
       concrete_int_ty,
-      float_ty,
       concrete_float_ty,
 
       anon_types: HashMap::default(),
@@ -286,11 +313,37 @@ impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for BindspaceIterMut<'a, K> {
 }
 
 
+/// The top level compilation unit of source for a semantic analyzer,
+/// synonymous with packages, libraries, compilation unit etc
+#[derive(Debug, Clone)]
+pub struct Module {
+  /// The canonical, original name of a Module
+  pub canonical_name: Identifier,
+  /// Indicates whether a Module is the main module being compiled,
+  /// or a dependency compiled separately
+  pub is_main: bool,
+  /// The top level Namespace containing all of a Module's Items
+  pub namespace: ContextKey,
+}
 
-/// The basic unit of source for a semantic analyzer,
+impl Module {
+  /// Create a new semantic analysis Module
+  pub fn new (canonical_name: Identifier, is_main: bool, namespace: ContextKey) -> Self {
+    Self {
+      canonical_name,
+      is_main,
+      namespace,
+    }
+  }
+}
+
+
+/// The basic unit of source for a Module in a semantic analyzer,
 /// serves as a container for types, values, and other namespaces
 #[derive(Debug, Clone)]
 pub struct Namespace {
+  /// The Module a namespace was created in
+  pub parent_module: ContextKey,
   /// Immediate hierarchical ancestor of a Namespace, if any
   pub parent_namespace: Option<ContextKey>,
   /// The canonical, original name of a Namespace
@@ -305,8 +358,9 @@ pub struct Namespace {
 
 impl Namespace {
   /// Create a new semantic analysis Namespace, and initialize its parent key
-  pub fn new (parent_namespace: Option<ContextKey>, canonical_name: Identifier, origin: SourceRegion) -> Self {
+  pub fn new (parent_module: ContextKey, parent_namespace: Option<ContextKey>, canonical_name: Identifier, origin: SourceRegion) -> Self {
     Self {
+      parent_module,
       parent_namespace,
       canonical_name,
       local_bindings: Bindspace::default(),
@@ -397,7 +451,9 @@ impl TypeData {
 /// Any Type known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Type {
-  /// The namespace a Type was defined in, if it is not an anonymous type
+  /// The Module a Type was defined in, if it is not an anonymous Type
+  pub parent_module: Option<ContextKey>,
+  /// The Namespace a Type was defined in, if it is not an anonymous type
   pub parent_namespace: Option<ContextKey>,
   /// The canonical, original name of a Type
   pub canonical_name: Option<Identifier>,
@@ -409,8 +465,9 @@ pub struct Type {
 
 impl Type {
   /// Create a new Type and initialize its canonical name, origin, and optionally its data
-  pub fn new (parent_namespace: Option<ContextKey>, canonical_name: Option<Identifier>, origin: SourceRegion, data: Option<TypeData>) -> Self {
+  pub fn new (parent_module: Option<ContextKey>, parent_namespace: Option<ContextKey>, canonical_name: Option<Identifier>, origin: SourceRegion, data: Option<TypeData>) -> Self {
     Self {
+      parent_module,
       parent_namespace,
       canonical_name,
       data,
@@ -492,7 +549,7 @@ impl<'a> Display for TypeDisplay<'a> {
             write!(f, " {}: {}", field_name, self.descend(field_type))?;
 
             if iter.peek().is_some() { write!(f, ", " )?; }
-        }
+          }
 
           write!(f, " }}")?;
         },
@@ -510,7 +567,9 @@ impl<'a> Display for TypeDisplay<'a> {
 /// Any Global known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Global {
-  /// The namespace a Global was defined in
+  /// The Module a Global was defined in
+  pub parent_module: ContextKey,
+  /// The Namespace a Global was defined in
   pub parent_namespace: ContextKey,
   /// The canonical, original name of a Global
   pub canonical_name: Identifier,
@@ -524,8 +583,9 @@ pub struct Global {
 
 impl Global {
   /// Create a new Global and initialize its canonical name, origin, and optionally its type
-  pub fn new (parent_namespace: ContextKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
+  pub fn new (parent_module: ContextKey, parent_namespace: ContextKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
     Self {
+      parent_module,
       parent_namespace,
       canonical_name,
       ty,
@@ -538,7 +598,9 @@ impl Global {
 /// Any Function known by a semantic analyzer
 #[derive(Debug, Clone)]
 pub struct Function {
-  /// The namespace a Function was defined in
+  /// The Module a Function was defined in
+  pub parent_module: ContextKey,
+  /// The Namespace a Function was defined in
   pub parent_namespace: ContextKey,
   /// The canonical, original name of a Function
   pub canonical_name: Identifier,
@@ -556,8 +618,9 @@ pub struct Function {
 
 impl Function {
   /// Create a new Function and initialize its canonical name, origin, and optionally its type
-  pub fn new (parent_namespace: ContextKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
+  pub fn new (parent_module: ContextKey, parent_namespace: ContextKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
     Self {
+      parent_module,
       parent_namespace,
       canonical_name,
       params: Vec::new(),
@@ -572,8 +635,10 @@ impl Function {
 
 /// A top-level item known by a semantic analyzer
 #[allow(missing_docs)]
+#[allow(clippy::large_enum_variant)] // cant do anything about this under the current architecture
 #[derive(Debug, Clone)]
 pub enum ContextItem {
+  Module(Module),
   Namespace(Namespace),
   Type(Type),
   Global(Global),
@@ -742,12 +807,31 @@ impl ContextItem {
   /// Get the ContextItemKind of a ContextItem
   pub fn kind (&self) -> ContextItemKind {
     match self {
-      Self::Namespace(_)   => ContextItemKind::Namespace,
-      Self::Type(_)     => ContextItemKind::Type,
-      Self::Global(_)   => ContextItemKind::Global,
-      Self::Function(_) => ContextItemKind::Function,
+      Self::Module(_)    => ContextItemKind::Module,
+      Self::Namespace(_) => ContextItemKind::Namespace,
+      Self::Type(_)      => ContextItemKind::Type,
+      Self::Global(_)    => ContextItemKind::Global,
+      Self::Function(_)  => ContextItemKind::Function,
     }
   }
+
+  /// Convert a reference to a ContextItem into an optional reference to a Module
+  #[inline] pub fn ref_module (&self) -> Option<&Module> { match self { Self::Module(item) => Some(item), _ => None } }
+
+  /// Convert a reference to a ContextItem into an optional reference to a Module
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn ref_module_unchecked (&self) -> &Module { if cfg!(debug_assertions) { self.ref_module().unwrap() } else if let Self::Module(item) = self { item } else { unreachable_unchecked() } }
+
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Module
+  #[inline] pub fn mut_module (&mut self) -> Option<&mut Module> { match self { Self::Module(item) => Some(item), _ => None } }
+
+  /// Convert a mutable reference to a ContextItem into an optional mutable reference to a Module
+  /// # Safety
+  /// This only performs an assertion on the variant if debug_assertions is enabled,
+  /// it is up to the caller to determine the safety of this transformation
+  #[inline] pub unsafe fn mut_module_unchecked (&mut self) -> &mut Module { if cfg!(debug_assertions) { self.mut_module().unwrap() } else if let Self::Module(item) = self { item } else { unreachable_unchecked() } }
 
 
   /// Convert a reference to a ContextItem into an optional reference to a Namespace
@@ -823,6 +907,7 @@ impl ContextItem {
   #[inline] pub unsafe fn mut_function_unchecked (&mut self) -> &mut Function { if cfg!(debug_assertions) { self.mut_function().unwrap() } else if let Self::Function(item) = self { item } else { unreachable_unchecked() } }
 }
 
+impl From<Module> for ContextItem { #[inline] fn from (item: Module) -> ContextItem { Self::Module(item) } }
 impl From<Namespace> for ContextItem { #[inline] fn from (item: Namespace) -> ContextItem { Self::Namespace(item) } }
 impl From<Type> for ContextItem { #[inline] fn from (item: Type) -> ContextItem { Self::Type(item) } }
 impl From<Global> for ContextItem { #[inline] fn from (item: Global) -> ContextItem { Self::Global(item) } }
@@ -833,6 +918,7 @@ impl From<Function> for ContextItem { #[inline] fn from (item: Function) -> Cont
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ContextItemKind {
+  Module,
   Namespace,
   Type,
   Global,
@@ -842,6 +928,7 @@ pub enum ContextItemKind {
 impl Display for ContextItemKind {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
     write!(f, "{}", match self {
+      Self::Module => "Module",
       Self::Namespace => "Namespace",
       Self::Type => "Type",
       Self::Global => "Global",

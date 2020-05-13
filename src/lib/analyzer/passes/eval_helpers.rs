@@ -55,7 +55,7 @@ pub fn eval_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) ->
   let mut base_name = Identifier::default();
                 
   let base_key = if path.absolute {
-    analyzer.context.lib_ns
+    analyzer.context.main_ns
   } else {
     analyzer.get_active_namespace_key()
   };

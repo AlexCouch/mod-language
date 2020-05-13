@@ -32,3 +32,4 @@ pub mod parser;
 pub mod ctx;
 pub mod ir;
 pub mod analyzer;
+pub mod decl_builder;

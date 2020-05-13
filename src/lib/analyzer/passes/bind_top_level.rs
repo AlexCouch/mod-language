@@ -115,6 +115,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, pseudonyms: &mut Vec<
       let new_ns = analyzer.create_item(
         identifier.to_owned(),
         Namespace::new(
+          analyzer.get_active_module_key(),
           Some(analyzer.get_active_namespace_key()),
           identifier.to_owned(),
           item.origin
@@ -134,6 +135,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, pseudonyms: &mut Vec<
     ItemData::Struct { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),
       Type::new(
+        Some(analyzer.get_active_module_key()),
         Some(analyzer.get_active_namespace_key()),
         Some(identifier.to_owned()),
         item.origin,
@@ -145,6 +147,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, pseudonyms: &mut Vec<
     ItemData::Global { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),
       Global::new(
+        analyzer.get_active_module_key(),
         analyzer.get_active_namespace_key(),
         identifier.to_owned(),
         item.origin,
@@ -156,6 +159,7 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, pseudonyms: &mut Vec<
     ItemData::Function { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),
       Function::new(
+        analyzer.get_active_module_key(),
         analyzer.get_active_namespace_key(),
         identifier.to_owned(),
         item.origin,

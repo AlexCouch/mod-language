@@ -41,6 +41,6 @@ impl Analyzer {
 
     generate_bodies(self, ast);
 
-    assert!(self.get_active_namespace_key() == self.context.lib_ns, "Internal error, a pass did not pop an active namespace");
+    assert!(self.get_active_namespace_key() == self.context.main_ns, "Internal error, a pass did not pop an active namespace");
   }
 }

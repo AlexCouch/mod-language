@@ -6,7 +6,7 @@ use crate::{
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Item, },
-  ctx::{ Context, Namespace, ContextItem, ContextKey, LocalContext, },
+  ctx::{ Context, Module, Namespace, ContextItem, ContextKey, LocalContext, },
 };
 
 
@@ -17,6 +17,8 @@ pub mod passes;
 pub struct Analyzer {
   /// All contextual information used by a semantic analyzer
   pub context: Context,
+  /// A stack of active modules being analyzed
+  pub active_modules: Vec<ContextKey>,
   /// A stack of active namespaces being analyzed
   pub active_namespaces: Vec<ContextKey>,
   /// The local context being analyzed, if any
@@ -33,10 +35,12 @@ impl Analyzer {
   /// Create a new semantic analyzer
   pub fn new () -> Self {
     let context = Context::default();
-    let active_namespaces = vec![ context.lib_ns ];
+    let active_modules = vec![ context.main_mod ];
+    let active_namespaces = vec![ context.main_ns ];
 
     Self {
       context,
+      active_modules,
       active_namespaces,
       local_context: None,
     }
@@ -51,6 +55,48 @@ impl Analyzer {
   }
 
   
+  
+  /// Push a new active module key on an Analyzer's stack
+  /// 
+  /// Panics if there is not only one (the module root) active namespace left on the stack
+  pub fn push_active_module (&mut self, key: ContextKey) {
+    assert!(
+      self.active_namespaces.len() == 1,
+      "Internal error, cannot push module with active namespaces"
+    );
+
+    self.active_modules.push(key);
+
+    self.active_namespaces.clear();
+    self.active_namespaces.push(self.context.items.get(key).unwrap().ref_module().unwrap().namespace);
+  }
+
+  /// Pops and returns active module key from an Analyzer's stack
+  ///
+  /// Panics if there is only one (the main module) active module left on the stack,
+  /// or if the active namespace stack contains more than the root namespace
+  pub fn pop_active_module (&mut self) -> ContextKey {
+    assert!(
+      self.active_modules.len() > 1,
+      "Internal error, cannot pop main module"
+    );
+
+    assert!(
+      self.active_namespaces.len() == 1,
+      "Internal error, cannot pop module with active namespaces"
+    );
+
+    let key = unsafe { self.active_modules.pop().unwrap_unchecked() };
+
+    let new_key = unsafe { *self.active_modules.last().unwrap_unchecked() };
+
+    self.active_namespaces.clear();
+    self.active_namespaces.push(self.context.items.get(new_key).unwrap().ref_module().unwrap().namespace);
+
+    key
+  }
+
+  
   /// Push a new active namespace key on an Analyzer's stack
   pub fn push_active_namespace (&mut self, key: ContextKey) {
     self.active_namespaces.push(key);
@@ -58,15 +104,31 @@ impl Analyzer {
 
   /// Pops and returns active namespace key from an Analyzer's stack
   ///
-  /// Panics if there is only one (the root) active namespace left on the stack,
-  /// or if the active namespaces counts are not identical
+  /// Panics if there is only one (the module root) active namespace left on the stack
   pub fn pop_active_namespace (&mut self) -> ContextKey {
     assert!(
       self.active_namespaces.len() > 1,
-      "Internal error, cannot pop lib namespace"
+      "Internal error, cannot pop module root namespace"
     );
 
     unsafe { self.active_namespaces.pop().unwrap_unchecked() }
+  }
+
+
+  
+  /// Get they key of the active Module in an Analyzer
+  pub fn get_active_module_key (&self) -> ContextKey {
+    unsafe { *self.active_modules.last().unwrap_unchecked() }
+  }
+
+  /// Get an immutable reference to the active Module in an Analyzer
+  pub fn get_active_module (&self) -> &Module {
+    unsafe { self.context.items.get_unchecked(self.get_active_module_key()).ref_module_unchecked() }
+  }
+  
+  /// Get a mutable reference to the active Module in an Analyzer
+  pub fn get_active_module_mut (&mut self) -> &mut Module {
+    unsafe { self.context.items.get_unchecked_mut(self.get_active_module_key()).mut_module_unchecked() }
   }
 
 
