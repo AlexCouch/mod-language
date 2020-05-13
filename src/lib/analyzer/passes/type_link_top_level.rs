@@ -21,10 +21,12 @@ pub fn type_link_top_level (analyzer: &mut Analyzer, items: &[Item]) {
       => continue,
 
       ItemData::Export { data: ExportData::Inline(item), .. } => type_link_item(analyzer, item),
-
-      | ItemData::Namespace   { .. }
-      | ItemData::Global   { .. }
-      | ItemData::Function { .. }
+      
+      | ItemData::Struct    { .. }
+      | ItemData::Type      { .. }
+      | ItemData::Namespace { .. }
+      | ItemData::Global    { .. }
+      | ItemData::Function  { .. }
       => type_link_item(analyzer, item)
     }
   }
@@ -39,6 +41,35 @@ fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
       analyzer.pop_active_namespace();
     },
 
+    ItemData::Struct { identifier, fields, .. } => {
+      let struct_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
+      
+      // its possible some shadowing error has overwritten this def and if so we just return
+      some!(analyzer.context.items.get(struct_key).unwrap().ref_type());
+
+      let mut field_names = Vec::new();
+      let mut field_types = Some(Vec::new());
+      
+      for LocalDeclaration { identifier, ty, .. } in fields.iter() {
+        field_names.push(identifier.clone());
+
+        if let Some(field_type) = eval_texpr(analyzer, ty) {
+          if let Some(field_types) = field_types.as_mut() {
+            field_types.push(field_type)
+          }
+        } else {
+          field_types = None;
+        }
+      }
+
+      if let Some(field_types) = field_types {
+        let struct_td = TypeData::Structure { field_names, field_types };
+
+        unsafe { analyzer.context.items.get_unchecked_mut(struct_key).mut_type_unchecked() }
+          .data.replace(struct_td);
+      }
+    },
+
     ItemData::Global { identifier, explicit_type, .. } => {
       let global_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
 
@@ -47,7 +78,8 @@ fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
 
       let ty = eval_texpr(analyzer, explicit_type).unwrap_or(analyzer.context.err_ty);
 
-      unsafe { analyzer.context.items.get_unchecked_mut(global_key).mut_global_unchecked() }.ty.replace(ty);
+      unsafe { analyzer.context.items.get_unchecked_mut(global_key).mut_global_unchecked() }
+        .ty.replace(ty);
     },
 
     ItemData::Function { identifier, parameters, return_type, .. } => {
@@ -74,13 +106,19 @@ fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
       // TODO itd be nice to attribute this type to just the signature portion of the function def, but the parser will need to adjust
       let fn_ty = ty_from_anon_data(analyzer, fn_td, item.origin);
 
-      let fn_data = unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() };
+      let func = unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() };
 
-      fn_data.ty.replace(fn_ty);
-      fn_data.params = param_info;
-      fn_data.return_ty = return_type;
+      func.ty.replace(fn_ty);
+      func.params = param_info;
+      func.return_ty = return_type;
     }
-    
+
+
+    // Handled in previous pass
+    | ItemData::Type   { .. }
+    => { },
+
+    // Not allowed, already produced panic in first pass
     | ItemData::Alias { .. }
     | ItemData::Export { .. }
     => unreachable!()

@@ -8,6 +8,7 @@ ns A {
 }
 
 export ns B {
+  export type S32PtrPtr: ^::C::D::S32Ptr;
   export ::C;
 }
 
@@ -17,9 +18,15 @@ export ns C {
     export X;
     export fn Y { }
     export global Z: s32 = 99;
+    export type S32Ptr: ^s32;
+    export struct MyStruct {
+      a: S32Ptr,
+      b: ::B::S32PtrPtr,
+    }
   }
 }
 
 alias A::X;
 export X as Y;
 export s32 as i32;
+export C::D::MyStruct;

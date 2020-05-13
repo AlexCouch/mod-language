@@ -19,15 +19,17 @@ use super::{
 pub fn generate_bodies (analyzer: &mut Analyzer, items: &mut Vec<Item>) {
   for item in items.iter_mut() {
     match &mut item.data {
-      | ItemData::Alias { .. }
+      | ItemData::Alias  { .. }
+      | ItemData::Type   { .. }
+      | ItemData::Struct { .. }
       | ItemData::Export { data: ExportData::List { .. }, .. }
       => continue,
       
       ItemData::Export { data: ExportData::Inline(item), .. } => generate_item(analyzer, item),
       
-      | ItemData::Namespace   { .. }
-      | ItemData::Global   { .. }
-      | ItemData::Function { .. }
+      | ItemData::Namespace { .. }
+      | ItemData::Global    { .. }
+      | ItemData::Function  { .. }
       => generate_item(analyzer, item)
     }
   }
@@ -104,6 +106,12 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
       }
     },
 
+    // Handled in previous pass
+    | ItemData::Struct { .. }
+    | ItemData::Type   { .. }
+    => { },
+
+    // Not allowed, already produced panic in first pass
     | ItemData::Alias { .. }
     | ItemData::Export { .. }
     => unreachable!()

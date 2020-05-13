@@ -7,6 +7,7 @@ use std::{
 use crate::{
   common::{ Identifier, },
   source::{ SourceRegion, },
+  ast::{ Path, TypeExpression, },
   ctx::{ ContextKey, },
 };
 
@@ -24,16 +25,25 @@ impl Display for PseudonymKind {
     write!(f, "{}", match self { PseudonymKind::Alias => "Alias", PseudonymKind::Export => "Export" })
   }
 }
-  
-/// A placeholder structure for delayed evaluation of aliass and exports
+
+/// Variant data for an Pseudonym
+#[repr(u8)]
 #[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub enum PseudonymPayload {
+  Path(Path),
+  TypeExpression(TypeExpression),
+}
+  
+/// A placeholder structure for delayed evaluation of imports and exports
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
 pub struct Pseudonym {
   pub destination_namespace: ContextKey,
   pub kind: PseudonymKind,
+  pub payload: PseudonymPayload,
   pub new_name: Identifier,
-  pub absolute: bool,
   pub relative_to: ContextKey,
-  pub chain: Vec<Identifier>,
   pub origin: SourceRegion,
 }
 

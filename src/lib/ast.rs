@@ -129,6 +129,7 @@ impl LocalDeclaration {
 pub enum TypeExpressionData {
   Identifier(Identifier),
   Path(Path),
+  Pointer(Box<TypeExpression>),
   Function { parameter_types: Vec<TypeExpression>, return_type: Box<Option<TypeExpression>> },
 }
 
@@ -502,6 +503,8 @@ pub enum ItemData {
   Alias { data: Vec<PseudonymData>, terminal: bool },
   Export { data: ExportData, terminal: bool },
 
+  Struct { identifier: Identifier, fields: Vec<LocalDeclaration>, terminal: bool, },
+  Type { identifier: Identifier, type_expression: TypeExpression },
   Namespace { identifier: Identifier, items: Vec<Item>, inline: bool },
   Global { identifier: Identifier, explicit_type: TypeExpression, initializer: Option<Expression> },
   Function { identifier: Identifier, parameters: Vec<LocalDeclaration>, return_type: Option<TypeExpression>, body: Option<Block> },
@@ -513,13 +516,15 @@ impl ItemData {
   pub fn requires_semi (&self) -> bool {
     match self {
       | ItemData::Global { .. }
+      | ItemData::Type   { .. }
       => true,
 
       ItemData::Namespace { inline, .. } => !*inline,
-
+      
       ItemData::Function { body, .. } => body.is_none(),
-
-      | ItemData::Alias { terminal, .. }
+      
+      | ItemData::Struct { terminal, .. }
+      | ItemData::Alias  { terminal, .. }
       | ItemData::Export { terminal, .. } => !*terminal,
     }
   }

@@ -242,14 +242,14 @@ pub fn ty_from_binary (analyzer: &mut Analyzer, operand_tk: ContextKey, operator
 
 
 /// Extract the Type ContextKey from a ContextItem, if it is a value item
-pub fn ty_from_global_item (global_item: &ContextItem) -> Option<ContextKey> {
-  match global_item {
+pub fn ty_from_global_item (context_item: &ContextItem) -> Option<ContextKey> {
+  match context_item {
     | &ContextItem::Global(Global { ty, .. })
     | &ContextItem::Function(Function { ty, .. })
     => ty,
 
     | ContextItem::Namespace { .. }
-    | ContextItem::Type   { .. }
+    | ContextItem::Type      { .. }
     => None
   }
 }

@@ -9,6 +9,7 @@
 #![feature(track_caller)]
 #![feature(stmt_expr_attributes)]
 #![feature(or_patterns)]
+#![feature(bindings_after_at)]
 #![feature(option_expect_none)]
 #![feature(const_fn)]
 #![feature(const_loop)]

@@ -367,6 +367,13 @@ pub enum TypeData {
     /// The type of value returned by a function, if any
     return_type: Option<ContextKey>
   },
+  /// A structural, aggregate type
+  Structure {
+    /// Names for each field of a structural type
+    field_names: Vec<Identifier>,
+    /// Types for each field of a structural type
+    field_types: Vec<ContextKey>,
+  },
 }
 
 impl TypeData {
@@ -380,6 +387,7 @@ impl TypeData {
       
       | TypeData::Primitive { .. }
       | TypeData::Coercible { .. }
+      | TypeData::Structure { .. }
       => false,
     }
   }
@@ -457,7 +465,7 @@ impl<'a> Display for TypeDisplay<'a> {
           PrimitiveType::Bool => { write!(f, "bool")?; },
           PrimitiveType::Integer { bit_size, signed } => { write!(f, "{}{}", if *signed { "s" } else { "u" }, bit_size)?; },
           PrimitiveType::FloatingPoint { bit_size } => { write!(f, "f{}", bit_size)?; },
-        }
+        },
         TypeData::Function { parameter_types, return_type } => {
           write!(f, "fn (")?;
 
@@ -474,7 +482,20 @@ impl<'a> Display for TypeDisplay<'a> {
           if let Some(return_ty) = return_type {
             write!(f, " -> {}", self.descend(*return_ty))?;
           }
+        },
+        TypeData::Structure { field_names, field_types } => {
+          writeln!(f, "struct {{")?;
+
+          let mut iter = field_names.iter().zip(field_types.iter()).peekable();
+
+          while let Some((field_name, &field_type)) = iter.next() {
+            write!(f, " {}: {}", field_name, self.descend(field_type))?;
+
+            if iter.peek().is_some() { write!(f, ", " )?; }
         }
+
+          write!(f, " }}")?;
+        },
       }
     } else {
       write!(f, "UndefinedType")?;

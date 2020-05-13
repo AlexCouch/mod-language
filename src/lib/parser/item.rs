@@ -388,6 +388,126 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
 }
 
 
+fn itm_struct (parser: &mut Parser) -> Option<Item> {
+  let (start_region, mut end_region) = if let Some(&Token { data: TokenData::Keyword(Struct), origin }) = parser.curr_tok() {
+    parser.advance();
+    (origin, origin)
+  } else {
+    unreachable!("Internal error, struct parselet called on non-struct token");
+  };
+
+  let identifier = if let Some(&Token { data: TokenData::Identifier(ref identifier), .. }) = parser.curr_tok() {
+    let identifier = identifier.clone();
+
+    parser.advance();
+
+    identifier
+  } else {
+    parser.error("Expected identifier for structure to follow struct keyword".to_owned());
+    return None;
+  };
+
+  let mut fields = Vec::new();
+
+  let terminal = if let Some(&Token { data: TokenData::Operator(LeftBracket), .. }) = parser.curr_tok() {
+    parser.advance();
+
+    loop {
+      if let Some(&Token { data: TokenData::Identifier(ref param_ident), origin: param_start }) = parser.curr_tok() {
+        let parameter_name = param_ident.clone();
+
+        parser.advance();
+
+        if let Some(&Token { data: TokenData::Operator(Colon), .. }) = parser.curr_tok() {
+          parser.advance();
+
+          if let Some(parameter_type) = type_expression(parser) {
+            if let Some(&Token { data: TokenData::Operator(op), origin: param_end }) = parser.curr_tok() {
+              fields.push(LocalDeclaration::new(parameter_name, parameter_type, SourceRegion::merge(param_start, param_end)));
+              
+              if op == Comma {
+                parser.advance();
+                
+                continue
+              } else if op == RightBracket {
+                parser.advance();
+
+                end_region = param_end;
+
+                break;
+              }
+            }
+
+            parser.error("Expected , to separate fields or } to end field list".to_owned());
+          } // else { Error has already been issued by type_expression, fall through to synchronization }
+        } else {
+          parser.error("Expected : and a type expression to follow field name".to_owned());
+        }
+      }
+
+      if parser.synchronize(sync::close_pair_or(sync::operator(LeftBracket), sync::operator(RightBracket), sync::operator(Comma))) {
+        if let Some(&Token { data: TokenData::Operator(op), .. }) = parser.curr_tok() {
+          if op == Comma {
+            parser.advance();
+            continue;
+          } else {
+            parser.advance();
+            break;
+          }
+        }
+      }
+
+      // Could not recover
+      return None
+    }
+
+    true
+  } else {
+    false
+  };
+
+  Some(Item::new(
+    ItemData::Struct { identifier, fields, terminal },
+    SourceRegion::merge(start_region, end_region)
+  ))
+}
+
+
+fn itm_type (parser: &mut Parser) -> Option<Item> {
+  if let Some(&Token { data: TokenData::Keyword(Type), origin: start_region }) = parser.curr_tok() {
+    parser.advance();
+
+    if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: mut end_region }) = parser.curr_tok() {
+      let identifier = identifier.clone();
+
+      parser.advance();
+      
+      let type_expression = if let Some(&Token { data: TokenData::Operator(Colon), .. }) = parser.curr_tok() {
+        parser.advance();
+
+        let texpr = type_expression(parser)?;
+
+        end_region = texpr.origin;
+
+        texpr
+      } else {
+        parser.error("Expected : and a type expression to follow type identifier".to_owned());
+        return None
+      };
+
+      return Some(Item::new(
+        ItemData::Type { identifier, type_expression },
+        SourceRegion::merge(start_region, end_region)
+      ))
+    } else {
+      parser.error("Expected identifier for type to follow `type` keyword".to_owned());
+    }
+  }
+
+  unreachable!("Internal error, type item parselet called on non-type token");
+}
+
+
 fn itm_global (parser: &mut Parser) -> Option<Item> {
   // Synchronization should be handled by higher level parselet
 
@@ -551,14 +671,21 @@ struct ItemParselet {
   function: ParseletFunction<Item>,
 }
 
-macro_rules! itm { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( ItemParselet { predicate: $predicate, function: $function } ),* ] } }
 
 impl ItemParselet {
-  const PARSELETS: &'static [Self] = itm! [
-    |token| token.is_keyword(Namespace)   => itm_namespace,
-    |token| token.is_keyword(Global)   => itm_global,
-    |token| token.is_keyword(Function) => itm_function,
-  ];
+  const PARSELETS: &'static [Self] = {
+    macro_rules! itm { ($( $($predicate: pat)|* => $function: expr ),* $(,)?) => { &[ $( ItemParselet { predicate: |token| matches!(token.data, $($predicate)|*), function: $function } ),* ] } }
+
+    use TokenData::*;
+
+    itm! [
+      Keyword(Namespace) => itm_namespace,
+      Keyword(Struct) => itm_struct,
+      Keyword(Type) => itm_type,
+      Keyword(Global) => itm_global,
+      Keyword(Function) => itm_function,
+    ]
+  };
 
   fn get_function (token: &Token) -> Option<ParseletFunction<Item>> {
     for parselet in Self::PARSELETS.iter() {

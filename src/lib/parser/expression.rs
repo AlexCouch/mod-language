@@ -4,7 +4,7 @@ use crate::{
   util::{ Either, },
   source::{ SourceRegion, },
   common::{ Operator::*, Keyword::*, get_binary_precedence },
-  token::{ Token, TokenData, TokenKind, },
+  token::{ Token, TokenData, },
   ast::{ Expression, ExpressionData, },
 };
 
@@ -135,14 +135,16 @@ struct PrefixParselet {
 
 impl PrefixParselet {
   const PARSELETS: &'static [Self] = {
-    macro_rules! pfx { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( PrefixParselet { predicate: $predicate, function: $function } ),* ] } }
+    macro_rules! pfx { ($( $($predicate: pat)|* => $function: expr ),* $(,)?) => { &[ $( PrefixParselet { predicate: |token| matches!(token.data, $($predicate)|*), function: $function } ),* ] } }
+    
+    use TokenData::*;
 
     pfx! [
-      |token| matches!(token.data, TokenData::Identifier(_) | TokenData::Operator(DoubleColon)) => pfx_path_or_ident,
-      |token| token.kind() == TokenKind::Number => pfx_number,
-      |token| token.is_operator(LeftParen) => pfx_syntactic_group,
-      |token| token.is_operator(LeftBracket) => pfx_block,
-      |token| token.is_keyword(If) => pfx_conditional,
+      Identifier(_) | Operator(DoubleColon) => pfx_path_or_ident,
+      Number(_) => pfx_number,
+      Operator(LeftParen) => pfx_syntactic_group,
+      Operator(LeftBracket) => pfx_block,
+      Keyword(If) => pfx_conditional,
     ]
   };
 
@@ -265,19 +267,21 @@ struct InfixParselet {
 
 impl InfixParselet {
   const PARSELETS: &'static [Self] = {
-    macro_rules! ifx { ($( ($precedence: expr) [$($predicate: expr),+] => $function: expr ),* $(,)?) => {
+    macro_rules! ifx { ($( ($precedence: expr) $($predicate: pat)|* => $function: expr ),* $(,)?) => {
       &[ $( InfixParselet {
         precedence: get_binary_precedence($precedence),
-        predicate: |token| token.is_any_operator_of(&[$($predicate),+]).is_some(),
+        predicate: |token| matches!(token.data, $($predicate)|*),
         function: $function
       } ),* ]
     } }
 
+    use TokenData::*;
+
     ifx! [
-      (LeftParen) [ LeftParen ] => ifx_call,
-      (Equal) [ Equal, NotEqual, Lesser, Greater, LesserOrEqual, GreaterOrEqual ] => ifx_binary_operator,
-      (Add) [ Add, Sub ] => ifx_binary_operator,
-      (Mul) [ Mul, Div, Rem ] => ifx_binary_operator,
+      (LeftParen) Operator(LeftParen) => ifx_call,
+      (Equal) Operator(Equal | NotEqual | Lesser | Greater | LesserOrEqual | GreaterOrEqual) => ifx_binary_operator,
+      (Add) Operator(Add | Sub) => ifx_binary_operator,
+      (Mul) Operator(Mul | Div | Rem) => ifx_binary_operator,
     ]
   };
   

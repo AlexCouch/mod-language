@@ -154,12 +154,13 @@ struct StatementParselet  {
 
 impl StatementParselet {
   const PARSELETS: &'static [Self] = {
-    macro_rules! stm { ($( $predicate: expr => $function: expr ),* $(,)?) => { &[ $( StatementParselet { predicate: $predicate, function: $function } ),* ] } }
+    macro_rules! stm { ($( $($predicate: pat)|* => $function: expr ),* $(,)?) => { &[ $( StatementParselet { predicate: |token| matches!(token.data, $($predicate)|*), function: $function } ),* ] } }
 
+    use TokenData::*;
     stm! [
-      |token| token.is_operator(LeftBracket) => stm_block,
-      |token| token.is_keyword(Let) => stm_declaration,
-      |token| token.is_keyword(If) => stm_conditional,
+      Operator(LeftBracket) => stm_block,
+      Keyword(Let) => stm_declaration,
+      Keyword(If) => stm_conditional,
     ]
   };
 

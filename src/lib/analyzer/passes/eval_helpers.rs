@@ -124,6 +124,12 @@ pub fn eval_texpr (analyzer: &mut Analyzer, texpr: &TypeExpression) -> Option<Co
       }
     },
 
+    TypeExpressionData::Pointer(value_texpr) => {
+      let value_key = eval_texpr(analyzer, value_texpr)?;
+
+      Some(ty_from_anon_data(analyzer, TypeData::Pointer(value_key), texpr.origin))
+    },
+
     TypeExpressionData::Function { parameter_types: parameter_texprs, return_type: return_texpr } => {
       let mut parameter_types = Vec::with_capacity(parameter_texprs.len());
 
