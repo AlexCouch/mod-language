@@ -7,7 +7,6 @@ use std::{
 
 use crate::{
   source::{ SourceLocation, SourceRegion, },
-  ansi,
   common::{ Identifier, Number, Keyword, Operator, },
 };
 
@@ -134,10 +133,8 @@ impl Debug for Token {
 
 impl Display for Token {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    write!(f, "[{}{}{}]: {:?}",
-      ansi::Foreground::Cyan,
+    write!(f, "[{}]: {:?}",
       self.origin,
-      ansi::Foreground::Reset,
       self.data
     )
   }

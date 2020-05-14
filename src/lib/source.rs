@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::{
+  ansi,
   util::{ make_key_type, },
   collections::{ SlotMap, },
 };
@@ -119,7 +120,7 @@ impl Debug for SourceRegion {
 
 impl Display for SourceRegion {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    Debug::fmt(self, f)
+    write!(f, "{}{:?}{}", ansi::Foreground::Cyan, self, ansi::Foreground::Reset)
   }
 }
 

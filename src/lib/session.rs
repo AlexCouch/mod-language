@@ -204,13 +204,11 @@ impl Display for Message {
     writeln!(f, "\n{}: {}", self.kind, self.content)?;
     
     if let Some(origin) = self.origin {
-      writeln!(f, "{}│{} {}at: {}{}{}",
+      writeln!(f, "{}│{} {}at: {}",
         self.kind.get_ansi(),
         ansi::Foreground::Reset,
         self.kind.get_whitespace(4),
-        ansi::Foreground::Cyan,
         origin,
-        ansi::Foreground::Reset
       )?;
     }
 
