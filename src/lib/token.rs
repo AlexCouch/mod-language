@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-  source::{ SourceLocation, SourceRegion, },
+  source::{ SourceRegion, },
   common::{ Identifier, Number, Keyword, Operator, },
 };
 
@@ -113,7 +113,7 @@ impl Token {
 
   /// Create a new Token with no SourceRegion origin
   pub fn no_src (data: TokenData) -> Self {
-    Self { data, origin: SourceLocation::ZERO.to_region(None) }
+    Self { data, origin: SourceRegion::ANONYMOUS }
   }
 }
 

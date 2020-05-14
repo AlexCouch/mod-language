@@ -1,7 +1,7 @@
 [package]
 name = "mod_language"
 description = "WIP wasm scripting language"
-version = "0.1.22"
+version = "0.1.23"
 authors = ["noxabellus <noxabellus@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -18,7 +18,7 @@ name = "mod_language"
 path = "src/main.rs"
 
 [dependencies]
-mod_utilities = "0.1.2"
+mod_utilities = "0.1.22"
 
 [dependencies.backtrace]
 optional = true

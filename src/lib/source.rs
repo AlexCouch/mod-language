@@ -29,7 +29,7 @@ impl SourceLocation {
   pub const ZERO: Self = Self { index: 0, line: 0, column: 0 };
 
   /// Create a zero-width SourceRegion from a SourceLocation
-  pub const fn to_region (self, source: Option<SourceKey>) -> SourceRegion {
+  pub const fn to_region (self, source: SourceKey) -> SourceRegion {
     SourceRegion {
       source,
       start: self,
@@ -42,14 +42,14 @@ impl SourceLocation {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 #[allow(missing_docs)]
 pub struct SourceRegion {
-  pub source: Option<SourceKey>,
+  pub source: SourceKey,
   pub start: SourceLocation,
   pub end: SourceLocation,
 }
 
 impl SourceRegion {
   /// A SourceRegion that is not attributed to any file or specific location
-  pub const ANONYMOUS: Self = SourceLocation::ZERO.to_region(None);
+  pub const ANONYMOUS: Self = SourceLocation::ZERO.to_region(SourceKey::NULL);
 
   /// Create a new SourceRegion from the start of one and the end of another
   /// 
@@ -101,9 +101,7 @@ impl Display for SourceLocation {
 
 impl Debug for SourceRegion {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    if let Some(source) = self.source {
-      let source = SOURCE_MANAGER.get(source).expect("Internal error: Could not get Source for SourceRegion Display");
-
+    if let Some(source) = SOURCE_MANAGER.get(self.source) {
       write!(f, "{}:{}", source.path.display(), self.start)?;
 
       if self.end != self.start
@@ -111,7 +109,7 @@ impl Debug for SourceRegion {
         write!(f, " to {}", self.end)?;
       }
     } else {
-      write!(f, "AnonymousSource")?;
+      write!(f, "UnknownSource")?;
     }
 
     Ok(())

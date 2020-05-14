@@ -66,7 +66,7 @@ impl Display for MessageKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message {
   /// Possibly contains an area of a Message's parent source at which the Message was created
-  pub origin: Option<SourceRegion>,
+  pub origin: SourceRegion,
   /// The variant or severity of a Message
   pub kind: MessageKind,
   /// Possibly contains contextual information for a Message
@@ -75,7 +75,7 @@ pub struct Message {
 
 impl Message {
   /// Create a new user-directed Message for a Source
-  pub fn new (origin: Option<SourceRegion>, kind: MessageKind, content: String) -> Self {
+  pub fn new (origin: SourceRegion, kind: MessageKind, content: String) -> Self {
     Self {
       origin,
       kind,
@@ -88,11 +88,10 @@ impl Message {
   /// Requires a reference to source chars
   #[allow(clippy::cognitive_complexity)] // Some functions are just complicated ok?
   pub fn excerpt (&self, f: &mut Formatter) -> FMTResult {
-    let origin = some!(self.origin; Ok(()));
-    let source = SOURCE_MANAGER.get(some!(origin.source; Ok(()))).expect("Internal error, invalid SourceKey");
+    let source = some!(SOURCE_MANAGER.get(self.origin.source); Ok(()));
     let chars = source.chars();
 
-    let mut start_index = origin.start.index.min(chars.len() - 1);
+    let mut start_index = self.origin.start.index.min(chars.len() - 1);
 
     if start_index != 0 {
       if matches!(chars[start_index], '\r'|'\n') {
@@ -108,7 +107,7 @@ impl Message {
       }
     }
 
-    let mut end_index = origin.end.index.min(chars.len());
+    let mut end_index = self.origin.end.index.min(chars.len());
 
     if end_index != chars.len() {
       if matches!(chars[end_index], '\r'|'\n') {
@@ -133,38 +132,38 @@ impl Message {
     }
 
     if num_lines == 1 {
-      let line_num = origin.start.line + 1;
+      let line_num = self.origin.start.line + 1;
       let line_num_digits = count_digits(line_num as _, 10);
       
       write!(f, "{}│\n│{} {} {}│{}  ", self.kind.get_ansi(), ansi::Foreground::Cyan, line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack)?;
 
       for (i, ch) in slice.iter().enumerate() {
-        if i == origin.start.column as _ { write!(f, "{}", ansi::Foreground::Reset)?; }
-        else if i == origin.end.column as _ { write!(f, "{}", ansi::Foreground::BrightBlack)?; }
+        if i == self.origin.start.column as _ { write!(f, "{}", ansi::Foreground::Reset)?; }
+        else if i == self.origin.end.column as _ { write!(f, "{}", ansi::Foreground::BrightBlack)?; }
         write!(f, "{}", ch)?;
       }
 
       write!(f, "\n{}{}└──", padding((line_num_digits + 3) as _), self.kind.get_ansi())?;
 
       for i in 0..slice.len() as _ {
-        if i < origin.start.column { write!(f, "─")?; }
-        else if i < origin.end.column { write!(f, "^")?; }
+        if i < self.origin.start.column { write!(f, "─")?; }
+        else if i < self.origin.end.column { write!(f, "^")?; }
         else { break }
       }
 
       writeln!(f, "{}", ansi::Foreground::Reset)?;
     } else {
-      let last_line_num = origin.end.line + 1;
+      let last_line_num = self.origin.end.line + 1;
       let last_line_num_digits = count_digits(last_line_num as _, 10);
       let gap_pad = padding((last_line_num_digits + 2) as _);
 
       write!(f, "{}│\n│{}┌", self.kind.get_ansi(), gap_pad,)?;
       
-      for _ in 0..origin.start.column + 2 {
+      for _ in 0..self.origin.start.column + 2 {
         write!(f, "─")?;
       }
       
-      let first_line_num = origin.start.line + 1;
+      let first_line_num = self.origin.start.line + 1;
       let first_line_num_digits = count_digits(first_line_num as _, 10);
       write!(f, "v\n│ {}{}{}{} │{}  ", padding((last_line_num_digits - first_line_num_digits) as _), ansi::Foreground::Cyan, first_line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack)?;
 
@@ -173,8 +172,8 @@ impl Message {
 
       for ch in slice.iter() {
         if *ch != '\n' {
-          if line_num - 1 == origin.start.line && column == origin.start.column as _ { write!(f, "{}", ansi::Foreground::Reset)?; }
-          else if line_num - 1 == origin.end.line && column == origin.end.column as _ { write!(f, "{}", ansi::Foreground::BrightBlack)?; }
+          if line_num - 1 == self.origin.start.line && column == self.origin.start.column as _ { write!(f, "{}", ansi::Foreground::Reset)?; }
+          else if line_num - 1 == self.origin.end.line && column == self.origin.end.column as _ { write!(f, "{}", ansi::Foreground::BrightBlack)?; }
           write!(f, "{}", ch)?;
           column += 1;
         } else {
@@ -188,7 +187,7 @@ impl Message {
 
       write!(f, "\n {}{}└", gap_pad, self.kind.get_ansi())?;
 
-      for _ in 0..origin.end.column + 1 {
+      for _ in 0..self.origin.end.column + 1 {
         write!(f, "─")?;
       }
       
@@ -203,14 +202,12 @@ impl Display for Message {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
     writeln!(f, "\n{}: {}", self.kind, self.content)?;
     
-    if let Some(origin) = self.origin {
-      writeln!(f, "{}│{} {}at: {}",
-        self.kind.get_ansi(),
-        ansi::Foreground::Reset,
-        self.kind.get_whitespace(4),
-        origin,
-      )?;
-    }
+    writeln!(f, "{}│{} {}at: {}",
+      self.kind.get_ansi(),
+      ansi::Foreground::Reset,
+      self.kind.get_whitespace(4),
+      self.origin,
+    )?;
 
     // TODO control excerpts with flag
     self.excerpt(f)
@@ -263,7 +260,7 @@ impl Session {
   }
 
   /// Add a Message to the list of Messages associated with a Session
-  pub fn message (&self, origin: Option<SourceRegion>, kind: MessageKind, content: String) {
+  pub fn message (&self, origin: SourceRegion, kind: MessageKind, content: String) {
     let msg = Message::new(
       origin,
       kind,
@@ -281,7 +278,7 @@ impl Session {
 
   
   /// Add an Error Message to the list of Messages associated with a Session
-  pub fn error (&self, origin: Option<SourceRegion>, content: String) {
+  pub fn error (&self, origin: SourceRegion, content: String) {
     self.vec().push(Message::new(
       origin,
       MessageKind::Error,
@@ -290,7 +287,7 @@ impl Session {
   }
   
   /// Add a Warning Message to the list of Messages associated with a Session
-  pub fn warning (&self, origin: Option<SourceRegion>, content: String) {
+  pub fn warning (&self, origin: SourceRegion, content: String) {
     self.vec().push(Message::new(
       origin,
       MessageKind::Warning,
@@ -299,7 +296,7 @@ impl Session {
   }
   
   /// Add a Notice Message to the list of Messages associated with a Session
-  pub fn notice (&self, origin: Option<SourceRegion>, content: String) {
+  pub fn notice (&self, origin: SourceRegion, content: String) {
     self.vec().push(Message::new(
       origin,
       MessageKind::Notice,

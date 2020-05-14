@@ -169,7 +169,7 @@ fn lex_decimal_number (lexer: &mut Lexer) -> LexletResult {
       }
 
       if let Some(start) = alphabetic_err_start {
-        lexer.error_at(SourceRegion { source: Some(lexer.source_key), start, end: lexer.curr_location() }, "Unexpected characters in decimal literal".to_owned());
+        lexer.error_at(SourceRegion { source: lexer.source_key, start, end: lexer.curr_location() }, "Unexpected characters in decimal literal".to_owned());
       }
 
       LexletResult::Some(Token::new(

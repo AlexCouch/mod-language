@@ -270,12 +270,12 @@ impl<'a> Parser<'a> {
   /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
   pub fn message (&mut self, kind: MessageKind, content: String) {
     SESSION.message(
-      Some(if let Some(curr) = self.curr_tok() {
+      if let Some(curr) = self.curr_tok() {
         curr.origin
       } else {
         let origin = self.prev_tok().unwrap().origin;
         origin.end.to_region(origin.source)
-      }),
+      },
       kind,
       content
     )
@@ -290,7 +290,7 @@ impl<'a> Parser<'a> {
   /// the SourceRegion generated will be taken from Parser's current Token
   pub fn message_pop (&mut self, kind: MessageKind, content: String) {
     SESSION.message(
-      Some(self.pop_marker_region().or_else(|| Some(self.curr_region())).unwrap()),
+      self.pop_marker_region().or_else(|| Some(self.curr_region())).unwrap(),
       kind,
       content
     )
@@ -300,7 +300,7 @@ impl<'a> Parser<'a> {
   /// with a custom line and column origin
   pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) {
     SESSION.message(
-      Some(origin),
+      origin,
       kind,
       content
     )

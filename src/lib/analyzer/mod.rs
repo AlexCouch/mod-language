@@ -227,7 +227,7 @@ impl Analyzer {
 
   /// Create a Message in the Source of the AST of an Analyzer
   pub fn message (&self, origin: SourceRegion, kind: MessageKind, message: String) {
-    SESSION.message(Some(origin), kind, message)
+    SESSION.message(origin, kind, message)
   }
 
   /// Create a notice in the Source of the AST of an Analyzer

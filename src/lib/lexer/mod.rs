@@ -135,7 +135,7 @@ impl<'a> Lexer<'a> {
   /// Get a SourceRegion by popping a SourceLocation marker off of the Lexer's stack
   /// and combine it with the Lexer's current SourceLocation
   pub fn pop_marker_region (&mut self) -> Option<SourceRegion> {
-    self.pop_marker().map(|start| SourceRegion { source: Some(self.source_key), start, end: self.locale.location })
+    self.pop_marker().map(|start| SourceRegion { source: self.source_key, start, end: self.locale.location })
   }
 
   /// Get the current SourceLocation of a Lexer
@@ -147,7 +147,7 @@ impl<'a> Lexer<'a> {
   /// and the top marker on the stack if one exists
   pub fn curr_region (&self) -> SourceRegion {
     SourceRegion {
-      source: Some(self.source_key),
+      source: self.source_key,
       start: self.markers.last().unref().unwrap_or(self.locale.location),
       end: self.locale.location
     }
@@ -164,7 +164,7 @@ impl<'a> Lexer<'a> {
   /// and will originate at the Lexer's current location
   pub fn message (&mut self, kind: MessageKind, content: String) {
     SESSION.message(
-      Some(self.curr_region()),
+      self.curr_region(),
       kind,
       content
     )
@@ -180,11 +180,11 @@ impl<'a> Lexer<'a> {
   /// and will originate at the Lexer's current location
   pub fn message_pop (&mut self, kind: MessageKind, content: String) {
     SESSION.message(
-     Some(SourceRegion {
-        source: Some(self.source_key),
+     SourceRegion {
+        source: self.source_key,
         start: self.pop_marker().unwrap_or(self.locale.location),
         end: self.locale.location
-      }),
+      },
       kind,
       content
     )
@@ -193,7 +193,7 @@ impl<'a> Lexer<'a> {
   /// Create a user-directed Message in the Source of a Lexer, with a custom line and column origin
   pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) {
     SESSION.message(
-      Some(origin),
+      origin,
       kind,
       content
     )

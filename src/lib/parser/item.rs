@@ -319,7 +319,7 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
           }
         }
       } else {
-        let curr_source_key = start_region.source.expect("Internal error: Namespace item has no source origin");
+        let curr_source_key = start_region.source;
         let curr_source = SOURCE_MANAGER.get(curr_source_key).expect("Internal error: Namespace item has invalid source origin");
 
         let curr_path = &curr_source.path;
