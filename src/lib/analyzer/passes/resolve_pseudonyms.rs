@@ -42,10 +42,10 @@ fn resolve_pseudonym (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, 
             .expect("Internal error, local item has no binding source location");
 
         analyzer.error(pseudonym.origin, format!(
-          "Namespace alias `{}` shadows an existing item, defined at [{}]",
+          "Namespace alias `{}` shadows an existing item",
           pseudonym.new_name,
-          existing_origin,
         ))
+        .append(existing_origin, "Existing item defined here".to_owned());
       }
 
       unsafe { analyzer.context.items.get_unchecked_mut(pseudonym.destination_namespace).mut_namespace_unchecked() }
@@ -63,7 +63,7 @@ fn resolve_pseudonym (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, 
           "Namespace export `{}` shadows an existing item, defined at [{}]",
           pseudonym.new_name,
           existing_origin,
-        ))
+        ));
       }
 
       unsafe { analyzer.context.items.get_unchecked_mut(pseudonym.destination_namespace).mut_namespace_unchecked() }

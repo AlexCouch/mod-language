@@ -1,7 +1,7 @@
 //! Contains Lexer and supporting structures and functions
 
 use crate::{
-  session::{ SESSION, MessageKind, },
+  session::{ SESSION, MessageKind, Message, },
   source::{ SOURCE_MANAGER, SourceLocation, SourceRegion, SourceKey, },
   token::{ Token, TokenData, },
   util::{ Unref, },
@@ -162,7 +162,7 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn message (&mut self, kind: MessageKind, content: String) {
+  pub fn message (&mut self, kind: MessageKind, content: String) -> &mut Message {
     SESSION.message(
       self.curr_region(),
       kind,
@@ -178,7 +178,7 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn message_pop (&mut self, kind: MessageKind, content: String) {
+  pub fn message_pop (&mut self, kind: MessageKind, content: String) -> &mut Message {
     SESSION.message(
      SourceRegion {
         source: self.source_key,
@@ -191,7 +191,8 @@ impl<'a> Lexer<'a> {
   }
 
   /// Create a user-directed Message in the Source of a Lexer, with a custom line and column origin
-  pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) -> &mut Message {
     SESSION.message(
       origin,
       kind,
@@ -208,7 +209,7 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn error (&mut self, content: String) {
+  pub fn error (&mut self, content: String) -> &mut Message {
     self.message(
       MessageKind::Error,
       content
@@ -223,12 +224,13 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn error_pop (&mut self, content: String) {
+  pub fn error_pop (&mut self, content: String) -> &mut Message {
     self.message_pop(MessageKind::Error, content)
   }
 
   /// Create a user-directed Error Message in the Source of a Lexer, with a custom line and column origin
-  pub fn error_at (&self, origin: SourceRegion, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn error_at (&self, origin: SourceRegion, content: String) -> &mut Message {
     self.message_at(origin, MessageKind::Error, content)
   }
 
@@ -241,7 +243,7 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn warning (&mut self, content: String) {
+  pub fn warning (&mut self, content: String) -> &mut Message {
     self.message(
       MessageKind::Warning,
       content
@@ -256,12 +258,13 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn warning_pop (&mut self, content: String) {
+  pub fn warning_pop (&mut self, content: String) -> &mut Message {
     self.message_pop(MessageKind::Warning, content)
   }
 
   /// Create a user-directed Warning Message in the Source of a Lexer, with a custom line and column origin
-  pub fn warning_at (&self, origin: SourceRegion, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn warning_at (&self, origin: SourceRegion, content: String) -> &mut Message {
     self.message_at(origin, MessageKind::Warning, content)
   }
 
@@ -274,7 +277,7 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn notice (&mut self, content: String) {
+  pub fn notice (&mut self, content: String) -> &mut Message {
     self.message(
       MessageKind::Notice,
       content
@@ -289,12 +292,13 @@ impl<'a> Lexer<'a> {
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be zero-width,
   /// and will originate at the Lexer's current location
-  pub fn notice_pop (&mut self, content: String) {
+  pub fn notice_pop (&mut self, content: String) -> &mut Message {
     self.message_pop(MessageKind::Notice, content)
   }
 
   /// Create a user-directed Notice Message in the Source of a Lexer, with a custom line and column origin
-  pub fn notice_at (&self, origin: SourceRegion, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn notice_at (&self, origin: SourceRegion, content: String) -> &mut Message {
     self.message_at(origin, MessageKind::Notice, content)
   }
 
@@ -327,7 +331,7 @@ impl<'a> Lexer<'a> {
         },
         Err(InvalidLexicalSymbol { symbol, origin }) => {
           tokens.push(Token::new(TokenData::Invalid, origin));
-          self.error_at(origin, format!("Unexpected lexical symbol {:?}", symbol))
+          self.error_at(origin, format!("Unexpected lexical symbol {:?}", symbol));
         }
       }
     }

@@ -2,7 +2,7 @@
 
 use crate::{
   util::{ UnwrapUnchecked, },
-  session::{ SESSION, MessageKind, },
+  session::{ SESSION, MessageKind, Message, },
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Item, },
@@ -226,22 +226,26 @@ impl Analyzer {
 
 
   /// Create a Message in the Source of the AST of an Analyzer
-  pub fn message (&self, origin: SourceRegion, kind: MessageKind, message: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn message (&self, origin: SourceRegion, kind: MessageKind, message: String) -> &mut Message {
     SESSION.message(origin, kind, message)
   }
 
   /// Create a notice in the Source of the AST of an Analyzer
-  pub fn notice (&self, origin: SourceRegion, message: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn notice (&self, origin: SourceRegion, message: String) -> &mut Message {
     self.message(origin, MessageKind::Notice, message)
   }
 
   /// Create a warning in the Source of the AST of an Analyzer
-  pub fn warning (&self, origin: SourceRegion, message: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn warning (&self, origin: SourceRegion, message: String) -> &mut Message {
     self.message(origin, MessageKind::Warning, message)
   }
 
   /// Create an error in the Source of the AST of an Analyzer
-  pub fn error (&self, origin: SourceRegion, message: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn error (&self, origin: SourceRegion, message: String) -> &mut Message {
     self.message(origin, MessageKind::Error, message)
   }
 }

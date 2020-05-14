@@ -53,43 +53,48 @@ impl MessageKind {
 
 impl Display for MessageKind {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    write!(
-      f, "{}{}{}",
-      self.get_ansi(),
-      self.get_name(),
-      ansi::Foreground::Reset
-    )
+    self.get_ansi().wrap(self.get_name()).fmt(f)
   }
 }
 
-/// A user-directed message such as an Error
+/// A single information entry in a Message
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Message {
-  /// Possibly contains an area of a Message's parent source at which the Message was created
+pub struct MessageItem {
+  /// Contains an area of a Message's parent source at which the Message was created
   pub origin: SourceRegion,
-  /// The variant or severity of a Message
-  pub kind: MessageKind,
-  /// Possibly contains contextual information for a Message
+  /// Contains contextual information for a Message
   pub content: String,
 }
 
-impl Message {
-  /// Create a new user-directed Message for a Source
-  pub fn new (origin: SourceRegion, kind: MessageKind, content: String) -> Self {
-    Self {
-      origin,
-      kind,
-      content,
-    }
+impl MessageItem {
+  /// Display a MessageItem
+  pub fn fmt (&self, f: &mut Formatter, kind: MessageKind, is_last: bool) -> FMTResult {
+    let line = kind.get_ansi().wrap("|");
+
+    writeln!(
+      f,
+      "{} {}\n\
+       {} at: {}",
+      line,
+      self.content,
+      line,
+      self.origin,
+    )?;
+
+    // TODO control excerpts with flag
+    self.excerpt(f, kind, is_last)
   }
 
-  /// Print the source excerpt for a Message
+  /// Print the source excerpt for a MessageItem
   /// 
   /// Requires a reference to source chars
   #[allow(clippy::cognitive_complexity)] // Some functions are just complicated ok?
-  pub fn excerpt (&self, f: &mut Formatter) -> FMTResult {
+  pub fn excerpt (&self, f: &mut Formatter, kind: MessageKind, is_last: bool) -> FMTResult {
     let source = some!(SOURCE_MANAGER.get(self.origin.source); Ok(()));
     let chars = source.chars();
+
+    let pre_line = kind.get_ansi().wrap("|");
+    let trailing_line = kind.get_ansi().wrap(if is_last { "|" } else { " " });
 
     let mut start_index = self.origin.start.index.min(chars.len() - 1);
 
@@ -135,7 +140,7 @@ impl Message {
       let line_num = self.origin.start.line + 1;
       let line_num_digits = count_digits(line_num as _, 10);
       
-      write!(f, "{}│\n│{} {} {}│{}  ", self.kind.get_ansi(), ansi::Foreground::Cyan, line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack)?;
+      write!(f, "{}\n{} {} {}{}  ", pre_line, pre_line, ansi::Foreground::Cyan.wrap(line_num), pre_line, ansi::Foreground::BrightBlack)?;
 
       for (i, ch) in slice.iter().enumerate() {
         if i == self.origin.start.column as _ { write!(f, "{}", ansi::Foreground::Reset)?; }
@@ -143,7 +148,7 @@ impl Message {
         write!(f, "{}", ch)?;
       }
 
-      write!(f, "\n{}{}└──", padding((line_num_digits + 3) as _), self.kind.get_ansi())?;
+      write!(f, "\n{}{}{}└──", trailing_line, padding((line_num_digits + 2) as _), kind.get_ansi())?;
 
       for i in 0..slice.len() as _ {
         if i < self.origin.start.column { write!(f, "─")?; }
@@ -157,7 +162,7 @@ impl Message {
       let last_line_num_digits = count_digits(last_line_num as _, 10);
       let gap_pad = padding((last_line_num_digits + 2) as _);
 
-      write!(f, "{}│\n│{}┌", self.kind.get_ansi(), gap_pad,)?;
+      write!(f, "{}│\n│{}┌", kind.get_ansi(), gap_pad,)?;
       
       for _ in 0..self.origin.start.column + 2 {
         write!(f, "─")?;
@@ -165,7 +170,7 @@ impl Message {
       
       let first_line_num = self.origin.start.line + 1;
       let first_line_num_digits = count_digits(first_line_num as _, 10);
-      write!(f, "v\n│ {}{}{}{} │{}  ", padding((last_line_num_digits - first_line_num_digits) as _), ansi::Foreground::Cyan, first_line_num, self.kind.get_ansi(), ansi::Foreground::BrightBlack)?;
+      write!(f, "v\n│ {}{}{}{} │{}  ", padding((last_line_num_digits - first_line_num_digits) as _), ansi::Foreground::Cyan, first_line_num, kind.get_ansi(), ansi::Foreground::BrightBlack)?;
 
       let mut line_num = first_line_num;
       let mut column = 0;
@@ -180,12 +185,12 @@ impl Message {
           column = 0;
           line_num += 1;
           let line_num_digits = count_digits(line_num as _, 10);
-          write!(f, "\n{}│ {}{}{}{} │  ", self.kind.get_ansi(), padding((last_line_num_digits - line_num_digits) as _), ansi::Foreground::Cyan, line_num, self.kind.get_ansi())?;
+          write!(f, "\n{}│ {}{}{}{} │  ", kind.get_ansi(), padding((last_line_num_digits - line_num_digits) as _), ansi::Foreground::Cyan, line_num, kind.get_ansi())?;
           if line_num > first_line_num { write!(f, "{}", ansi::Foreground::Reset)?; }
         }
       }
 
-      write!(f, "\n {}{}└", gap_pad, self.kind.get_ansi())?;
+      write!(f, "\n{}{}{}└", trailing_line, gap_pad, kind.get_ansi())?;
 
       for _ in 0..self.origin.end.column + 1 {
         write!(f, "─")?;
@@ -198,21 +203,52 @@ impl Message {
   }
 }
 
-impl Display for Message {
-  fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    writeln!(f, "\n{}: {}", self.kind, self.content)?;
-    
-    writeln!(f, "{}│{} {}at: {}",
-      self.kind.get_ansi(),
-      ansi::Foreground::Reset,
-      self.kind.get_whitespace(4),
-      self.origin,
-    )?;
+/// A user-directed message such as an Error
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Message {
+  /// The variant or severity of a Message
+  pub kind: MessageKind,
+  /// Informational entries detailing a Message
+  pub items: Vec<MessageItem>,
+}
 
-    // TODO control excerpts with flag
-    self.excerpt(f)
+impl Message {
+  /// Create a new user-directed Message for a Source
+  pub fn new (kind: MessageKind, origin: SourceRegion, content: String) -> Self {
+    Self {
+      kind,
+      items: vec![ MessageItem {
+        origin,
+        content,
+      } ]
+    }
+  }
+
+  /// Add a new MessageItem to the end of a message
+  pub fn append (&mut self, origin: SourceRegion, content: String) -> &mut Self {
+    self.items.push(MessageItem { origin, content });
+    self
   }
 }
+
+impl Display for Message {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    writeln!(f, "\n{}", self.kind)?;
+    
+    let mut iter = self.items.iter().peekable();
+
+    while let Some(item) = iter.next() {
+      let is_last = iter.peek().is_some();
+      item.fmt(f, self.kind, is_last)?;
+      if is_last {
+        self.kind.get_ansi().wrap("|\n").fmt(f)?;
+      }
+    }
+
+    Ok(())
+  }
+}
+
 
 
 /// The type of the central repository for Messages created during a compilation session
@@ -260,10 +296,11 @@ impl Session {
   }
 
   /// Add a Message to the list of Messages associated with a Session
-  pub fn message (&self, origin: SourceRegion, kind: MessageKind, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn message (&self, origin: SourceRegion, kind: MessageKind, content: String) -> &mut Message {
     let msg = Message::new(
-      origin,
       kind,
+      origin,
       content
     );
 
@@ -273,35 +310,40 @@ impl Session {
       println!("New session message caught:\n{}\nat {:?}", &msg, bt);
     }
 
-    self.vec().push(msg)
+    self.vec().push(msg);
+
+    self.vec().last_mut().unwrap()
   }
 
   
   /// Add an Error Message to the list of Messages associated with a Session
-  pub fn error (&self, origin: SourceRegion, content: String) {
-    self.vec().push(Message::new(
+  #[allow(clippy::mut_from_ref)]
+  pub fn error (&self, origin: SourceRegion, content: String) -> &mut Message {
+    self.message(
       origin,
       MessageKind::Error,
       content
-    ))
+    )
   }
   
   /// Add a Warning Message to the list of Messages associated with a Session
-  pub fn warning (&self, origin: SourceRegion, content: String) {
-    self.vec().push(Message::new(
+  #[allow(clippy::mut_from_ref)]
+  pub fn warning (&self, origin: SourceRegion, content: String) -> &mut Message {
+    self.message(
       origin,
       MessageKind::Warning,
       content
-    ))
+    )
   }
   
   /// Add a Notice Message to the list of Messages associated with a Session
-  pub fn notice (&self, origin: SourceRegion, content: String) {
-    self.vec().push(Message::new(
+  #[allow(clippy::mut_from_ref)]
+  pub fn notice (&self, origin: SourceRegion, content: String) -> &mut Message {
+    self.message(
       origin,
       MessageKind::Notice,
       content
-    ))
+    )
   }
 
 

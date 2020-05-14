@@ -182,3 +182,47 @@ impl Debug for Background {
     Display::fmt(self, f)
   }
 }
+
+
+/// Wraps a Display item in ansi Foreground color and reset
+pub struct WrapForeground<D: Display> {
+  /// The value being colorized with ansi Foreground
+  pub value: D,
+  /// The ansi Foreground color being applied to the wrapped value
+  pub color: Foreground,
+}
+
+impl<D: Display> Display for WrapForeground<D> {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    write!(f, "{}{}{}", self.color, self.value, Foreground::Reset)
+  }
+}
+
+impl Foreground {
+  /// Wraps a Display item in ansi Foreground color and reset
+  pub fn wrap<D: Display> (self, value: D) -> WrapForeground<D> {
+    WrapForeground { value, color: self }
+  }
+}
+
+
+/// Wraps a Display item in ansi Background color and reset
+pub struct WrapBackground<D: Display> {
+  /// The value being colorized with ansi Background
+  pub value: D,
+  /// The ansi Background color being applied to the wrapped value
+  pub color: Background,
+}
+
+impl<D: Display> Display for WrapBackground<D> {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    write!(f, "{}{}{}", self.color, self.value, Background::Reset)
+  }
+}
+
+impl Background {
+  /// Wraps a Display item in ansi Background color and reset
+  pub fn wrap<D: Display> (self, value: D) -> WrapBackground<D> {
+    WrapBackground { value, color: self }
+  }
+}

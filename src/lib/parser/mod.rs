@@ -1,7 +1,7 @@
 //! Contains Parser and supporting structures and functions
 
 use crate::{
-  session::{ SESSION, MessageKind, },
+  session::{ SESSION, MessageKind, Message, },
   source::{ SourceLocation, SourceRegion, },
   common::{ Operator::*, ITEM_KEYWORDS, },
   token::{ Token, TokenData, },
@@ -268,7 +268,7 @@ impl<'a> Parser<'a> {
   /// 
   /// This will use the current Token's SourceRegion,
   /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
-  pub fn message (&mut self, kind: MessageKind, content: String) {
+  pub fn message (&mut self, kind: MessageKind, content: String) -> &mut Message {
     SESSION.message(
       if let Some(curr) = self.curr_tok() {
         curr.origin
@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
   /// 
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be taken from Parser's current Token
-  pub fn message_pop (&mut self, kind: MessageKind, content: String) {
+  pub fn message_pop (&mut self, kind: MessageKind, content: String) -> &mut Message {
     SESSION.message(
       self.pop_marker_region().or_else(|| Some(self.curr_region())).unwrap(),
       kind,
@@ -298,7 +298,8 @@ impl<'a> Parser<'a> {
 
   /// Create a user-directed Message in the Source of the TokenStream of a Parser,
   /// with a custom line and column origin
-  pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn message_at (&self, origin: SourceRegion, kind: MessageKind, content: String) -> &mut Message {
     SESSION.message(
       origin,
       kind,
@@ -311,7 +312,7 @@ impl<'a> Parser<'a> {
   /// 
   /// This will use the current Token's SourceRegion,
   /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
-  pub fn error (&mut self, content: String) {
+  pub fn error (&mut self, content: String) -> &mut Message {
     self.message(
       MessageKind::Error,
       content
@@ -325,13 +326,14 @@ impl<'a> Parser<'a> {
   /// 
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be taken from Parser's current Token
-  pub fn error_pop (&mut self, content: String) {
+  pub fn error_pop (&mut self, content: String) -> &mut Message {
     self.message_pop(MessageKind::Error, content)
   }
 
   /// Create a user-directed Error Message in the Source of the TokenStream of a Parser,
   /// with a custom line and column origin
-  pub fn error_at (&self, origin: SourceRegion, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn error_at (&self, origin: SourceRegion, content: String) -> &mut Message {
     self.message_at(origin, MessageKind::Error, content)
   }
 
@@ -340,7 +342,7 @@ impl<'a> Parser<'a> {
   /// 
   /// This will use the current Token's SourceRegion,
   /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
-  pub fn warning (&mut self, content: String) {
+  pub fn warning (&mut self, content: String) -> &mut Message {
     self.message(
       MessageKind::Warning,
       content
@@ -354,13 +356,14 @@ impl<'a> Parser<'a> {
   /// 
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be taken from Parser's current Token
-  pub fn warning_pop (&mut self, content: String) {
+  pub fn warning_pop (&mut self, content: String) -> &mut Message {
     self.message_pop(MessageKind::Warning, content)
   }
 
   /// Create a user-directed Warning Message in the Source of the TokenStream of a Parser,
   /// with a custom line and column origin
-  pub fn warning_at (&self, origin: SourceRegion, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn warning_at (&self, origin: SourceRegion, content: String) -> &mut Message {
     self.message_at(origin, MessageKind::Warning, content)
   }
 
@@ -369,7 +372,7 @@ impl<'a> Parser<'a> {
   /// 
   /// This will use the current Token's SourceRegion,
   /// or generate a zero-width SourceRegion from the TokenStream's last Token if there is no current
-  pub fn notice (&mut self, content: String) {
+  pub fn notice (&mut self, content: String) -> &mut Message {
     self.message(
       MessageKind::Notice,
       content
@@ -383,13 +386,14 @@ impl<'a> Parser<'a> {
   /// 
   /// If there are no markers in the stack,
   /// the SourceRegion generated will be taken from Parser's current Token
-  pub fn notice_pop (&mut self, content: String) {
+  pub fn notice_pop (&mut self, content: String) -> &mut Message {
     self.message_pop(MessageKind::Notice, content)
   }
 
   /// Create a user-directed Notice Message in the Source of the TokenStream of a Parser,
   /// with a custom line and column origin
-  pub fn notice_at (&self, origin: SourceRegion, content: String) {
+  #[allow(clippy::mut_from_ref)]
+  pub fn notice_at (&self, origin: SourceRegion, content: String) -> &mut Message {
     self.message_at(origin, MessageKind::Notice, content)
   }
 

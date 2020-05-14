@@ -345,12 +345,12 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
             local_error(format!(
               "A file exists at both [{}] and [{}], please remove one to resolve the ambiguity",
               sub_dir_ns_path.display(), sub_file_ns_path.display()
-            ))
+            ));
           } else {
             local_error(format!(
               "Expected a file at either [{}] or [{}], but neither exists",
               sub_dir_ns_path.display(), sub_file_ns_path.display()
-            ))
+            ));
           }
 
           return None
@@ -363,12 +363,12 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
               local_error(format!(
                 "File [{}] has already been loaded during this session, it cannot be aliased twice",
                 sub_ns_path.display()
-              ))
+              ));
             } else {
               local_error(format!(
                 "Unexpected error loading file [{}] from disk: {}",
                 sub_ns_path.display(), e
-              ))
+              ));
             }
 
             return None
