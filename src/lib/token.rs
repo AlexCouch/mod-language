@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
   source::{ SourceRegion, },
-  common::{ Identifier, Number, Keyword, Operator, },
+  common::{ Identifier, Constant, Keyword, Operator, },
 };
 
 
@@ -17,8 +17,7 @@ use crate::{
 pub enum TokenKind {
   Invalid,
   Identifier,
-  Number,
-  String,
+  Constant,
   Keyword,
   Operator
 }
@@ -31,8 +30,7 @@ pub enum TokenData {
   Invalid,
 
   Identifier(Identifier),
-  Number(Number),
-  String(String),
+  Constant(Constant),
   Keyword(Keyword),
   Operator(Operator),
 }
@@ -43,8 +41,7 @@ impl TokenData {
     match self {
       TokenData::Invalid => TokenKind::Invalid,
       TokenData::Identifier(_) => TokenKind::Identifier,
-      TokenData::Number(_) => TokenKind::Number,
-      TokenData::String(_) => TokenKind::String,
+      TokenData::Constant(_) => TokenKind::Constant,
       TokenData::Keyword(_) => TokenKind::Keyword,
       TokenData::Operator(_) => TokenKind::Operator,
     }

@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-  common::{ Operator, Number, },
+  common::{ Operator, Constant, },
   source::{ SourceRegion, },
   ctx::{ ContextKey, LocalItem, },
 };
@@ -204,7 +204,7 @@ pub enum ExpressionData {
 
   Reference(Reference),
 
-  Number(Number),
+  Constant(Constant),
 
   Unary {
     operand: Box<Expression>,

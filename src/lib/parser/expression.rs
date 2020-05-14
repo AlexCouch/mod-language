@@ -63,13 +63,14 @@ fn pfx_path_or_ident (parser: &mut Parser) -> Option<Expression> {
   Some(Expression::new(data, origin))
 }
 
-fn pfx_number (parser: &mut Parser) -> Option<Expression> {
-  if let Some(&Token { data: TokenData::Number(num), origin }) = parser.curr_tok() {
+fn pfx_constant (parser: &mut Parser) -> Option<Expression> {
+  if let Some(&Token { data: TokenData::Constant(ref constant), origin }) = parser.curr_tok() {
+    let constant = constant.clone();
     parser.advance();
-    return Some(Expression::new(ExpressionData::Number(num), origin))
+    return Some(Expression::new(ExpressionData::Constant(constant), origin))
   }
 
-  unreachable!("Internal error, number expression parselet called on non-number token");
+  unreachable!("Internal error, constant expression parselet called on non-constant token");
 }
 
 fn pfx_syntactic_group (parser: &mut Parser) -> Option<Expression> {
@@ -138,7 +139,7 @@ impl PrefixParselet {
 
     pfx! [
       Identifier(_) | Operator(DoubleColon) => pfx_path_or_ident,
-      Number(_) => pfx_number,
+      Constant(_) => pfx_constant,
       Operator(LeftParen) => pfx_syntactic_group,
       Operator(LeftBracket) => pfx_block,
       Keyword(If) => pfx_conditional,

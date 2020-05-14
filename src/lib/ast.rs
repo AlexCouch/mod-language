@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
   source::{ SourceRegion, ASTKey, },
-  common::{ Number, Identifier, Operator, },
+  common::{ Constant, Identifier, Operator, },
 };
 
 
@@ -203,7 +203,7 @@ pub enum ExpressionData {
   Identifier(Identifier),
   Path(Path),
 
-  Number(Number),
+  Constant(Constant),
 
   Unary {
     operand: Box<Expression>,
@@ -235,16 +235,16 @@ impl From<Path> for ExpressionData {
 }
 
 
-impl From<Number> for ExpressionData {
-  #[inline] fn from (num: Number) -> Self { Self::Number(num) }
+impl From<Constant> for ExpressionData {
+  #[inline] fn from (constant: Constant) -> Self { Self::Constant(constant) }
 }
 
 impl From<u64> for ExpressionData {
-  #[inline] fn from (num: u64) -> Self { Self::Number(num.into()) }
+  #[inline] fn from (num: u64) -> Self { Self::Constant(Constant::Number(num.into())) }
 }
 
 impl From<f64> for ExpressionData {
-  #[inline] fn from (num: f64) -> Self { Self::Number(num.into()) }
+  #[inline] fn from (num: f64) -> Self { Self::Constant(Constant::Number(num.into())) }
 }
 
 /// A syntactic element forming a sequence of actions or a reference
@@ -683,7 +683,7 @@ impl HierarchicalDisplay for ExpressionData {
     match self {
       ExpressionData::Identifier(ident) => Display::fmt(ident, f),
       ExpressionData::Path(path) => Display::fmt(path, f),
-      ExpressionData::Number(number) => Display::fmt(number, f),
+      ExpressionData::Constant(constant) => Display::fmt(constant, f),
       ExpressionData::Conditional(conditional) => conditional.fmt_hierarchical(f, level),
       ExpressionData::Block(block) => block.fmt_hierarchical(f, level),
 

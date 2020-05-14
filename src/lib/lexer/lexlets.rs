@@ -1,8 +1,7 @@
 use crate::{
   source::{ SourceRegion, },
-  common::{ Identifier, Number, IDENTIFIER_VALUES, SYM_OPERATOR_VALUES, },
+  common::{ Identifier, Constant, Number, IDENTIFIER_VALUES, SYM_OPERATOR_VALUES, },
   token::{ Token, TokenData, },
-  util::{ Either, },
 };
 
 use super::{ Lexer, };
@@ -88,7 +87,7 @@ fn lex_identifier (lexer: &mut Lexer) -> LexletResult {
         }
       }
 
-      'id_loop: for (substr, either) in IDENTIFIER_VALUES {
+      'id_loop: for (substr, token_data) in IDENTIFIER_VALUES {
         if ident.len() != substr.len() { continue }
         
         for (i, op_char) in substr.chars().enumerate() {  
@@ -101,10 +100,7 @@ fn lex_identifier (lexer: &mut Lexer) -> LexletResult {
         // Assuming identifiers are sorted from longest to shortest then we can accept this identifier
     
         return LexletResult::Some(Token::new(
-          match either {
-            Either::A(keyword) => TokenData::Keyword(*keyword),
-            Either::B(operator) => TokenData::Operator(*operator),
-          },
+          token_data.clone(),
           lexer.pop_marker_region().unwrap()
         ))
       }
@@ -173,14 +169,14 @@ fn lex_decimal_number (lexer: &mut Lexer) -> LexletResult {
       }
 
       LexletResult::Some(Token::new(
-        TokenData::Number(if float {
+        TokenData::Constant(Constant::Number(if float {
           Number::FloatingPoint(match builder.as_ref().parse::<f64>() {
             Ok(f) => f,
             Err(e) => {
               lexer.error(format!("Failed to parse floating point decimal literal: {}", e));
               0.0
             }
-          })
+          }.into())
         } else {
           Number::Integer(match builder.as_ref().parse::<u64>() {
             Ok(i) => i,
@@ -189,7 +185,7 @@ fn lex_decimal_number (lexer: &mut Lexer) -> LexletResult {
               0
             }
           })
-        }),
+        })),
         lexer.pop_marker_region().unwrap()
       ))
     },

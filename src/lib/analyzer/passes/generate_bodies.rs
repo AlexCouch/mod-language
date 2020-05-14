@@ -1,6 +1,5 @@
 use crate::{
   util::{ some, },
-  common::{ Number, },
   ast::{ self, Item, ItemData, ExportData, },
   ctx::{ ContextItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
   ir,
@@ -9,7 +8,7 @@ use crate::{
 use super::{
   Analyzer,
   support_structures::{ Expect, TyMeetResult, },
-  ty_helpers::{ ty_from_global_item, ty_from_unary, ty_from_binary, ty_meet, ty_will_coerce, ty_meet_n, ty_handle_coercion, ty_finalize_coercible, },
+  ty_helpers::{ ty_from_global_item, ty_from_unary, ty_from_binary, ty_meet, ty_will_coerce, ty_meet_n, ty_handle_coercion, ty_finalize_coercible, ty_of_constant, },
   eval_helpers::{ eval_path, eval_local_ident, eval_texpr, },
 };
 
@@ -414,12 +413,9 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
       }
     },
 
-    &ast::ExpressionData::Number(number) => Some(ir::Expression::new(
-      ir::ExpressionData::Number(number),
-      match number {
-        Number::Integer(_) => analyzer.context.int_ty,
-        Number::FloatingPoint(_) => analyzer.context.float_ty,
-      },
+    ast::ExpressionData::Constant(constant) => Some(ir::Expression::new(
+      ir::ExpressionData::Constant(constant.clone()),
+      ty_of_constant(analyzer, constant, expr.origin),
       expr.origin
     )),
   

@@ -23,3 +23,19 @@ fn test_branch -> bool {
     5
   }
 }
+
+fn ret_true -> bool {
+  true
+}
+
+fn ret_false -> bool {
+  false
+}
+
+fn ret_void_ptr -> ^void {
+  null
+}
+
+fn ret_coerce_ptr -> ^s32 {
+  null
+}

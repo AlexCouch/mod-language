@@ -6,7 +6,7 @@ use std::{
 
 
 use crate::{
-  common::{ Operator, },
+  common::{ Operator, Constant, Number, },
   source::{ SourceRegion, },
   ctx::{ Type, Global, Function, ContextItem, ContextKey, TypeData, PrimitiveType, CoercibleType, TypeDisplay, },
   ir,
@@ -178,7 +178,7 @@ pub fn ty_handle_coercion (coerce_ty: ContextKey, expr_ir: &mut ir::Expression) 
   if expr_ir.ty == coerce_ty { return }
 
   let mut new_ir = ir::Expression::new(
-    ir::ExpressionData::Number(0.into()), // placeholder data
+    ir::ExpressionData::Constant(0u64.into()), // placeholder data
     coerce_ty,
     expr_ir.origin
   );
@@ -186,6 +186,17 @@ pub fn ty_handle_coercion (coerce_ty: ContextKey, expr_ir: &mut ir::Expression) 
   swap(expr_ir, &mut new_ir);
 
   expr_ir.data = ir::ExpressionData::Coerce(box new_ir);
+}
+
+/// Get a type key from a constant
+pub fn ty_of_constant (analyzer: &mut Analyzer, constant: &Constant, origin: SourceRegion) -> ContextKey {
+  match constant {
+    Constant::NullPointer => ty_from_anon_data(analyzer, TypeData::Pointer(analyzer.context.void_ty), origin),
+    Constant::Bool(_) => analyzer.context.bool_ty,
+    Constant::Number(Number::Integer(_)) => analyzer.context.int_ty,
+    Constant::Number(Number::FloatingPoint(_)) => analyzer.context.float_ty,
+    Constant::String(_) => unimplemented!("String types are not yet implemented"),
+  }
 }
 
 

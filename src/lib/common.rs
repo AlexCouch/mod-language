@@ -2,16 +2,15 @@
 
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
-  str::from_utf8_unchecked as str_from_utf8_unchecked,
-  slice::Iter as SliceIter,
-  cmp::Ordering,
+  str::{ from_utf8_unchecked as str_from_utf8_unchecked, },
+  slice::{ Iter as SliceIter, },
+  cmp::{ Ordering, },
   hash::{ Hash, Hasher, },
   borrow::{ Borrow, },
 };
 
-
 use crate::{
-  util::Either,
+  token::{ TokenData, },
 };
 
 
@@ -168,12 +167,46 @@ impl Borrow<str> for Identifier {
   #[inline] fn borrow (&self) -> &str { self.as_ref() }
 }
 
+/// An enum representing a floating point constant
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum FloatingPoint {
+  /// Not a Number
+  NaN,
+  /// A normal number value
+  Norm(f64),
+  /// Infinity
+  Inf,
+}
+
+impl Display for FloatingPoint {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    match self {
+      FloatingPoint::NaN => write!(f, "nan"),
+      FloatingPoint::Norm(norm) => write!(f, "{}", norm),
+      FloatingPoint::Inf => write!(f, "inf"),
+    }
+  }
+}
+
+impl From<f64> for FloatingPoint {
+  fn from (f: f64) -> FloatingPoint {
+    if f.is_infinite() {
+      FloatingPoint::Inf
+    } else if f.is_nan() {
+      FloatingPoint::NaN
+    } else {
+      FloatingPoint::Norm(f)
+    }
+  }
+}
+
 /// An enum containing either an Integer or FloatingPoint numeric value
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-#[allow(missing_docs)]
 pub enum Number {
+  /// An integer whole number
   Integer(u64),
-  FloatingPoint(f64),
+  /// A floating point real or non-normal number
+  FloatingPoint(FloatingPoint),
 }
 
 impl Display for Number {
@@ -195,9 +228,46 @@ impl From<u64> for Number {
 impl From<f64> for Number {
   #[inline]
   fn from (f: f64) -> Self {
-    Number::FloatingPoint(f)
+    Number::FloatingPoint(f.into())
   }
 }
+
+/// A constant literal value
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum Constant {
+  /// The 0-address pointer
+  NullPointer,
+  /// A numeric literal
+  Number(Number),
+  /// A boolean literal
+  Bool(bool),
+  /// A string literal
+  String(String),
+}
+
+impl Display for Constant {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    match self {
+      Constant::NullPointer => write!(f, "null"),
+      Constant::Number(number) => Display::fmt(number, f),
+      Constant::Bool(bool) => Display::fmt(bool, f),
+      Constant::String(string) => write!(f, "\"{}\"", string),
+    }
+  }
+}
+
+impl<T: Into<Number>> From<T> for Constant {
+  fn from (num: T) -> Constant { Constant::Number(num.into()) }
+}
+
+impl From<bool> for Constant {
+  fn from (bool: bool) -> Constant { Constant::Bool(bool) }
+}
+
+impl From<String> for Constant {
+  fn from (string: String) -> Constant { Constant::String(string) }
+}
+
 
 /// An enum representing a language control word such as `fn` or `let`
 #[repr(u8)]
@@ -343,24 +413,29 @@ impl Operator {
 /// A lookup table from substrings to their associated Keyword or Operator
 /// 
 /// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
-pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
+pub const IDENTIFIER_VALUES: &[(&str, TokenData)] = {
   &[
-    ("import", Either::A(Keyword::Import)),
-    ("export", Either::A(Keyword::Export)),
-    ("global", Either::A(Keyword::Global)),
-    ("struct", Either::A(Keyword::Struct)),
-    ("alias",  Either::A(Keyword::Alias)),
-    ("type",   Either::A(Keyword::Type)),
-    ("else",   Either::A(Keyword::Else)),
-    ("let",    Either::A(Keyword::Let)),
-    ("not",    Either::B(Operator::Not)),
-    ("and",    Either::B(Operator::And)),
-    ("xor",    Either::B(Operator::Xor)),
-    ("ns",     Either::A(Keyword::Namespace)),
-    ("fn",     Either::A(Keyword::Function)),
-    ("if",     Either::A(Keyword::If)),
-    ("or",     Either::B(Operator::Or)),
-    ("as",     Either::B(Operator::As)),
+    ("import", TokenData::Keyword(Keyword::Import)),
+    ("export", TokenData::Keyword(Keyword::Export)),
+    ("global", TokenData::Keyword(Keyword::Global)),
+    ("struct", TokenData::Keyword(Keyword::Struct)),
+    ("alias",  TokenData::Keyword(Keyword::Alias)),
+    ("false",  TokenData::Constant(Constant::Bool(false))),
+    ("true",   TokenData::Constant(Constant::Bool(true))),
+    ("type",   TokenData::Keyword(Keyword::Type)),
+    ("else",   TokenData::Keyword(Keyword::Else)),
+    ("null",   TokenData::Constant(Constant::NullPointer)),
+    ("nan",    TokenData::Constant(Constant::Number(Number::FloatingPoint(FloatingPoint::NaN)))),
+    ("inf",    TokenData::Constant(Constant::Number(Number::FloatingPoint(FloatingPoint::Inf)))),
+    ("let",    TokenData::Keyword(Keyword::Let)),
+    ("not",    TokenData::Operator(Operator::Not)),
+    ("and",    TokenData::Operator(Operator::And)),
+    ("xor",    TokenData::Operator(Operator::Xor)),
+    ("ns",     TokenData::Keyword(Keyword::Namespace)),
+    ("fn",     TokenData::Keyword(Keyword::Function)),
+    ("if",     TokenData::Keyword(Keyword::If)),
+    ("or",     TokenData::Operator(Operator::Or)),
+    ("as",     TokenData::Operator(Operator::As)),
   ]
 };
 
