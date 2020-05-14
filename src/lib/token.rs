@@ -124,7 +124,7 @@ impl Deref for Token {
 
 impl Debug for Token {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    write!(f, "[{}]: {:?}",
+    write!(f, "[{:?}]: {:?}",
       self.origin,
       self.data
     )
