@@ -1,0 +1,32 @@
+ns A {
+  ns L {
+    export fn F;
+  }
+  export ::C::D::Y as Y;
+  export ns H {
+  }
+  export L::F as F;
+  export ::C::D::Z as Z;
+  export core::s32 as X;
+}
+export core::s32 as Y;
+export ::C::D::MyStruct as MyStruct;
+export A::F as F;
+export core::s32 as i32;
+export ns C {
+  export ns D {
+    export type S32Ptr: ^core::s32;
+    export struct MyStruct {
+      a: ^core::s32,
+      b: ^^core::s32
+    }
+    export fn Y;
+    export global Z: core::s32;
+    export core::s32 as X;
+  }
+}
+export A::H as H;
+export ns B {
+  export type S32PtrPtr: ^^core::s32;
+  export ::C as C;
+}

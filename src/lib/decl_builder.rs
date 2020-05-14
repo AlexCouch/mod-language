@@ -96,33 +96,33 @@ fn decl_ns_items (ctx: &Context, exported_items: &HashSet<ContextKey>, ns_key: C
         if export_ns.parent_namespace == Some(ns_key) {
           items.push(make_export_item(decl_ns(ctx, exported_items, export_ident.clone(), export_key)));
         } else {
-          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+          items.push(decl_reexport(ctx, ns_key, export_ident.clone(), export_key));
         }
       },
 
       ContextItem::Type(ty) => {
         if ty.parent_namespace == Some(ns_key) {
-          items.push(make_export_item(decl_ty(ctx, export_ident.clone(), export_key)));
+          items.push(make_export_item(decl_ty(ctx, ns_key, export_ident.clone(), export_key)));
         } else if !ty.is_anon() {
-          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+          items.push(decl_reexport(ctx, ns_key, export_ident.clone(), export_key));
         } else {
-          items.push(make_export_item(decl_ty_alias(ctx, export_ident.clone(), export_key)));
+          items.push(make_export_item(decl_ty_alias(ctx, ns_key, export_ident.clone(), export_key)));
         }
       },
 
       ContextItem::Global(global) => {
         if global.parent_namespace == ns_key {
-          items.push(make_export_item(decl_global(ctx, export_ident.clone(), export_key)));
+          items.push(make_export_item(decl_global(ctx, ns_key, export_ident.clone(), export_key)));
         } else {
-          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+          items.push(decl_reexport(ctx, ns_key, export_ident.clone(), export_key));
         }
       },
 
       ContextItem::Function(function) => {
         if function.parent_namespace == ns_key {
-          items.push(make_export_item(decl_function(ctx, export_ident.clone(), export_key)));
+          items.push(make_export_item(decl_function(ctx, ns_key, export_ident.clone(), export_key)));
         } else {
-          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+          items.push(decl_reexport(ctx, ns_key, export_ident.clone(), export_key));
         }
       }
 
@@ -143,13 +143,13 @@ fn decl_ns(ctx: &Context, exported_items: &HashSet<ContextKey>, ns_name: Identif
 }
 
 
-fn decl_ty (ctx: &Context, ty_name: Identifier, ty_key: ContextKey) -> ast::Item {
+fn decl_ty (ctx: &Context, base_key: ContextKey, ty_name: Identifier, ty_key: ContextKey) -> ast::Item {
   let ty = ctx.items.get(ty_key).unwrap().ref_type().unwrap();
 
   if let Some(TypeData::Structure { field_names, field_types }) = ty.data.as_ref() {
     let fields =
       field_names.iter().zip(field_types.iter())
-        .map(|(field_name, &field_type)| ast::LocalDeclaration::no_src(field_name.clone(), make_texpr(ctx, field_type)))
+        .map(|(field_name, &field_type)| ast::LocalDeclaration::no_src(field_name.clone(), make_texpr(ctx, base_key, field_type)))
         .collect();
 
     ast::Item::no_src(ast::ItemData::Struct { identifier: ty_name, fields, terminal: true })
@@ -159,50 +159,50 @@ fn decl_ty (ctx: &Context, ty_name: Identifier, ty_key: ContextKey) -> ast::Item
 }
 
 
-fn decl_ty_alias (ctx: &Context, ty_name: Identifier, ty_key: ContextKey) -> ast::Item {
+fn decl_ty_alias (ctx: &Context, base_key: ContextKey, ty_name: Identifier, ty_key: ContextKey) -> ast::Item {
   ast::Item::no_src(
     ast::ItemData::Type {
       identifier: ty_name,
-      type_expression: make_texpr(ctx, ty_key)
+      type_expression: make_texpr(ctx, base_key, ty_key)
     }
   )
 }
 
 
-fn decl_global (ctx: &Context, global_name: Identifier, global_key: ContextKey) -> ast::Item {
+fn decl_global (ctx: &Context, base_key: ContextKey, global_name: Identifier, global_key: ContextKey) -> ast::Item {
   let global = ctx.items.get(global_key).unwrap().ref_global().unwrap();
 
   ast::Item::no_src(
     ast::ItemData::Global {
       identifier: global_name,
-      explicit_type: make_texpr(ctx, global.ty.unwrap()),
+      explicit_type: make_texpr(ctx, base_key, global.ty.unwrap()),
       initializer: None
     }
   )
 }
 
 
-fn decl_function (ctx: &Context, function_name: Identifier, function_key: ContextKey) -> ast::Item {
+fn decl_function (ctx: &Context, base_key: ContextKey, function_name: Identifier, function_key: ContextKey) -> ast::Item {
   let function = ctx.items.get(function_key).unwrap().ref_function().unwrap();
 
   let parameters =
     function.params.iter()
-    .map(|&(ref ident, ty, _)| ast::LocalDeclaration::no_src(ident.clone(), make_texpr(ctx, ty)))
+    .map(|&(ref ident, ty, _)| ast::LocalDeclaration::no_src(ident.clone(), make_texpr(ctx, base_key, ty)))
     .collect();
 
   ast::Item::no_src(
     ast::ItemData::Function {
       identifier: function_name,
       parameters,
-      return_type: function.return_ty.map(|ty| make_texpr(ctx, ty)),
+      return_type: function.return_ty.map(|ty| make_texpr(ctx, base_key, ty)),
       body: None
     }
   )
 }
 
 
-fn decl_reexport (ctx: &Context, ns_name: Identifier, ns_key: ContextKey) -> ast::Item {
-  let path = make_path(ctx, ns_key);
+fn decl_reexport (ctx: &Context, base_key: ContextKey, ns_name: Identifier, ns_key: ContextKey) -> ast::Item {
+  let path = make_path(ctx, base_key, ns_key);
 
   ast::Item::no_src(
     ast::ItemData::Export {
@@ -258,19 +258,19 @@ fn get_item_canonical_name (ctx: &Context, key: ContextKey) -> Option<&Identifie
 }
 
 
-fn make_texpr (ctx: &Context, ty_key: ContextKey) -> ast::TypeExpression {
+fn make_texpr (ctx: &Context, base_key: ContextKey, ty_key: ContextKey) -> ast::TypeExpression {
   let ty = ctx.items.get(ty_key).unwrap().ref_type().unwrap();
 
   let texpr_data = match ty.data.as_ref().unwrap() {
     | TypeData::Structure { .. }
     | TypeData::Primitive { .. }
-    => ast::TypeExpressionData::Path(make_path(ctx, ty_key)),
+    => ast::TypeExpressionData::Path(make_path(ctx, base_key, ty_key)),
 
-    &TypeData::Pointer(value_ty) => ast::TypeExpressionData::Pointer(box make_texpr(ctx, value_ty)),
+    &TypeData::Pointer(value_ty) => ast::TypeExpressionData::Pointer(box make_texpr(ctx, base_key, value_ty)),
     
     TypeData::Function { parameter_types, return_type } => {
-      let parameter_types = parameter_types.iter().map(|&ty| make_texpr(ctx, ty)).collect();
-      let return_type = box return_type.map(|ty| make_texpr(ctx, ty));
+      let parameter_types = parameter_types.iter().map(|&ty| make_texpr(ctx, base_key, ty)).collect();
+      let return_type = box return_type.map(|ty| make_texpr(ctx, base_key, ty));
 
       ast::TypeExpressionData::Function { parameter_types, return_type }
     },
@@ -288,10 +288,13 @@ fn make_export_item (item: ast::Item) -> ast::Item {
 }
 
 
-fn make_path (ctx: &Context, ns_key: ContextKey) -> ast::Path {
+fn make_path (ctx: &Context, base_key: ContextKey, ns_key: ContextKey) -> ast::Path {
   let mut chain = Vec::new();
+  let mut bs_chain: Vec<(bool, ContextKey)> = Vec::new();
 
   let mut active_key = ns_key;
+
+  let mut absolute = true;
 
   'traversal: loop {
     if let Some(parent_key) = get_item_parent(ctx, active_key) {
@@ -300,6 +303,7 @@ fn make_path (ctx: &Context, ns_key: ContextKey) -> ast::Path {
       for (export_ident, &export_key) in parent_ns.export_bindings.entry_iter() {
         if export_key == active_key {
           chain.insert(0, export_ident.to_owned());
+          bs_chain.insert(0, (false, active_key));
           active_key = parent_key;
           continue 'traversal
         }
@@ -307,26 +311,67 @@ fn make_path (ctx: &Context, ns_key: ContextKey) -> ast::Path {
 
       for (local_ident, &local_key) in parent_ns.local_bindings.entry_iter() {
         if local_key == active_key {
-          chain.insert(0, local_ident.to_owned());
           active_key = parent_key;
-          continue 'traversal
+          chain.insert(0, local_ident.to_owned());
+          bs_chain.insert(0, (true, active_key));
+          
+          if active_key == base_key {
+            absolute = false;
+            break 'traversal
+          } else {
+            continue 'traversal
+          }
         }
       }
 
-      panic!("Could not find item named `{}` in `{}`", get_item_canonical_name(ctx, active_key).map(|ident| ident.as_ref()).unwrap_or("[ERROR GETTING IDENT]"), parent_ns.canonical_name);
+      panic!("Could not find item named `{}` in `{}` [chain was @ {:?}]", get_item_canonical_name(ctx, active_key).map(|ident| ident.as_ref()).unwrap_or("[ERROR GETTING IDENT]"), parent_ns.canonical_name, chain);
     } else {
       break 'traversal
     }
   }
 
-  let mut absolute = true;
+  fn resolve_path_chains (ctx: &Context, mut chain: Vec<Identifier>, mut bs_chain: Vec<(bool, ContextKey)>) -> Vec<Identifier> {
+    let len = bs_chain.len();
 
-  if let Some(module_key) = get_item_module(ctx, active_key) {
-    if module_key != ctx.main_mod {
-      let module = ctx.items.get(module_key).unwrap().ref_module().unwrap();
-      // TODO this needs to get the name the module was imported as when module imports are resolved
-      chain.insert(0, module.canonical_name.clone());
-      absolute = false;
+    if len <= 2 { return chain }
+
+    for i in 0 ..= len - 3 {
+      let (is_local, _) = bs_chain[i + 1];
+      
+      if is_local {
+        let (_, root_key)  = bs_chain[i];
+        let (_, local_key) = bs_chain[i + 2];
+
+        let root_ns: &Namespace = ctx.items.get(root_key).unwrap().ref_namespace().unwrap();
+
+        for (export_ident, &export_key) in root_ns.export_bindings.entry_iter() {
+          if export_key == local_key {
+            bs_chain[i + 2].0 = false;
+            chain[i + 2] = export_ident.clone();
+            chain.remove(i + 1);
+            bs_chain.remove(i + 1);
+
+            return resolve_path_chains(ctx, chain, bs_chain)
+          }
+        }
+
+        unreachable!();
+      }
+    }
+
+    chain
+  }
+
+  let mut chain = resolve_path_chains(ctx, chain, bs_chain);
+
+  if absolute {
+    if let Some(module_key) = get_item_module(ctx, active_key) {
+      if module_key != ctx.main_mod {
+        let module = ctx.items.get(module_key).unwrap().ref_module().unwrap();
+        // TODO this needs to get the name the module was imported as when module imports are resolved
+        chain.insert(0, module.canonical_name.clone());
+        absolute = false;
+      }
     }
   }
 
