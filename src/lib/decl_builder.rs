@@ -1,73 +1,334 @@
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 //! A system which iterates over a processed Context and generates a declaration file of all exports
+
+use std::{
+  collections::{ HashSet, },
+};
 
 use crate::{
   common::{ Identifier, },
-  ctx::{ Context, ContextKey, ContextItem, Namespace, Global, Function, Type, },
-  ast::{ self, Path, },
+  ast,
+  ctx::{ Context, ContextKey, ContextItem, Module, Namespace, Type, TypeData, Global, Function, },
 };
 
 
-fn generate_declarations (ctx: &Context) -> ast::Item {
-  decl_namespace(ctx, ctx.main_ns)
+
+/// Iterate over the exported items of a Context and build an ast of external declarations
+pub fn generate_declarations (ctx: &Context) -> Vec<ast::Item> {
+  let exported_items = collect_exported_items(ctx);
+
+  decl_ns_items(ctx, &exported_items, ctx.main_ns)
 }
 
-fn generate_path_to (ctx: &Context, key: ContextKey) -> Path {
-  unimplemented!()
+
+
+fn collect_ns_exports (ctx: &Context, ns: &Namespace, set: &mut HashSet<ContextKey>) {
+  for &exported_key in ns.export_bindings.key_iter() {
+    set.insert(exported_key);
+
+    if let ContextItem::Namespace(ns) = ctx.items.get(exported_key).unwrap() {
+      collect_ns_exports(ctx, ns, set)
+    }
+  }
 }
 
-fn decl_namespace (ctx: &Context, namespace_key: ContextKey) -> ast::Item {
-  let curr_namespace = ctx.items.get(namespace_key).unwrap().ref_namespace().unwrap();
 
-  let mut items: Vec<ast::Item> = Vec::new();
+fn collect_exported_items (ctx: &Context) -> HashSet<ContextKey> {
+  let mut set = HashSet::default();
 
-  for (export_ident, &export_key) in curr_namespace.export_bindings.entry_iter() {
-    let export_item = ctx.items.get(export_key).unwrap();
+  let module_ns = ctx.items.get(ctx.main_ns).unwrap().ref_namespace().unwrap();
 
-    match export_item {
-      ContextItem::Namespace(namespace)
-      if namespace.parent_namespace == Some(namespace_key)
-      => items.push(decl_namespace(ctx, export_key)),
+  collect_ns_exports(ctx, module_ns, &mut set);
 
-      ContextItem::Type(ty)
-      if ty.parent_namespace == Some(namespace_key)
-      => items.push(decl_type(ctx, export_key)),
+  set
+}
 
-      ContextItem::Global(global)
-      if global.parent_namespace == namespace_key
-      => items.push(decl_global(ctx, export_key)),
 
-      ContextItem::Function(function)
-      if function.parent_namespace == namespace_key
-      => items.push(decl_function(ctx, export_key)),
 
-      ___________
-      => continue
+fn ns_contains_exports (exported_items: &HashSet<ContextKey>, ns: &Namespace) -> bool {
+  for export_key in ns.export_bindings.key_iter() {
+    if exported_items.contains(export_key) {
+      return true
     }
   }
 
-  ast::Item::new(
-    ast::ItemData::Namespace {
-      identifier: curr_namespace.canonical_name.clone(),
-      items,
-      inline: true,
-    },
-    curr_namespace.origin
+  false
+}
+
+fn ns_exports (ns: &Namespace, key: ContextKey) -> bool {
+  for &export_key in ns.export_bindings.key_iter() {
+    if export_key == key {
+      return true
+    }
+  }
+
+  false
+}
+
+
+
+fn decl_ns_items (ctx: &Context, exported_items: &HashSet<ContextKey>, ns_key: ContextKey) -> Vec<ast::Item> {
+  let ns: &Namespace = ctx.items.get(ns_key).unwrap().ref_namespace().unwrap();
+
+  let mut items = Vec::new();
+
+  for (local_ident, &local_key) in ns.local_bindings.entry_iter() {
+    if !ns_exports(ns, local_key) {
+      let local_item = ctx.items.get(local_key).unwrap();
+
+      match local_item {
+        ContextItem::Namespace(local_ns) => {
+          if local_ns.parent_namespace == Some(ns_key)
+          && ns_contains_exports(exported_items, local_ns) {
+            items.push(decl_ns(ctx, exported_items, local_ident.clone(), local_key));
+          }
+        },
+
+        _ => continue
+      }
+    }
+  }
+
+  for (export_ident, &export_key) in ns.export_bindings.entry_iter() {
+    let export_item = ctx.items.get(export_key).unwrap();
+
+    match export_item {
+      ContextItem::Namespace(export_ns) => {
+        if export_ns.parent_namespace == Some(ns_key) {
+          items.push(make_export_item(decl_ns(ctx, exported_items, export_ident.clone(), export_key)));
+        } else {
+          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+        }
+      },
+
+      ContextItem::Type(ty) => {
+        if ty.parent_namespace == Some(ns_key) {
+          items.push(make_export_item(decl_ty(ctx, export_ident.clone(), export_key)));
+        } else if !ty.is_anon() {
+          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+        } else {
+          items.push(make_export_item(decl_ty_alias(ctx, export_ident.clone(), export_key)));
+        }
+      },
+
+      ContextItem::Global(global) => {
+        if global.parent_namespace == ns_key {
+          items.push(make_export_item(decl_global(ctx, export_ident.clone(), export_key)));
+        } else {
+          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+        }
+      },
+
+      ContextItem::Function(function) => {
+        if function.parent_namespace == ns_key {
+          items.push(make_export_item(decl_function(ctx, export_ident.clone(), export_key)));
+        } else {
+          items.push(decl_reexport(ctx, export_ident.clone(), export_key));
+        }
+      }
+
+      _ => continue
+    }
+  }
+
+  items
+}
+
+
+fn decl_ns(ctx: &Context, exported_items: &HashSet<ContextKey>, ns_name: Identifier, ns_key: ContextKey) -> ast::Item {  
+  ast::Item::no_src(ast::ItemData::Namespace {
+    identifier: ns_name,
+    items: decl_ns_items(ctx, exported_items, ns_key),
+    inline: true,
+  })
+}
+
+
+fn decl_ty (ctx: &Context, ty_name: Identifier, ty_key: ContextKey) -> ast::Item {
+  let ty = ctx.items.get(ty_key).unwrap().ref_type().unwrap();
+
+  if let Some(TypeData::Structure { field_names, field_types }) = ty.data.as_ref() {
+    let fields =
+      field_names.iter().zip(field_types.iter())
+        .map(|(field_name, &field_type)| ast::LocalDeclaration::no_src(field_name.clone(), make_texpr(ctx, field_type)))
+        .collect();
+
+    ast::Item::no_src(ast::ItemData::Struct { identifier: ty_name, fields, terminal: true })
+  } else {
+    unreachable!()
+  }
+}
+
+
+fn decl_ty_alias (ctx: &Context, ty_name: Identifier, ty_key: ContextKey) -> ast::Item {
+  ast::Item::no_src(
+    ast::ItemData::Type {
+      identifier: ty_name,
+      type_expression: make_texpr(ctx, ty_key)
+    }
   )
 }
 
-fn decl_type (ctx: &Context, type_key: ContextKey) -> ast::Item {
-  unimplemented!()
+
+fn decl_global (ctx: &Context, global_name: Identifier, global_key: ContextKey) -> ast::Item {
+  let global = ctx.items.get(global_key).unwrap().ref_global().unwrap();
+
+  ast::Item::no_src(
+    ast::ItemData::Global {
+      identifier: global_name,
+      explicit_type: make_texpr(ctx, global.ty.unwrap()),
+      initializer: None
+    }
+  )
 }
 
-fn decl_global (ctx: &Context, global_key: ContextKey) -> ast::Item {
-  unimplemented!()
+
+fn decl_function (ctx: &Context, function_name: Identifier, function_key: ContextKey) -> ast::Item {
+  let function = ctx.items.get(function_key).unwrap().ref_function().unwrap();
+
+  let parameters =
+    function.params.iter()
+    .map(|&(ref ident, ty, _)| ast::LocalDeclaration::no_src(ident.clone(), make_texpr(ctx, ty)))
+    .collect();
+
+  ast::Item::no_src(
+    ast::ItemData::Function {
+      identifier: function_name,
+      parameters,
+      return_type: function.return_ty.map(|ty| make_texpr(ctx, ty)),
+      body: None
+    }
+  )
 }
 
-fn decl_function (ctx: &Context, function_key: ContextKey) -> ast::Item {
-  unimplemented!()
+
+fn decl_reexport (ctx: &Context, ns_name: Identifier, ns_key: ContextKey) -> ast::Item {
+  let path = make_path(ctx, ns_key);
+
+  ast::Item::no_src(
+    ast::ItemData::Export {
+      data: ast::ExportData::List(vec! [ ast::PseudonymData::no_src(path, Some(ns_name)) ]),
+      terminal: false
+    }
+  )
 }
 
+
+fn get_item_parent (ctx: &Context, key: ContextKey) -> Option<ContextKey> {
+  match ctx.items.get(key)? {
+    ContextItem::Module(_) => None,
+
+    | &ContextItem::Namespace(Namespace { parent_namespace, .. })
+    | &ContextItem::Type(Type { parent_namespace, .. })
+    => parent_namespace,
+
+    | &ContextItem::Global(Global { parent_namespace, .. })
+    | &ContextItem::Function(Function { parent_namespace, .. })
+    => Some(parent_namespace)
+  }
+}
+
+
+fn get_item_module (ctx: &Context, key: ContextKey) -> Option<ContextKey> {
+  match ctx.items.get(key)? {
+    ContextItem::Module(_) => None,
+
+    &ContextItem::Type(Type { parent_module, .. })
+    => parent_module,
+    
+    | &ContextItem::Namespace(Namespace { parent_module, .. })
+    | &ContextItem::Global(Global { parent_module, .. })
+    | &ContextItem::Function(Function { parent_module, .. })
+    => Some(parent_module)
+  }
+}
+
+
+fn get_item_canonical_name (ctx: &Context, key: ContextKey) -> Option<&Identifier> {
+  match ctx.items.get(key)? {
+    ContextItem::Module(Module { canonical_name, .. }) => Some(canonical_name),
+
+    | ContextItem::Type(Type { canonical_name, .. })
+    => canonical_name.as_ref(),
+    
+    | ContextItem::Namespace(Namespace { canonical_name, .. })
+    | ContextItem::Global(Global { canonical_name, .. })
+    | ContextItem::Function(Function { canonical_name, .. })
+    => Some(canonical_name)
+  }
+}
+
+
+fn make_texpr (ctx: &Context, ty_key: ContextKey) -> ast::TypeExpression {
+  let ty = ctx.items.get(ty_key).unwrap().ref_type().unwrap();
+
+  let texpr_data = match ty.data.as_ref().unwrap() {
+    | TypeData::Structure { .. }
+    | TypeData::Primitive { .. }
+    => ast::TypeExpressionData::Path(make_path(ctx, ty_key)),
+
+    &TypeData::Pointer(value_ty) => ast::TypeExpressionData::Pointer(box make_texpr(ctx, value_ty)),
+    
+    TypeData::Function { parameter_types, return_type } => {
+      let parameter_types = parameter_types.iter().map(|&ty| make_texpr(ctx, ty)).collect();
+      let return_type = box return_type.map(|ty| make_texpr(ctx, ty));
+
+      ast::TypeExpressionData::Function { parameter_types, return_type }
+    },
+
+    _ => unreachable!()
+  };
+
+  ast::TypeExpression::no_src(texpr_data)
+}
+
+
+fn make_export_item (item: ast::Item) -> ast::Item {
+  let terminal = !item.requires_semi();
+  ast::Item::no_src(ast::ItemData::Export { data: ast::ExportData::Inline(box item), terminal })
+}
+
+
+fn make_path (ctx: &Context, ns_key: ContextKey) -> ast::Path {
+  let mut chain = Vec::new();
+
+  let mut active_key = ns_key;
+
+  'traversal: loop {
+    if let Some(parent_key) = get_item_parent(ctx, active_key) {
+      let parent_ns: &Namespace = ctx.items.get(parent_key).unwrap().ref_namespace().unwrap();
+
+      for (export_ident, &export_key) in parent_ns.export_bindings.entry_iter() {
+        if export_key == active_key {
+          chain.insert(0, export_ident.to_owned());
+          active_key = parent_key;
+          continue 'traversal
+        }
+      }
+
+      for (local_ident, &local_key) in parent_ns.local_bindings.entry_iter() {
+        if local_key == active_key {
+          chain.insert(0, local_ident.to_owned());
+          active_key = parent_key;
+          continue 'traversal
+        }
+      }
+
+      panic!("Could not find item named `{}` in `{}`", get_item_canonical_name(ctx, active_key).map(|ident| ident.as_ref()).unwrap_or("[ERROR GETTING IDENT]"), parent_ns.canonical_name);
+    } else {
+      break 'traversal
+    }
+  }
+
+  let mut absolute = true;
+
+  if let Some(module_key) = get_item_module(ctx, active_key) {
+    if module_key != ctx.main_mod {
+      let module = ctx.items.get(module_key).unwrap().ref_module().unwrap();
+      // TODO this needs to get the name the module was imported as when module imports are resolved
+      chain.insert(0, module.canonical_name.clone());
+      absolute = false;
+    }
+  }
+
+  ast::Path::no_src(absolute, chain)
+}

@@ -1,10 +1,17 @@
+ns U { }
+
 ns A {
   alias ::B::C::D;
   alias {
     D::X,
     D::Y,
   }
+  ns L {
+    export fn F { }
+  }
+  export L::F;
   export { X, Y, D::Z }
+  export ns H { }
 }
 
 export ns B {
@@ -30,3 +37,4 @@ alias A::X;
 export X as Y;
 export s32 as i32;
 export C::D::MyStruct;
+export { A::H, A::F }

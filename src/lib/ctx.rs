@@ -144,6 +144,19 @@ impl Context {
       anon_types: HashMap::default(),
     }
   }
+
+  /// Iterate a slice of identifiers and use it as a path to traverse and retrieve a key
+  pub fn get_key_from_path<I: AsRef<str>> (&self, path: &[I]) -> Option<ContextKey> {
+    let mut active_key = self.main_ns;
+
+    for ident in path.iter() {
+      let ns = self.items.get(active_key)?.ref_namespace()?;
+
+      active_key = ns.export_bindings.get_entry(ident)?;
+    }
+
+    Some(active_key)
+  }
 }
 
 
@@ -476,8 +489,17 @@ impl Type {
   }
 
   /// Determine if a Type's TypeData is anonymous
-  pub fn is_anon (&self) -> Option<bool> {
+  /// 
+  /// Returns None if the type is undefined
+  pub fn is_anon_opt (&self) -> Option<bool> {
     self.data.as_ref().map(|td| td.is_anon())
+  }
+
+  /// Determine if a Type's TypeData is anonymous
+  /// 
+  /// Returns true if the type is undefined
+  pub fn is_anon (&self) -> bool {
+    self.data.as_ref().map(|td| td.is_anon()).unwrap_or(true)
   }
 }
 

@@ -3,12 +3,13 @@
 extern crate mod_language;
 
 use mod_language::{
+  ansi,
   session::SESSION,
   source::SOURCE_MANAGER,
   lexer::Lexer,
   parser::Parser,
   analyzer::Analyzer,
-  ansi,
+  decl_builder::generate_declarations,
   ast,
 };
 
@@ -50,12 +51,13 @@ fn main () -> std::io::Result<()> {
   std::fs::write("./log/context", format!("{:#?}", context)).expect("Failed to dump context to ./log/context");
 
   println!("Got transformed ast, dumping to ./log/transformed_ast");
-  std::fs::write(
-    "./log/transformed_ast",
-    format!("{}", ast::Item::no_src(
-      ast::ItemData::Namespace { identifier: "item_analysis.md".into(), items: transformed_ast, inline: false }
-    ))
-  ).expect("Failed to dump transformed_ast to ./log/transformed_ast");
+  std::fs::write("./log/transformed_ast", format!("{}", ast::Displayer(&transformed_ast))).expect("Failed to dump transformed ast to ./log/transformed_ast");
+
+
+  let decls = generate_declarations(&context);
+
+  println!("Got declaration AST, dumping to ./log/decl");
+  std::fs::write("./log/decl", format!("{}", ast::Displayer(&decls))).expect("Failed to dump declaration ast to ./log/decl");
 
 
   if !SESSION.messages().is_empty() {

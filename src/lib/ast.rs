@@ -855,13 +855,9 @@ impl HierarchicalDisplay for ItemData {
   fn fmt_hierarchical (&self, f: &mut Formatter, mut level: usize) -> FMTResult {
     match self {
       ItemData::Alias { data, .. } => {
-        write!(f, "alias {{\n")?;
-        level += 1;
-
-        let mut iter = data.iter().peekable();
-        
-        while let Some(PseudonymData { path, new_name, .. }) = iter.next() {
-          Padding.fmt_hierarchical(f, level)?;
+        write!(f, "alias ")?;
+        if data.len() == 1 {
+          let PseudonymData { path, new_name, .. } = data.first().unwrap();
 
           write!(f, "{}", path)?;
 
@@ -869,16 +865,33 @@ impl HierarchicalDisplay for ItemData {
             write!(f, " as {}", ident)?;
           }
 
-          if iter.peek().is_some() {
-            write!(f, ",")?;
+          Ok(())
+        } else {
+          write!(f, "{{\n")?;
+          level += 1;
+
+          let mut iter = data.iter().peekable();
+          
+          while let Some(PseudonymData { path, new_name, .. }) = iter.next() {
+            Padding.fmt_hierarchical(f, level)?;
+
+            write!(f, "{}", path)?;
+
+            if let Some(ident) = new_name {
+              write!(f, " as {}", ident)?;
+            }
+
+            if iter.peek().is_some() {
+              write!(f, ",")?;
+            }
+
+            write!(f, "\n")?;
           }
 
-          write!(f, "\n")?;
+          level -= 1;
+          Padding.fmt_hierarchical(f, level)?;
+          write!(f, "}}")
         }
-
-        level -= 1;
-        Padding.fmt_hierarchical(f, level)?;
-        write!(f, "}}")
       },
 
       ItemData::Export { data, .. } => {
@@ -887,13 +900,8 @@ impl HierarchicalDisplay for ItemData {
         match data {
           ExportData::Inline(item) => item.fmt_hierarchical(f, level),
           ExportData::List(entries) => {
-            write!(f, "{{\n")?;
-            level += 1;
-
-            let mut iter = entries.iter().peekable();
-        
-            while let Some(PseudonymData { path, new_name, .. }) = iter.next() {
-              Padding.fmt_hierarchical(f, level)?;
+            if entries.len() == 1 {
+              let PseudonymData { path, new_name, .. } = entries.first().unwrap();
 
               write!(f, "{}", path)?;
 
@@ -901,16 +909,33 @@ impl HierarchicalDisplay for ItemData {
                 write!(f, " as {}", ident)?;
               }
 
-              if iter.peek().is_some() {
-                write!(f, ",")?;
+              Ok(())
+            } else {
+              write!(f, "{{\n")?;
+              level += 1;
+
+              let mut iter = entries.iter().peekable();
+          
+              while let Some(PseudonymData { path, new_name, .. }) = iter.next() {
+                Padding.fmt_hierarchical(f, level)?;
+
+                write!(f, "{}", path)?;
+
+                if let Some(ident) = new_name {
+                  write!(f, " as {}", ident)?;
+                }
+
+                if iter.peek().is_some() {
+                  write!(f, ",")?;
+                }
+
+                write!(f, "\n")?;
               }
 
-              write!(f, "\n")?;
+              level -= 1;
+              Padding.fmt_hierarchical(f, level)?;
+              write!(f, "}}")
             }
-
-            level -= 1;
-            Padding.fmt_hierarchical(f, level)?;
-            write!(f, "}}")
           }
         }
       },
@@ -918,27 +943,8 @@ impl HierarchicalDisplay for ItemData {
       ItemData::Namespace { identifier, items, .. } => {
         write!(f, "ns {} {{\n", identifier)?;
         level += 1;
-
-        let mut iter = items.iter().peekable();
     
-        while let Some(item) = iter.next() {
-          Padding.fmt_hierarchical(f, level)?;
-
-          item.fmt_hierarchical(f, level)?;
-
-          if iter.peek().is_some()
-          && !matches!(&item.data, // these items will never require semis the way we are printing them
-              ItemData::Namespace { .. }
-            | ItemData::Alias     { .. }
-            | ItemData::Struct    { .. }
-            | ItemData::Export { data: ExportData::List(_), .. }
-          )
-          && item.requires_semi() {
-            write!(f, ";")?;
-          }
-
-          write!(f, "\n")?;
-        }
+        Displayer(items).fmt_hierarchical(f, level)?;
 
         level -= 1;
         Padding.fmt_hierarchical(f, level)?;
@@ -1022,5 +1028,40 @@ impl HierarchicalDisplay for ItemData {
         Ok(())
       }
     }
+  }
+}
+
+/// A wrapper for display vecs of ast Items
+pub struct Displayer<'a> (pub &'a Vec<Item>);
+
+impl<'a> Display for Displayer<'a> {
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+}
+
+impl<'a> HierarchicalDisplay for Displayer<'a> {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+    for item in self.0.iter() {
+      Padding.fmt_hierarchical(f, level)?;
+
+      item.fmt_hierarchical(f, level)?;
+
+      if (
+        !matches!(&item.data,
+            ItemData::Alias     { .. }
+          | ItemData::Struct    { .. }
+          | ItemData::Export { data: ExportData::List(_), .. }
+        ) && item.requires_semi()
+      ) || matches!(&item.data,
+          ItemData::Alias { data: list, .. }
+        | ItemData::Export { data: ExportData::List(list), .. }
+        if list.len() == 1
+      ) {
+        write!(f, ";")?;
+      }
+
+      write!(f, "\n")?;
+    }
+
+    Ok(())
   }
 }
