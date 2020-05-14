@@ -203,10 +203,11 @@ fn decl_function (ctx: &Context, base_key: ContextKey, function_name: Identifier
 
 fn decl_reexport (ctx: &Context, base_key: ContextKey, ns_name: Identifier, ns_key: ContextKey) -> ast::Item {
   let path = make_path(ctx, base_key, ns_key);
+  let new_name = if path.last() == Some(&ns_name) { None } else { Some(ns_name) };
 
   ast::Item::no_src(
     ast::ItemData::Export {
-      data: ast::ExportData::List(vec! [ ast::PseudonymData::no_src(path, Some(ns_name)) ]),
+      data: ast::ExportData::List(vec! [ ast::PseudonymData::no_src(path, new_name) ]),
       terminal: false
     }
   )

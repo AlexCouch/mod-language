@@ -9,7 +9,7 @@ ns A {
   ns L {
     export fn F { }
   }
-  export L::F;
+  export L::F as Q;
   export { X, Y, D::Z }
   export ns H { }
 }
@@ -37,4 +37,4 @@ alias A::X;
 export X as Y;
 export s32 as i32;
 export C::D::MyStruct;
-export { A::H, A::F }
+export { A::H, A::Q }
