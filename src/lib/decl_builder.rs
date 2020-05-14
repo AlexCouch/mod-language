@@ -76,6 +76,12 @@ fn decl_ns_items (ctx: &Context, exported_items: &HashSet<ContextKey>, ns_key: C
       let local_item = ctx.items.get(local_key).unwrap();
 
       match local_item {
+        ContextItem::Module(module) => {
+          if ns_contains_exports(exported_items, ctx.items.get(module.namespace).unwrap().ref_namespace().unwrap()) {
+            items.push(decl_import(ctx, None, local_key));
+          }
+        },
+
         ContextItem::Namespace(local_ns) => {
           if local_ns.parent_namespace == Some(ns_key)
           && ns_contains_exports(exported_items, local_ns) {
@@ -92,6 +98,10 @@ fn decl_ns_items (ctx: &Context, exported_items: &HashSet<ContextKey>, ns_key: C
     let export_item = ctx.items.get(export_key).unwrap();
 
     match export_item {
+      ContextItem::Module(_) => {
+        items.push(make_export_item(decl_import(ctx, Some(export_ident.clone()), export_key)));
+      },
+
       ContextItem::Namespace(export_ns) => {
         if export_ns.parent_namespace == Some(ns_key) {
           items.push(make_export_item(decl_ns(ctx, exported_items, export_ident.clone(), export_key)));
@@ -124,9 +134,7 @@ fn decl_ns_items (ctx: &Context, exported_items: &HashSet<ContextKey>, ns_key: C
         } else {
           items.push(decl_reexport(ctx, ns_key, export_ident.clone(), export_key));
         }
-      }
-
-      _ => continue
+      },
     }
   }
 
@@ -134,7 +142,18 @@ fn decl_ns_items (ctx: &Context, exported_items: &HashSet<ContextKey>, ns_key: C
 }
 
 
-fn decl_ns(ctx: &Context, exported_items: &HashSet<ContextKey>, ns_name: Identifier, ns_key: ContextKey) -> ast::Item {  
+fn decl_import (ctx: &Context, mod_name: Option<Identifier>, mod_key: ContextKey) -> ast::Item {
+  let module = ctx.items.get(mod_key).unwrap().ref_module().unwrap();
+
+  ast::Item::no_src(ast::ItemData::Import {
+    identifier: module.canonical_name.clone(),
+    new_name: mod_name.and_then(|mod_name| if mod_name != module.canonical_name { Some(mod_name) } else { None }),
+    ast_key: Default::default()
+  })
+}
+
+
+fn decl_ns (ctx: &Context, exported_items: &HashSet<ContextKey>, ns_name: Identifier, ns_key: ContextKey) -> ast::Item {  
   ast::Item::no_src(ast::ItemData::Namespace {
     identifier: ns_name,
     items: decl_ns_items(ctx, exported_items, ns_key),

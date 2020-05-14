@@ -17,10 +17,8 @@ pub mod passes;
 pub struct Analyzer {
   /// All contextual information used by a semantic analyzer
   pub context: Context,
-  /// A stack of active modules being analyzed
-  pub active_modules: Vec<ContextKey>,
-  /// A stack of active namespaces being analyzed
-  pub active_namespaces: Vec<ContextKey>,
+  /// A stack of active modules and namespaces
+  pub active_mod_and_ns: Vec<(ContextKey, Vec<ContextKey>)>,
   /// The local context being analyzed, if any
   pub local_context: Option<LocalContext>,
 }
@@ -35,13 +33,11 @@ impl Analyzer {
   /// Create a new semantic analyzer
   pub fn new () -> Self {
     let context = Context::default();
-    let active_modules = vec![ context.main_mod ];
-    let active_namespaces = vec![ context.main_ns ];
+    let active_mod_and_ns = vec![ (context.main_mod, vec![ context.main_ns ]) ];
 
     Self {
       context,
-      active_modules,
-      active_namespaces,
+      active_mod_and_ns,
       local_context: None,
     }
   }
@@ -56,50 +52,37 @@ impl Analyzer {
 
   
   
-  /// Push a new active module key on an Analyzer's stack
-  /// 
-  /// Panics if there is not only one (the module root) active namespace left on the stack
-  pub fn push_active_module (&mut self, key: ContextKey) {
-    assert!(
-      self.active_namespaces.len() == 1,
-      "Internal error, cannot push module with active namespaces"
-    );
-
-    self.active_modules.push(key);
-
-    self.active_namespaces.clear();
-    self.active_namespaces.push(self.context.items.get(key).unwrap().ref_module().unwrap().namespace);
+  /// Push a new active module and its root namespace on an Analyzer's stack
+  pub fn push_active_module (&mut self, mod_key: ContextKey) {
+    let module = self.context.items.get(mod_key).unwrap().ref_module().unwrap();
+    let ns_key = module.namespace;
+    self.active_mod_and_ns.push((mod_key, vec![ ns_key ]));
   }
 
   /// Pops and returns active module key from an Analyzer's stack
   ///
   /// Panics if there is only one (the main module) active module left on the stack,
-  /// or if the active namespace stack contains more than the root namespace
+  /// or if there is more than one active namespace in the active module's stack
   pub fn pop_active_module (&mut self) -> ContextKey {
     assert!(
-      self.active_modules.len() > 1,
+      self.active_mod_and_ns.len() > 1,
       "Internal error, cannot pop main module"
     );
 
     assert!(
-      self.active_namespaces.len() == 1,
+      self.active_mod_and_ns.last().unwrap().1.len() == 1,
       "Internal error, cannot pop module with active namespaces"
     );
 
-    let key = unsafe { self.active_modules.pop().unwrap_unchecked() };
+    let (mod_key, _ns_vec) = unsafe { self.active_mod_and_ns.pop().unwrap_unchecked() };
 
-    let new_key = unsafe { *self.active_modules.last().unwrap_unchecked() };
-
-    self.active_namespaces.clear();
-    self.active_namespaces.push(self.context.items.get(new_key).unwrap().ref_module().unwrap().namespace);
-
-    key
+    mod_key
   }
 
   
   /// Push a new active namespace key on an Analyzer's stack
-  pub fn push_active_namespace (&mut self, key: ContextKey) {
-    self.active_namespaces.push(key);
+  pub fn push_active_namespace (&mut self, ns_key: ContextKey) {
+    unsafe { self.active_mod_and_ns.last_mut().unwrap_unchecked().1.push(ns_key) };
   }
 
   /// Pops and returns active namespace key from an Analyzer's stack
@@ -107,18 +90,18 @@ impl Analyzer {
   /// Panics if there is only one (the module root) active namespace left on the stack
   pub fn pop_active_namespace (&mut self) -> ContextKey {
     assert!(
-      self.active_namespaces.len() > 1,
+      self.active_mod_and_ns.last().unwrap().1.len() > 1,
       "Internal error, cannot pop module root namespace"
     );
 
-    unsafe { self.active_namespaces.pop().unwrap_unchecked() }
+    unsafe { self.active_mod_and_ns.last_mut().unwrap_unchecked().1.pop().unwrap_unchecked() }
   }
 
 
   
   /// Get they key of the active Module in an Analyzer
   pub fn get_active_module_key (&self) -> ContextKey {
-    unsafe { *self.active_modules.last().unwrap_unchecked() }
+    unsafe { self.active_mod_and_ns.last().unwrap_unchecked().0 }
   }
 
   /// Get an immutable reference to the active Module in an Analyzer
@@ -134,7 +117,7 @@ impl Analyzer {
 
   /// Get they key of the active Namespace in an Analyzer
   pub fn get_active_namespace_key (&self) -> ContextKey {
-    unsafe { *self.active_namespaces.last().unwrap_unchecked() }
+    unsafe { *self.active_mod_and_ns.last().unwrap_unchecked().1.last().unwrap_unchecked() }
   }
 
   /// Get an immutable reference to the active Namespace in an Analyzer
@@ -222,6 +205,23 @@ impl Analyzer {
     self.get_active_namespace_mut().local_bindings.set_entry_bound(identifier, key, origin);
 
     key
+  }
+
+
+  /// Create a new dependency declaration Module, and its namespace
+  /// 
+  /// Panics if there is an existing module with the same identifier
+  /// 
+  /// Returns the ContextKey associated with the new Module
+  pub fn create_module (&mut self, identifier: Identifier, origin: SourceRegion) -> ContextKey {
+    let module_key = self.context.items.insert(Module::new(identifier.clone(), false, ContextKey::NULL).into());
+    let namespace_key = self.context.items.insert(Namespace::new(module_key, None, identifier.clone(), origin).into());
+
+    unsafe { self.context.items.get_unchecked_mut(module_key).mut_module_unchecked() }.namespace = namespace_key;
+
+    self.context.modules.insert(identifier, module_key).expect_none("Internal error, overwrote existing Module");
+
+    module_key
   }
 
 

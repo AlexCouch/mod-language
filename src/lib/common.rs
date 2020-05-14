@@ -204,6 +204,7 @@ impl From<f64> for Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(missing_docs)]
 pub enum Keyword {
+  Import,
   Alias,
   Export,
   Namespace,
@@ -222,6 +223,7 @@ impl Keyword {
     use Keyword::*;
 
     match self {
+      Import    => "import",
       Alias     => "alias",
       Export    => "export",
       Namespace => "ns",
@@ -343,6 +345,7 @@ impl Operator {
 /// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
 pub const IDENTIFIER_VALUES: &[(&str, Either<Keyword, Operator>)] = {
   &[
+    ("import", Either::A(Keyword::Import)),
     ("export", Either::A(Keyword::Export)),
     ("global", Either::A(Keyword::Global)),
     ("struct", Either::A(Keyword::Struct)),
@@ -424,6 +427,7 @@ pub const ITEM_KEYWORDS: &[Keyword] = {
   use Keyword::*;
 
   &[
+    Import,
     Namespace,
     Alias,
     Export,

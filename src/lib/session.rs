@@ -90,7 +90,7 @@ impl MessageItem {
   /// Requires a reference to source chars
   #[allow(clippy::cognitive_complexity)] // Some functions are just complicated ok?
   pub fn excerpt (&self, f: &mut Formatter, kind: MessageKind, is_last: bool) -> FMTResult {
-    let source = some!(SOURCE_MANAGER.get(self.origin.source); Ok(()));
+    let source = some!(SOURCE_MANAGER.get_source(self.origin.source); Ok(()));
     let chars = source.chars();
 
     let pre_line = kind.get_ansi().wrap("|");

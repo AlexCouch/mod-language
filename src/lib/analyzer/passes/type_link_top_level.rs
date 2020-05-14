@@ -1,5 +1,10 @@
+use std::{
+  collections::{ HashSet, },
+};
+
 use crate::{
   util::{ some, },
+  source::{ SOURCE_MANAGER, ASTKey, },
   ast::{ Item, ItemData, ExportData, LocalDeclaration, },
   ctx::{ TypeData, },
 };
@@ -13,31 +18,48 @@ use super::{
 
 
 /// Binds top level globals and functions to their types
-pub fn type_link_top_level (analyzer: &mut Analyzer, items: &[Item]) {
+pub fn type_link_top_level (analyzer: &mut Analyzer, linked_module_asts: &mut HashSet<ASTKey>, items: &[Item]) {
   for item in items.iter() {
     match &item.data {
       | ItemData::Alias { .. }
       | ItemData::Export { data: ExportData::List(_), .. } 
       => continue,
 
-      ItemData::Export { data: ExportData::Inline(item), .. } => type_link_item(analyzer, item),
+      ItemData::Export { data: ExportData::Inline(item), .. } => type_link_item(analyzer, linked_module_asts, item),
       
+      | ItemData::Import    { .. }
+      | ItemData::Namespace { .. }
       | ItemData::Struct    { .. }
       | ItemData::Type      { .. }
-      | ItemData::Namespace { .. }
       | ItemData::Global    { .. }
       | ItemData::Function  { .. }
-      => type_link_item(analyzer, item)
+      => type_link_item(analyzer, linked_module_asts, item)
     }
   }
 }
 
 
-fn type_link_item (analyzer: &mut Analyzer, item: &Item) {
+fn type_link_item (analyzer: &mut Analyzer, linked_module_asts: &mut HashSet<ASTKey>, item: &Item) {
   match &item.data {
+    &ItemData::Import { ref identifier, ast_key, .. } => {
+      if !linked_module_asts.contains(&ast_key) {
+        let &module_key = analyzer.context.modules.get(identifier).unwrap();
+        let ast = SOURCE_MANAGER.get_ast(ast_key).unwrap();
+
+        // Its important to register it before starting to analyze it incase of circular deps
+        linked_module_asts.insert(ast_key);
+
+        analyzer.push_active_module(module_key);
+
+        type_link_top_level(analyzer, linked_module_asts, ast);
+
+        analyzer.pop_active_module();
+      }
+    }
+
     ItemData::Namespace { identifier, items, .. } => {
       analyzer.push_active_namespace(analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap());
-      type_link_top_level(analyzer, items);
+      type_link_top_level(analyzer, linked_module_asts, items);
       analyzer.pop_active_namespace();
     },
 

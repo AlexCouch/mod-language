@@ -36,7 +36,7 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
   /// Create a new Lexer for a given Source
   pub fn new (source_key: SourceKey) -> Self {
-    let source = SOURCE_MANAGER.get(source_key).expect("Internal error, invalid SourceKey passed to Lexer");
+    let source = SOURCE_MANAGER.get_source(source_key).expect("Internal error, invalid SourceKey passed to Lexer");
     let chars = source.chars();
     let length = chars.len();
     let curr = chars.get(0).unref();

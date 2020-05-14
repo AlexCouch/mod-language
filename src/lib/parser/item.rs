@@ -32,46 +32,80 @@ pub fn item (parser: &mut Parser) -> Option<Item> {
 }
 
 
-fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, SourceRegion)>, ()> {
-  if let Some(&Token { data: TokenData::Operator(As), origin }) = parser.curr_tok() {
+fn itm_import (parser: &mut Parser) -> Option<Item> {
+  if let Some(&Token { data: TokenData::Keyword(Import), origin: start_region }) = parser.curr_tok() {
     parser.advance();
     
-    if let Some(&Token { data: TokenData::Identifier(ref new_name), origin: new_name_origin }) = parser.curr_tok() {
-      let new_name = new_name.to_owned();
+    let (identifier, end_region) = if let Some(&Token { data: TokenData::Identifier(ref identifier), origin: end_region }) = parser.curr_tok() {
+      let data = (identifier.clone(), end_region);
+      parser.advance();
+      data
+    } else {
+      parser.error("Expected identifier to follow `import` token".to_owned());
+      return None
+    };
+
+    let (new_name, end_region) = if let Some(&Token { data: TokenData::Operator(As), .. }) = parser.curr_tok() {
       parser.advance();
 
-      Ok(Some((new_name, SourceRegion::merge(origin, new_name_origin))))
+      if let Some(&Token { data: TokenData::Identifier(ref new_identifier), origin: end_region }) = parser.curr_tok() {
+        let data = (Some(new_identifier.clone()), end_region);
+        parser.advance();
+        data
+      } else {
+        parser.error("Expected identifier to follow aliasing keyword `as`".to_owned());
+        return None
+      }
     } else {
-      parser.error("Expected identifier to follow pseudonyming keyword `as`".to_owned());
+      (None, end_region)
+    };
+    
+    let origin = SourceRegion::merge(start_region, end_region);
 
-      Err(())
-    }
-  } else {
-    Ok(None)
+    let mut mod_path: std::path::PathBuf = [ SOURCE_MANAGER.get_module_dir(), identifier.as_ref().as_ref() ].iter().collect();
+
+    mod_path.set_extension("mi");
+
+    let ast_key = match SOURCE_MANAGER.load_source(&mod_path) {
+      Ok(source_key) => {
+        let ast_key = SOURCE_MANAGER.reserve_ast_cache();
+        SOURCE_MANAGER.bind_ast_to_source(ast_key, source_key);
+
+        let mut sub_lexer = Lexer::new(source_key);
+        let sub_stream = sub_lexer.lex_stream();
+        let mut sub_parser = Parser::new(&sub_stream);
+        let sub_ast = sub_parser.parse_ast();
+
+        SOURCE_MANAGER.set_reserved_ast_cache(ast_key, sub_ast);
+
+        ast_key
+      },
+      Err(Either::A(source_key)) => {
+        if let Some(ast_key) = SOURCE_MANAGER.get_ast_key_from_source(source_key) {
+          ast_key
+        } else {
+          parser.error_at(origin, format!(
+            "File [{}] has already been loaded as a source file, it cannot be loaded as a module declaration file",
+            mod_path.display()
+          ));
+
+          return None
+        }
+      },
+      Err(Either::B(e)) => {
+        parser.error_at(origin, format!(
+          "Unexpected error loading file [{}] from disk: {}",
+          mod_path.display(), e
+        ));
+
+        return None
+      }
+    };
+
+    return Some(Item::new(ItemData::Import { identifier, new_name, ast_key }, origin))
   }
-}
 
-fn get_single_pseudonym (parser: &mut Parser) -> Option<PseudonymData> {
-  let path = match path(parser)? {
-    Either::A(path)  => path,
-    Either::B((ident, origin)) => Path::new(false, vec![ ident ], origin),
-  };
-
-  let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
-      
-  let (new_name, origin) = if let Some((new_name, new_origin)) = new_name_and_origin {
-    (Some(new_name), SourceRegion::merge(path.origin, new_origin))
-  } else {
-    (None, path.origin)
-  };
-
-  if new_name.is_none() && path.is_empty() {
-    parser.error("Expected `as <identifier>` or at least one level descendant of path to follow absolute path operator `::`".to_owned());
-
-    return None
-  }
-
-  Some(PseudonymData { path, new_name, origin })
+  unreachable!("Internal error, import item parselet called on non-import token")
 }
 
 
@@ -320,7 +354,7 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
         }
       } else {
         let curr_source_key = start_region.source;
-        let curr_source = SOURCE_MANAGER.get(curr_source_key).expect("Internal error: Namespace item has invalid source origin");
+        let curr_source = SOURCE_MANAGER.get_source(curr_source_key).expect("Internal error: Namespace item has invalid source origin");
 
         let curr_path = &curr_source.path;
         let curr_dir = curr_path.parent().expect("Internal error: Source file path has no directory");
@@ -334,7 +368,7 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
 
         let local_region = SourceRegion::merge(start_region, end_region);
 
-        let local_error = |msg| parser.error_at(local_region, format!("Cannot alias subnamespace `{}`: {}", identifier, msg));
+        let local_error = |msg| parser.error_at(local_region, format!("Cannot load source file for namespace `{}`: {}", identifier, msg));
 
         let sub_ns_path = if dir_exists && !file_exists {
           sub_dir_ns_path
@@ -356,20 +390,21 @@ fn itm_namespace (parser: &mut Parser) -> Option<Item> {
           return None
         };
 
-        let sub_source_key = match SOURCE_MANAGER.load(&sub_ns_path) {
+        let sub_source_key = match SOURCE_MANAGER.load_source(&sub_ns_path) {
           Ok(key) => key,
-          Err(e) => {
-            if e.kind() == std::io::ErrorKind::AlreadyExists {
-              local_error(format!(
-                "File [{}] has already been loaded during this session, it cannot be aliased twice",
-                sub_ns_path.display()
-              ));
-            } else {
-              local_error(format!(
-                "Unexpected error loading file [{}] from disk: {}",
-                sub_ns_path.display(), e
-              ));
-            }
+          Err(Either::A(_src_key)) => {
+            local_error(format!(
+              "File [{}] has already been loaded during this session, it cannot be aliased twice",
+              sub_ns_path.display()
+            ));
+
+            return None
+          },
+          Err(Either::B(e)) =>  {
+            local_error(format!(
+              "Unexpected error loading file [{}] from disk: {}",
+              sub_ns_path.display(), e
+            ));
 
             return None
           }
@@ -666,6 +701,49 @@ fn itm_function (parser: &mut Parser) -> Option<Item> {
 }
 
 
+fn get_new_name_and_origin (parser: &mut Parser) -> Result<Option<(Identifier, SourceRegion)>, ()> {
+  if let Some(&Token { data: TokenData::Operator(As), origin }) = parser.curr_tok() {
+    parser.advance();
+    
+    if let Some(&Token { data: TokenData::Identifier(ref new_name), origin: new_name_origin }) = parser.curr_tok() {
+      let new_name = new_name.to_owned();
+      parser.advance();
+
+      Ok(Some((new_name, SourceRegion::merge(origin, new_name_origin))))
+    } else {
+      parser.error("Expected identifier to follow aliasing keyword `as`".to_owned());
+
+      Err(())
+    }
+  } else {
+    Ok(None)
+  }
+}
+
+fn get_single_pseudonym (parser: &mut Parser) -> Option<PseudonymData> {
+  let path = match path(parser)? {
+    Either::A(path)  => path,
+    Either::B((ident, origin)) => Path::new(false, vec![ ident ], origin),
+  };
+
+  let new_name_and_origin = if let Ok(new_name_and_origin) = get_new_name_and_origin(parser) { new_name_and_origin } else { return None };
+      
+  let (new_name, origin) = if let Some((new_name, new_origin)) = new_name_and_origin {
+    (Some(new_name), SourceRegion::merge(path.origin, new_origin))
+  } else {
+    (None, path.origin)
+  };
+
+  if new_name.is_none() && path.is_empty() {
+    parser.error("Expected `as <identifier>` or at least one level descendant of path to follow absolute path operator `::`".to_owned());
+
+    return None
+  }
+
+  Some(PseudonymData { path, new_name, origin })
+}
+
+
 struct ItemParselet {
   predicate: ParseletPredicate,
   function: ParseletFunction<Item>,
@@ -679,6 +757,7 @@ impl ItemParselet {
     use TokenData::*;
 
     itm! [
+      Keyword(Import) => itm_import,
       Keyword(Namespace) => itm_namespace,
       Keyword(Struct) => itm_struct,
       Keyword(Type) => itm_type,

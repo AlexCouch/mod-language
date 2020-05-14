@@ -20,10 +20,10 @@ fn main () -> std::io::Result<()> {
   
 
   SESSION.init();
-  SOURCE_MANAGER.init();
+  SOURCE_MANAGER.init("./test_scripts/modules/".into());
 
 
-  let source = SOURCE_MANAGER.load("./test_scripts/item_analysis.ms")?;
+  let source = SOURCE_MANAGER.load_source("./test_scripts/import.ms").expect("Could not find entry source file");
 
 
   let mut lexer = Lexer::new(source);

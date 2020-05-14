@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-  source::{ SourceRegion, },
+  source::{ SourceRegion, ASTKey, },
   common::{ Number, Identifier, Operator, },
 };
 
@@ -539,6 +539,8 @@ pub enum ExportData {
 #[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum ItemData {
+  Import { identifier: Identifier, new_name: Option<Identifier>, ast_key: ASTKey },
+
   Alias { data: Vec<PseudonymData>, terminal: bool },
   Export { data: ExportData, terminal: bool },
 
@@ -554,6 +556,7 @@ impl ItemData {
   /// requires a semicolon to separate it from other Items
   pub fn requires_semi (&self) -> bool {
     match self {
+      | ItemData::Import { .. }
       | ItemData::Global { .. }
       | ItemData::Type   { .. }
       => true,
@@ -854,6 +857,16 @@ impl Display for ItemData {
 impl HierarchicalDisplay for ItemData {
   fn fmt_hierarchical (&self, f: &mut Formatter, mut level: usize) -> FMTResult {
     match self {
+      ItemData::Import { identifier, new_name, .. } => {
+        write!(f, "import {}", identifier)?;
+
+        if let Some(new_name) = new_name {
+          write!(f, " as {}", new_name)?;
+        }
+
+        Ok(())
+      },
+
       ItemData::Alias { data, .. } => {
         write!(f, "alias ")?;
         if data.len() == 1 {

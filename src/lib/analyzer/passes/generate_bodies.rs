@@ -19,6 +19,7 @@ use super::{
 pub fn generate_bodies (analyzer: &mut Analyzer, items: &mut Vec<Item>) {
   for item in items.iter_mut() {
     match &mut item.data {
+      | ItemData::Import { .. }
       | ItemData::Alias  { .. }
       | ItemData::Type   { .. }
       | ItemData::Struct { .. }
@@ -107,6 +108,7 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
     },
 
     // Handled in previous pass
+    | ItemData::Import { .. }
     | ItemData::Struct { .. }
     | ItemData::Type   { .. }
     => { },

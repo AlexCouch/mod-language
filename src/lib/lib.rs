@@ -11,6 +11,7 @@
 #![feature(or_patterns)]
 #![feature(bindings_after_at)]
 #![feature(option_expect_none)]
+#![feature(option_unwrap_none)]
 #![feature(const_fn)]
 #![feature(const_loop)]
 #![feature(const_if_match)]

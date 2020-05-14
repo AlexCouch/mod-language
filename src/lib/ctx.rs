@@ -55,6 +55,9 @@ pub struct Context {
 
   /// Anonymous type lookup helper
   pub anon_types: HashMap<TypeData, ContextKey>,
+
+  /// Module lookup helper
+  pub modules: HashMap<Identifier, ContextKey>,
 }
 
 impl Default for Context {
@@ -121,6 +124,11 @@ impl Context {
 
     unsafe { items.get_unchecked_mut(main_ns).mut_namespace_unchecked() }.parent_module = main_mod;
 
+    let mut modules = HashMap::default();
+
+    modules.insert("core".into(), core_mod);
+    modules.insert("main".into(), main_mod);
+
     Self {
       items,
 
@@ -142,6 +150,8 @@ impl Context {
       concrete_float_ty,
 
       anon_types: HashMap::default(),
+
+      modules,
     }
   }
 

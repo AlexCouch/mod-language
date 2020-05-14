@@ -1,7 +1,8 @@
 use crate::{
   common::{ Identifier, },
+  source::{ SOURCE_MANAGER, },
   ast::{ Item, ItemData, ExportData, PseudonymData, Path, },
-  ctx::{ ContextKey, Namespace, Type, Global, Function, },
+  ctx::{ ContextKey,  Namespace, Type, Global, Function, },
 };
 
 use super::{
@@ -21,7 +22,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
         for &PseudonymData { ref path, ref new_name, origin } in data.iter() {
           let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty alias path with no pseudonym") }.to_owned();
           
-          let relative_to = if path.absolute { analyzer.context.main_ns } else { destination_namespace };
+          let relative_to = if path.absolute { analyzer.get_active_module().namespace } else { destination_namespace };
 
           pseudonyms.push(Pseudonym {
             destination_namespace,
@@ -39,11 +40,10 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
 
         match data {
           ExportData::List(exports) => {
-
             for &PseudonymData { ref path, ref new_name, origin } in exports.iter() {
               let new_name = if let Some(new_name) = new_name { new_name } else { path.last().expect("Internal error, empty export path with no pseudonym") }.to_owned();
               
-              let relative_to = if path.absolute { analyzer.context.main_ns } else { destination_namespace };
+              let relative_to = if path.absolute { analyzer.get_active_module().namespace } else { destination_namespace };
 
               pseudonyms.push(Pseudonym {
                 destination_namespace,
@@ -79,6 +79,7 @@ pub fn bind_top_level (analyzer: &mut Analyzer, items: &[Item], pseudonyms: &mut
 
       ItemData::Type { .. } => bind_pseudo_type(analyzer, item, pseudonyms),
 
+      | ItemData::Import    { .. }
       | ItemData::Namespace { .. }
       | ItemData::Struct    { .. }
       | ItemData::Global    { .. }
@@ -111,6 +112,32 @@ fn bind_pseudo_type (analyzer: &mut Analyzer, item: &Item, pseudonyms: &mut Vec<
 
 fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, pseudonyms: &mut Vec<Pseudonym>) -> (&'a Identifier, ContextKey) {
   match &item.data {
+    ItemData::Import { identifier, new_name, ast_key } => {
+      let module_key = if let Some(&module_key) = analyzer.context.modules.get(identifier) {
+        module_key
+      } else {
+        let module_key = analyzer.create_module(identifier.clone(), item.origin);
+
+        let ast = SOURCE_MANAGER.get_ast(*ast_key).expect("Internal error, invalid ASTKey in import node");
+
+        analyzer.push_active_module(module_key);
+
+        bind_top_level(analyzer, ast, pseudonyms);
+        
+        analyzer.pop_active_module();
+
+        module_key
+      };
+
+      let new_name = if let Some(new_name) = new_name { new_name } else { identifier };
+
+      let ns = analyzer.get_active_namespace_mut();
+
+      ns.local_bindings.set_entry_bound(new_name.clone(), module_key, item.origin);
+
+      (new_name, module_key)
+    },
+
     ItemData::Namespace { identifier, items, .. } => {
       let new_ns = analyzer.create_item(
         identifier.to_owned(),

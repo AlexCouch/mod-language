@@ -1,3 +1,5 @@
+import Circle;
+
 ns A {
   ns L {
     export fn F;

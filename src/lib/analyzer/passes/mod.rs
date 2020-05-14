@@ -1,6 +1,11 @@
 //! Analysis passes for the semantic Analyzer
 
+use std::{
+  collections::{ HashSet, },
+};
+
 use crate::{
+  source::{ ASTKey, },
   ast::{ Item, },
 };
 
@@ -37,7 +42,9 @@ impl Analyzer {
       resolve_pseudonyms(self, &mut pseudonyms);
     }
 
-    type_link_top_level(self, ast);
+    let mut linked_module_asts: HashSet<ASTKey> = HashSet::default();
+
+    type_link_top_level(self, &mut linked_module_asts, ast);
 
     generate_bodies(self, ast);
 

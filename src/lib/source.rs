@@ -1,7 +1,7 @@
 //! Contains Source, SourceManager structure and singleton, as well as SourceLocation and SourceRegion
 
 use std::{
-  io::Result as IOResult,
+  io::{ Error as IOError, Result as IOResult, },
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
   fs::read_to_string,
   cell::{ UnsafeCell, },
@@ -10,8 +10,9 @@ use std::{
 
 use crate::{
   ansi,
-  util::{ make_key_type, },
-  collections::{ SlotMap, },
+  util::{ make_key_type, Either, Unref, },
+  collections::{ SlotMap, BiMap, },
+  ast,
 };
 
 
@@ -101,7 +102,7 @@ impl Display for SourceLocation {
 
 impl Debug for SourceRegion {
   fn fmt (&self, f: &mut Formatter) -> FMTResult {
-    if let Some(source) = SOURCE_MANAGER.get(self.source) {
+    if let Some(source) = SOURCE_MANAGER.get_source(self.source) {
       write!(f, "{}:{}", source.path.display(), self.start)?;
 
       if self.end != self.start
@@ -175,13 +176,24 @@ impl Source {
 make_key_type! {
   /// A SlotMap key used to reference a Source file
   pub struct SourceKey;
+
+  /// A SlotMap key used to reference a Module declaration AST
+  pub struct ASTKey;
+}
+
+struct SourceManagerInterior {
+  source_map: SlotMap<SourceKey, Source>,
+  ast_map: SlotMap<ASTKey, Option<Vec<ast::Item>>>,
+  bi_map: BiMap<SourceKey, ASTKey>,
+
+  module_dir: PathBuf,
 }
 
 /// The type of the central repository for Sources processed during a compilation session
 /// 
 /// # Safety
 /// This is not a thread safe structure
-pub struct SourceManager (UnsafeCell<Option<SlotMap<SourceKey, Source>>>);
+pub struct SourceManager (UnsafeCell<Option<SourceManagerInterior>>);
 
 unsafe impl Send for SourceManager { }
 unsafe impl Sync for SourceManager { }
@@ -194,40 +206,102 @@ pub static SOURCE_MANAGER: SourceManager = SourceManager(UnsafeCell::new(None));
 
 impl SourceManager {
   #[allow(clippy::mut_from_ref)]
-  unsafe fn inner (&self) -> &mut Option<SlotMap<SourceKey, Source>> {
+  unsafe fn inner (&self) -> &mut Option<SourceManagerInterior> {
     &mut *self.0.get()
   }
 
   #[allow(clippy::mut_from_ref)]
-  fn map (&self) -> &mut SlotMap<SourceKey, Source> {
+  fn source_map (&self) -> &mut SlotMap<SourceKey, Source> {
     let inner = unsafe { self.inner() };
-    inner.as_mut().expect("Internal error: SourceManager not initialized")
+    &mut inner.as_mut().expect("Internal error: SourceManager not initialized").source_map
+  }
+
+  #[allow(clippy::mut_from_ref)]
+  fn ast_map (&self) -> &mut SlotMap<ASTKey, Option<Vec<ast::Item>>> {
+    let inner = unsafe { self.inner() };
+    &mut inner.as_mut().expect("Internal error: SourceManager not initialized").ast_map
+  }
+
+  #[allow(clippy::mut_from_ref)]
+  fn bi_map (&self) -> &mut BiMap<SourceKey, ASTKey> {
+    let inner = unsafe { self.inner() };
+    &mut inner.as_mut().expect("Internal error: SourceManager not initialized").bi_map
+  }
+
+  /// Get the directory containing module declaration files
+  pub fn get_module_dir (&self) -> &Path {
+    let inner = unsafe { self.inner() };
+    inner.as_mut().expect("Internal error: SourceManager not initialized").module_dir.as_ref()
   }
 
   /// Initialize the SourceManager singleton
   /// 
   /// # Safety
   /// This should only be called once at the start of a session
-  pub fn init (&self) {
+  pub fn init (&self, module_dir: PathBuf) {
     let inner = unsafe { self.inner() };
     assert!(inner.is_none(), "Internal error: SourceManager double initialized");
 
-    inner.replace(SlotMap::default());
+    inner.replace(SourceManagerInterior { source_map: SlotMap::default(), ast_map: SlotMap::default(), bi_map: BiMap::new(), module_dir });
   }
 
   /// Load a Source from a file path and get a key to it
-  pub fn load<P: AsRef<Path>> (&self, path: P) -> IOResult<SourceKey> {
-    for src in self.map().values() {
+  pub fn load_source<P: AsRef<Path>> (&self, path: P) -> Result<SourceKey, Either<SourceKey, IOError>> {
+    for (&key, src) in self.source_map().pair_iter() {
       if src.path == path.as_ref() {
-        return Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists))
+        return Err(Either::A(key))
       }
     }
 
-    Ok(self.map().insert(Source::load(path)?))
+    match Source::load(path) {
+      Ok(source) => Ok(self.source_map().insert(source)),
+      Err(e) => Err(Either::B(e))
+    }
   }
 
   /// Convert a SourceKey into a Source reference
-  pub fn get (&self, key: SourceKey) -> Option<&Source> {
-    self.map().get(key)
+  pub fn get_source (&self, key: SourceKey) -> Option<&Source> {
+    self.source_map().get(key)
+  }
+
+
+  /// Reserve a cache slot for an AST
+  pub fn reserve_ast_cache (&self) -> ASTKey {
+    self.ast_map().insert(None)
+  }
+
+  /// Set the value of an existing ast cache slot
+  /// 
+  /// Panics if the designated slot doesnt exist or is already filled
+  pub fn set_reserved_ast_cache (&self, key: ASTKey, ast: Vec<ast::Item>) {
+    self.ast_map()
+        .get_mut(key)
+        .expect("Internal error, tried to fill non-existant ast cache")
+        .replace(ast)
+        .expect_none("Internal error, tried to fill ast reserved cache, but it was already filled");
+  }
+
+  /// Get an AST cached in the SourceManager singleton from its ASTKey
+  /// 
+  /// Panics if the designated slot has not been filled
+  pub fn get_ast (&self, key: ASTKey) -> Option<&[ast::Item]> {
+    self.ast_map().get(key).map(|opt_vec| opt_vec.as_ref().expect("Internal error, tried to get unfilled ast reserve cache").as_slice())
+  }
+
+  /// Bind an ASTKey to a SourceKey for lookup later
+  /// 
+  /// Panics if the given SourceKey already has an ASTKey bound to it
+  pub fn bind_ast_to_source (&self, ast_key: ASTKey, src_key: SourceKey) {
+    self.bi_map().insert_at_key(src_key, ast_key).unwrap_none();
+  }
+
+  /// Get an ASTKey from a SourceKey if one is bound to it
+  pub fn get_ast_key_from_source (&self, src_key: SourceKey) -> Option<ASTKey> {
+    self.bi_map().find_value(&src_key).unref()
+  }
+
+  /// Get an SourceKey from an ASTKey if one is bound to it
+  pub fn get_source_key_from_ast (&self, ast_key: ASTKey) -> Option<SourceKey> {
+    self.bi_map().find_key(&ast_key).unref()
   }
 }

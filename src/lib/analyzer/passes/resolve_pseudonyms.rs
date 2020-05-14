@@ -1,6 +1,6 @@
 use crate::{
   common::{ Identifier, },
-  ctx::{ ContextKey, ContextItem, TypeData, },
+  ctx::{ ContextKey, ContextItem, Module, TypeData, },
   ast::{ TypeExpression, TypeExpressionData, Path, },
 };
 
@@ -96,36 +96,42 @@ fn resolve_path (analyzer: &mut Analyzer, pseudonyms: &mut Vec<Pseudonym>, relat
   for ident in path.chain.iter() {
     let base = analyzer.context.items.get(resolved_key).expect("Internal error, invalid lowered key during pseudonym resolution");
 
-    if let ContextItem::Namespace(namespace) = base {
-      base_name.set(&namespace.canonical_name);
+    let (ns_key, namespace) = match base {
+      ContextItem::Namespace(namespace) => (resolved_key, namespace),
+      &ContextItem::Module(Module { namespace, .. }) => (namespace, analyzer.context.items.get(namespace).unwrap().ref_namespace().unwrap()),
 
-      resolved_key = if !path.absolute && resolved_key == relative_to {
-        if let Some(local) = namespace.local_bindings.get_entry(ident) {
-          local
-        } else if let Some(pseudonym) = try_get_pseudonym(pseudonyms, resolved_key, PseudonymKind::Alias, ident) {
-          // if this fails there has already been an error message and we can just bail
-          // TODO should unresolved pseudonyms link an error item? (probably)
-          resolve_pseudonym(analyzer, pseudonyms, pseudonym)?
-        } else if let Some(core) = analyzer.context.core_bs.get_entry(ident) {
-          core
-        } else {
-          analyzer.error(path.origin, format!("Namespace `{}` does not have access to an item named `{}`", base_name, ident));
-          return None
-        }
-      } else if let Some(exported_key) = namespace.export_bindings.get_entry(ident) {
-        exported_key
-      } else if let Some(pseudonym) = try_get_pseudonym(pseudonyms, resolved_key, PseudonymKind::Export, ident) {
+      _ => {
+        analyzer.error(path.origin, format!("{} is not a Namespace or Module and has no exports", base_name));
+        return None
+      }
+    };
+
+    base_name.set(&namespace.canonical_name);
+
+    resolved_key = if !path.absolute && ns_key == relative_to {
+      if let Some(local) = namespace.local_bindings.get_entry(ident) {
+        local
+      } else if let Some(pseudonym) = try_get_pseudonym(pseudonyms, ns_key, PseudonymKind::Alias, ident) {
         // if this fails there has already been an error message and we can just bail
         // TODO should unresolved pseudonyms link an error item? (probably)
         resolve_pseudonym(analyzer, pseudonyms, pseudonym)?
+      } else if let Some(core) = analyzer.context.core_bs.get_entry(ident) {
+        core
       } else {
-        analyzer.error(path.origin, format!("Namespace `{}` does not export an item named `{}`", base_name, ident));
+        analyzer.error(path.origin, format!("Namespace `{}` does not have access to an item named `{}`", base_name, ident));
         return None
-      };
+      }
+    } else if let Some(exported_key) = namespace.export_bindings.get_entry(ident) {
+      exported_key
+    } else if let Some(pseudonym) = try_get_pseudonym(pseudonyms, ns_key, PseudonymKind::Export, ident) {
+      // if this fails there has already been an error message and we can just bail
+      // TODO should unresolved pseudonyms link an error item? (probably)
+      resolve_pseudonym(analyzer, pseudonyms, pseudonym)?
     } else {
-      analyzer.error(path.origin, format!("{} is not a Namespace and has no exports", ident));
+      analyzer.error(path.origin, format!("Namespace `{}` does not export an item named `{}`", base_name, ident));
       return None
-    }
+    };
+    
   }
 
   Some(resolved_key)
