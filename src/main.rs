@@ -23,7 +23,7 @@ fn main () -> std::io::Result<()> {
   SOURCE_MANAGER.init("./test_scripts/modules/".into());
 
 
-  let source = SOURCE_MANAGER.load_source("./test_scripts/body_analysis.ms").expect("Could not find entry source file");
+  let source = SOURCE_MANAGER.load_source("./test_scripts/global_analysis.ms").expect("Could not find entry source file");
 
 
   let mut lexer = Lexer::new(source);

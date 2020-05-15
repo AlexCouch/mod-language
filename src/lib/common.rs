@@ -40,6 +40,10 @@ impl PartialEq for Identifier {
   #[inline] fn eq (&self, other: &Self) -> bool { self.as_ref() == other.as_ref() }
 }
 
+impl PartialEq<str> for Identifier {
+  #[inline] fn eq (&self, other: &str) -> bool { self.as_ref() == other }
+}
+
 impl Eq for Identifier { }
 
 impl PartialOrd for Identifier {

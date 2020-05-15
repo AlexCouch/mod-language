@@ -277,6 +277,7 @@ pub fn ty_from_anon_data (analyzer: &mut Analyzer, type_data: TypeData, origin: 
   } else {
     let new_key = analyzer.context.items.insert(Type::new(None, None, None, origin, Some(type_data.clone())).into());
     analyzer.context.anon_types.insert(type_data, new_key);
+    analyzer.context.types.push(new_key);
     new_key
   }
 }

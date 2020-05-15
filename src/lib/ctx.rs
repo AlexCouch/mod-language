@@ -53,11 +53,19 @@ pub struct Context {
   /// Concrete type the coercible floating point type becomes without inferrence
   pub concrete_float_ty: ContextKey,
 
+  /// Module lookup helper
+  pub modules: HashMap<Identifier, ContextKey>,
   /// Anonymous type lookup helper
   pub anon_types: HashMap<TypeData, ContextKey>,
 
-  /// Module lookup helper
-  pub modules: HashMap<Identifier, ContextKey>,
+  /// A list of all types in a context
+  pub types: Vec<ContextKey>,
+  /// A list of all namespaces in a context
+  pub namespaces: Vec<ContextKey>,
+  /// A list of all globals in a context
+  pub globals: Vec<ContextKey>,
+  /// A list of all functions in a context
+  pub functions: Vec<ContextKey>,
 }
 
 impl Default for Context {
@@ -87,9 +95,16 @@ impl Context {
       ("f64",  TypeData::Primitive(PrimitiveType::FloatingPoint { bit_size: 64 })),
     ];
 
+    let mut modules = HashMap::default();
+    let anon_types = HashMap::default();
+    let mut namespaces = Vec::new();
+    let mut types = Vec::new();
+    let globals = Vec::new();
+    let functions = Vec::new();
+
     let mut items: SlotMap<ContextKey, ContextItem> = SlotMap::default();
     let core_ns = items.insert(Namespace::new(ContextKey::default(), None, "core".into(), SourceRegion::ANONYMOUS).into());
-    let core_mod = items.insert(Module::new("core".into(), false, core_ns).into());
+    let core_mod = items.insert(Module::new("core".into(), false, core_ns, None).into());
 
     unsafe { items.get_unchecked_mut(core_ns).mut_namespace_unchecked() }.parent_module = core_mod;
 
@@ -97,6 +112,7 @@ impl Context {
 
     for &(name, ref td) in PRIMITIVE_TYPES.iter() {
       let key = items.insert(Type::new(Some(core_mod), Some(core_ns), Some(name.into()), SourceRegion::ANONYMOUS, Some(td.clone())).into());
+      types.push(key);
 
       core_bs.set_entry_bound(name, key, SourceRegion::ANONYMOUS);
       
@@ -106,8 +122,11 @@ impl Context {
     }
 
     let err_ty = items.insert(Type::new(None, None, Some("{{ type error }}".into()), SourceRegion::ANONYMOUS, Some(TypeData::Error)).into());
+    types.push(err_ty);
     let int_ty = items.insert(Type::new(None, None, Some("int".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::Integer))).into());
+    types.push(int_ty);
     let float_ty = items.insert(Type::new(None, None, Some("float".into()), SourceRegion::ANONYMOUS, Some(TypeData::Coercible(CoercibleType::FloatingPoint))).into());
+    types.push(float_ty);
 
     let void_ty = core_bs.get_entry("void").unwrap();
     let bool_ty = core_bs.get_entry("bool").unwrap();
@@ -120,14 +139,15 @@ impl Context {
     let main_ns = items.insert(Namespace::new(ContextKey::default(), None, "module".into(), SourceRegion::ANONYMOUS).into());
     core_bs.set_entry_bound("module", main_ns, SourceRegion::ANONYMOUS);
 
-    let main_mod = items.insert(Module::new("main".into(), true, main_ns).into());
+    let main_mod = items.insert(Module::new("main".into(), true, main_ns, None).into());
 
     unsafe { items.get_unchecked_mut(main_ns).mut_namespace_unchecked() }.parent_module = main_mod;
 
-    let mut modules = HashMap::default();
-
     modules.insert("core".into(), core_mod);
     modules.insert("main".into(), main_mod);
+
+    namespaces.push(core_ns);
+    namespaces.push(main_ns);
 
     Self {
       items,
@@ -149,9 +169,13 @@ impl Context {
       concrete_int_ty,
       concrete_float_ty,
 
-      anon_types: HashMap::default(),
-
       modules,
+      anon_types,
+
+      namespaces,
+      types,
+      globals,
+      functions,
     }
   }
 
@@ -347,15 +371,18 @@ pub struct Module {
   pub is_main: bool,
   /// The top level Namespace containing all of a Module's Items
   pub namespace: ContextKey,
+  /// The location a Module was first imported (if it is an import)
+  pub origin: Option<SourceRegion>,
 }
 
 impl Module {
   /// Create a new semantic analysis Module
-  pub fn new (canonical_name: Identifier, is_main: bool, namespace: ContextKey) -> Self {
+  pub fn new (canonical_name: Identifier, is_main: bool, namespace: ContextKey, origin: Option<SourceRegion>) -> Self {
     Self {
       canonical_name,
       is_main,
       namespace,
+      origin,
     }
   }
 }
@@ -610,12 +637,14 @@ pub struct Global {
   /// The SourceRegion at which a Global was defined
   pub origin: SourceRegion,
   /// The initializer IR expression for a Global if it has one
-  pub initializer: Option<ir::Expression>
+  pub initializer: Option<ir::Expression>,
+  /// The initialization order of a Global
+  pub rank: usize,
 }
 
 impl Global {
   /// Create a new Global and initialize its canonical name, origin, and optionally its type
-  pub fn new (parent_module: ContextKey, parent_namespace: ContextKey, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
+  pub fn new (parent_module: ContextKey, parent_namespace: ContextKey, rank: usize, canonical_name: Identifier, origin: SourceRegion, ty: Option<ContextKey>) -> Self {
     Self {
       parent_module,
       parent_namespace,
@@ -623,6 +652,7 @@ impl Global {
       ty,
       origin,
       initializer: None,
+      rank,
     }
   }
 }

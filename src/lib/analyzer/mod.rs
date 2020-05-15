@@ -6,7 +6,7 @@ use crate::{
   source::{ SourceRegion, },
   common::{ Identifier, },
   ast::{ Item, },
-  ctx::{ Context, Module, Namespace, ContextItem, ContextKey, LocalContext, },
+  ctx::{ Context, Module, Namespace, ContextItem, ContextItemKind, ContextKey, LocalContext, },
 };
 
 
@@ -21,6 +21,8 @@ pub struct Analyzer {
   pub active_mod_and_ns: Vec<(ContextKey, Vec<ContextKey>)>,
   /// The local context being analyzed, if any
   pub local_context: Option<LocalContext>,
+  /// A counter used to track initialization order of Globals
+  pub global_rank_counter: usize,
 }
 
 
@@ -39,6 +41,7 @@ impl Analyzer {
       context,
       active_mod_and_ns,
       local_context: None,
+      global_rank_counter: 0,
     }
   }
 
@@ -51,6 +54,19 @@ impl Analyzer {
   }
 
   
+  /// Get the current value of the global rank counter, and then increment it
+  /// 
+  /// If the active module is not the main module, global rank is always `usize::MAX`
+  pub fn get_global_rank (&mut self) -> usize {
+    if self.get_active_module_key() == self.context.main_mod {
+      let rank = self.global_rank_counter;
+      self.global_rank_counter += 1;
+      rank
+    } else {
+      std::usize::MAX
+    }
+  }
+
   
   /// Push a new active module and its root namespace on an Analyzer's stack
   pub fn push_active_module (&mut self, mod_key: ContextKey) {
@@ -173,6 +189,8 @@ impl Analyzer {
   pub fn create_item<I: Into<ContextItem>> (&mut self, identifier: Identifier, new_item: I, origin: SourceRegion) -> ContextKey {
     let new_item = new_item.into();
 
+    let kind = new_item.kind();
+
     if let Some(shadowed_key) = self.get_active_namespace().local_bindings.get_entry(&identifier) {
       let shadowed_kind = self.context.items.get(shadowed_key).expect("Internal error, shadowed item does not exist").kind();
       let shadowed_location = self.get_active_namespace().local_bindings.get_bind_location(shadowed_key).expect("Internal error, shadowed item has no bind location");
@@ -204,6 +222,14 @@ impl Analyzer {
 
     self.get_active_namespace_mut().local_bindings.set_entry_bound(identifier, key, origin);
 
+    match kind {
+      ContextItemKind::Module => { },
+      ContextItemKind::Namespace => self.context.namespaces.push(key),
+      ContextItemKind::Type => self.context.types.push(key),
+      ContextItemKind::Global => self.context.globals.push(key),
+      ContextItemKind::Function => self.context.functions.push(key),
+    }
+
     key
   }
 
@@ -214,7 +240,7 @@ impl Analyzer {
   /// 
   /// Returns the ContextKey associated with the new Module
   pub fn create_module (&mut self, identifier: Identifier, origin: SourceRegion) -> ContextKey {
-    let module_key = self.context.items.insert(Module::new(identifier.clone(), false, ContextKey::NULL).into());
+    let module_key = self.context.items.insert(Module::new(identifier.clone(), false, ContextKey::NULL, Some(origin)).into());
     let namespace_key = self.context.items.insert(Namespace::new(module_key, None, identifier.clone(), origin).into());
 
     unsafe { self.context.items.get_unchecked_mut(module_key).mut_module_unchecked() }.namespace = namespace_key;

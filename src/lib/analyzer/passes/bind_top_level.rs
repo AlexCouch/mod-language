@@ -171,17 +171,21 @@ fn bind_item<'a> (analyzer: &mut Analyzer, item: &'a Item, pseudonyms: &mut Vec<
       item.origin
     )),
 
-    ItemData::Global { identifier, .. } => (identifier, analyzer.create_item(
-      identifier.to_owned(),
-      Global::new(
-        analyzer.get_active_module_key(),
-        analyzer.get_active_namespace_key(),
+    ItemData::Global { identifier, .. } => {
+      let rank =  analyzer.get_global_rank();
+      (identifier, analyzer.create_item(
         identifier.to_owned(),
-        item.origin,
-        None
-      ),
-      item.origin
-    )),
+        Global::new(
+          analyzer.get_active_module_key(),
+          analyzer.get_active_namespace_key(),
+          rank,
+          identifier.to_owned(),
+          item.origin,
+          None
+        ),
+        item.origin
+      ))
+    },
 
     ItemData::Function { identifier, .. } => (identifier, analyzer.create_item(
       identifier.to_owned(),

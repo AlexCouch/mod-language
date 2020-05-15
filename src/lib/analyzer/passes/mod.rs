@@ -29,6 +29,9 @@ pub use type_link_top_level::*;
 mod generate_bodies;
 pub use generate_bodies::*;
 
+mod check_global_initializers;
+pub use check_global_initializers::*;
+
 
 
 impl Analyzer {
@@ -47,6 +50,8 @@ impl Analyzer {
     type_link_top_level(self, &mut linked_module_asts, ast);
 
     generate_bodies(self, ast);
+
+    check_global_initializers(self);
 
     assert!(self.get_active_namespace_key() == self.context.main_ns, "Internal error, a pass did not pop an active namespace");
   }
