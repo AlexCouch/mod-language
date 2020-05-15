@@ -5,8 +5,9 @@ fn get_y -> s32 {
   Y
 }
 
-global A: s32 = get_a() + 1;
+global A: s32 = get_a_plus_one() + 1;
 
+fn get_a_plus_one -> s32 { get_a() + 1 }
 fn get_a -> s32 { A }
 
 global use_import: s32 = GlobalDef::X + 1;
