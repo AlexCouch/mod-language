@@ -48,6 +48,11 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
       let global_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
 
       if let Some(initializer_expr) = initializer {
+        if analyzer.get_active_module_key() != analyzer.context.main_mod {
+          analyzer.error(item.origin, "External global declarations cannot have an initializer".to_owned());
+          return
+        }
+
         analyzer.create_local_context();
         
         let initializer_ir = generate_expr(analyzer, initializer_expr);
@@ -85,6 +90,11 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
       let function_key = analyzer.get_active_namespace().local_bindings.get_entry(identifier).unwrap();
 
       if let Some(body_block) = body {
+        if analyzer.get_active_module_key() != analyzer.context.main_mod {
+          analyzer.error(item.origin, "External function declarations cannot have an initializer".to_owned());
+          return
+        }
+
         // its possible some shadowing error has overwritten this def and if so we just return
         let function = some!(analyzer.context.items.get(function_key).unwrap().ref_function());
 
