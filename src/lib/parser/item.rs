@@ -593,19 +593,19 @@ fn itm_global (parser: &mut Parser) -> Option<Item> {
 
 
 fn itm_function (parser: &mut Parser) -> Option<Item> {
-  let (start_region, mut end_region) = if let Some(&Token { data: TokenData::Keyword(Function), origin }) = parser.curr_tok() {
+  let start_region = if let Some(&Token { data: TokenData::Keyword(Function), origin }) = parser.curr_tok() {
     parser.advance();
-    (origin, origin)
+    origin
   } else {
     unreachable!("Internal error, function parselet called on non-fn token");
   };
 
-  let identifier = if let Some(&Token { data: TokenData::Identifier(ref identifier), .. }) = parser.curr_tok() {
+  let (identifier, mut end_region) = if let Some(&Token { data: TokenData::Identifier(ref identifier), origin }) = parser.curr_tok() {
     let identifier = identifier.clone();
 
     parser.advance();
 
-    identifier
+    (identifier, origin)
   } else {
     parser.error("Expected identifier for function to follow fn keyword".to_owned());
     return None;
