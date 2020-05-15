@@ -6,12 +6,12 @@ use core::{
 
 use std::{
   fmt::{ Display, Debug, Formatter, Result as FMTResult, },
-  collections::{ HashMap, hash_map::{ Iter as HashMapIter, IterMut as HashMapIterMut, Keys as HashMapKeys, Values as HashMapValues, }, },
+  collections::{ HashMap, },
 };
 
 use crate::{
   util::{ make_key_type, Unref, UnwrapUnchecked, },
-  collections::{ SlotMap, },
+  collections::{ SlotMap, Map, map::{ SliceIter, PairIter, PairIterMut, }, },
   source::{ SourceRegion, },
   common::{ Identifier, },
   ir,
@@ -173,16 +173,16 @@ impl Context {
 /// A layer of semantic distinction for identifiers in a compilation context
 #[derive(Debug, Clone)]
 pub struct Bindspace<K: std::hash::Hash + Eq + Copy> {
-  entries: HashMap<Identifier, K>,
-  bind_locations: HashMap<K, SourceRegion>,
+  entries: Map<Identifier, K>,
+  bind_locations: Map<K, SourceRegion>,
 }
 
 impl<K: std::hash::Hash + Eq + Copy> Bindspace<K> {
   /// Create a new empty Bindspace
   pub fn new () -> Self {
     Self {
-      entries: HashMap::default(),
-      bind_locations: HashMap::default(),
+      entries: Map::new(),
+      bind_locations: Map::new(),
     }
   }
 }
@@ -199,7 +199,7 @@ pub type LocalBindspace = Bindspace<MultiKey>;
 impl<K: std::hash::Hash + Eq + Copy> Bindspace<K> {
   /// Get the location, if any, a Bindspace entry was bound at
   pub fn get_bind_location (&self, key: K) -> Option<SourceRegion> {
-    self.bind_locations.get(&key).unref()
+    self.bind_locations.find_value(&key).unref()
   }
 
   /// Determine if a Bindspace entry has a binding location
@@ -214,14 +214,14 @@ impl<K: std::hash::Hash + Eq + Copy> Bindspace<K> {
   
   /// Get the entry, if any, associated with an identifier in a Bindspace
   pub fn get_entry<I: AsRef<str> + ?Sized> (&self, ident: &I) -> Option<K> {
-    self.entries.get(ident.as_ref()).unref()
+    self.entries.find_value(ident.as_ref()).unref()
   }
 
   /// Get the entry associated with an identifier in a Bindspace
   /// # Safety
   /// It is up to the caller to determine whether the identifier provided is bound
   pub unsafe fn get_entry_unchecked<I: AsRef<str> + ?Sized> (&self, ident: &I) -> K {
-    *self.entries.get(ident.as_ref()).unwrap_unchecked()
+    *self.entries.find_value(ident.as_ref()).unwrap_unchecked()
   }
 
   /// Determine if a Bindspace entry has a binding location
@@ -256,32 +256,32 @@ impl<K: std::hash::Hash + Eq + Copy> Bindspace<K> {
   }
 
   /// Get a key/loc iterator over the bind pairs in a Bindspace
-  pub fn bind_iter (&self) -> HashMapIter<K, SourceRegion> {
+  pub fn bind_iter (&self) -> PairIter<K, SourceRegion> {
     self.bind_locations.iter()
   }
 
   /// Get a mutable key/loc iterator over the bind pairs in a Bindspace
-  pub fn bind_iter_mut (&mut self) -> HashMapIterMut<K, SourceRegion> {
+  pub fn bind_iter_mut (&mut self) -> PairIterMut<K, SourceRegion> {
     self.bind_locations.iter_mut()
   }
 
   /// Get an iterator over the identifiers in a Bindspace
-  pub fn ident_iter (&self) -> HashMapKeys<Identifier, K> {
-    self.entries.keys()
+  pub fn ident_iter (&self) -> SliceIter<Identifier> {
+    self.entries.key_iter()
   }
 
   /// Get an iterator over the keys in a Bindspace
-  pub fn key_iter (&self) -> HashMapValues<Identifier, K> {
-    self.entries.values()
+  pub fn key_iter (&self) -> SliceIter<K> {
+    self.entries.value_iter()
   }
 
   /// Get a key/value iterator over the entry pairs in a Bindspace
-  pub fn entry_iter (&self) -> HashMapIter<Identifier, K> {
+  pub fn entry_iter (&self) -> PairIter<Identifier, K> {
     self.entries.iter()
   }
 
   /// Get a mutable key/value iterator over the entry pairs in a Bindspace
-  pub fn entry_iter_mut (&mut self) -> HashMapIterMut<Identifier, K> {
+  pub fn entry_iter_mut (&mut self) -> PairIterMut<Identifier, K> {
     self.entries.iter_mut()
   }
 
@@ -304,8 +304,8 @@ impl<K: std::hash::Hash + Eq + Copy> Bindspace<K> {
 
 /// An immutable key/value/sourceregion iterator over the entry pairs and bind locations in a Bindspace
 pub struct BindspaceIter<'a, K: std::hash::Hash + Eq + Copy> {
-  bind_locations: &'a HashMap<K, SourceRegion>,
-  entry_iter: HashMapIter<'a, Identifier, K>,
+  bind_locations: &'a Map<K, SourceRegion>,
+  entry_iter: PairIter<'a, Identifier, K>,
 }
 
 impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for BindspaceIter<'a, K> {
@@ -314,14 +314,14 @@ impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for BindspaceIter<'a, K> {
   fn next (&mut self) -> Option<Self::Item> {
     let (ident, key) = self.entry_iter.next()?;
 
-    Some((ident, key, self.bind_locations.get(key)?))
+    Some((ident, key, self.bind_locations.find_value(key)?))
   }
 }
 
 /// A mutable key/value/sourceregion iterator over the entry pairs and bind locations in a Bindspace
 pub struct BindspaceIterMut<'a, K: std::hash::Hash + Eq + Copy> {
-  bind_locations: &'a HashMap<K, SourceRegion>,
-  entry_iter: HashMapIterMut<'a, Identifier, K>,
+  bind_locations: &'a Map<K, SourceRegion>,
+  entry_iter: PairIterMut<'a, Identifier, K>,
 }
 
 impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for BindspaceIterMut<'a, K> {
@@ -331,7 +331,7 @@ impl<'a, K: std::hash::Hash + Eq + Copy> Iterator for BindspaceIterMut<'a, K> {
     let (ident, key) = self.entry_iter.next()?;
     let owned_key = *key;
 
-    Some((ident, key, self.bind_locations.get(&owned_key)?))
+    Some((ident, key, self.bind_locations.find_value(&owned_key)?))
   }
 }
 
