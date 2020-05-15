@@ -4,7 +4,7 @@ use crate::{
   common::{ Identifier, },
   source::{ SourceRegion, },
   ast::{ TypeExpression, TypeExpressionData, Path, },
-  ctx::{ ContextItem, ContextKey, TypeData,  MultiKey, },
+  ctx::{ ContextItem, ContextKey, Module, TypeData,  MultiKey, },
 };
 
 use super::{
@@ -65,28 +65,33 @@ pub fn eval_path (analyzer: &mut Analyzer, path: &Path, origin: SourceRegion) ->
   for ident in path.iter() {
     let base = analyzer.context.items.get(resolved_key).expect("Internal error, invalid lowered key during path resolution");
 
-    if let ContextItem::Namespace(namespace) = base {
-      base_name.set(&namespace.canonical_name);
+    let (ns_key, namespace) = match base {
+      ContextItem::Namespace(namespace) => (resolved_key, namespace),
+      &ContextItem::Module(Module { namespace, .. }) => (namespace, analyzer.context.items.get(namespace).unwrap().ref_namespace().unwrap()),
 
-      resolved_key = if !path.absolute && resolved_key == base_key {
-        if let Some(local) = namespace.local_bindings.get_entry(ident) {
-          local
-        } else if let Some(core) = analyzer.context.core_bs.get_entry(ident) {
-          core
-        } else {
-          analyzer.error(origin, format!("Namespace `{}` does not have access to an item named `{}`", base_name, ident));
-          return None
-        }
-      } else if let Some(exported_key) = namespace.export_bindings.get_entry(ident) {
-        exported_key
-      } else {
-        analyzer.error(origin, format!("Namespace `{}` does not export an item named `{}`", base_name, ident));
+      _ => {
+        analyzer.error(path.origin, format!("{} is not a Namespace or Module and has no exports", base_name));
         return None
-      };
+      }
+    };
+
+    base_name.set(&namespace.canonical_name);
+
+    resolved_key = if !path.absolute && ns_key == base_key {
+      if let Some(local) = namespace.local_bindings.get_entry(ident) {
+        local
+      } else if let Some(core) = analyzer.context.core_bs.get_entry(ident) {
+        core
+      } else {
+        analyzer.error(origin, format!("Namespace `{}` does not have access to an item named `{}`", base_name, ident));
+        return None
+      }
+    } else if let Some(exported_key) = namespace.export_bindings.get_entry(ident) {
+      exported_key
     } else {
-      analyzer.error(origin, format!("{} is not a Namespace and has no exports", ident));
+      analyzer.error(origin, format!("Namespace `{}` does not export an item named `{}`", base_name, ident));
       return None
-    }
+    };
   }
 
   Some(resolved_key)
