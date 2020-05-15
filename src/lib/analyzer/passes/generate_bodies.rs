@@ -103,6 +103,8 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
 
         unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() }
           .body.replace(some!(body_ir)).expect_none("Internal error, function body IR replaced");
+      } else if analyzer.get_active_module().is_main {
+        analyzer.error(item.origin, "Function definitions inside a source module must have a body".to_owned());
       }
     },
 
