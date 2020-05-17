@@ -134,98 +134,98 @@ impl Decode for Version {
 
 
 
-/// A unique (per-item-kind, per-`Module`) index for an item in a `Module`
+/// A unique (per-item-kind, per-`Module`) id for an item in a `Module`
 /// 
 /// This is a generic version of the type safe indices defined later
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct Index(pub u64);
+pub struct ID(pub u64);
 
-impl From<u64> for Index { fn from (i: u64) -> Self { Self(i) } }
-impl From<Index> for u64 { fn from (i: Index) -> Self { i.0 } }
+impl From<u64> for ID { fn from (i: u64) -> Self { Self(i) } }
+impl From<ID> for u64 { fn from (i: ID) -> Self { i.0 } }
 
-impl From<TypeIndex> for Index { fn from (i: TypeIndex) -> Self { Self(i.0) } }
-impl From<GlobalIndex> for Index { fn from (i: GlobalIndex) -> Self { Self(i.0) } }
-impl From<FunctionIndex> for Index { fn from (i: FunctionIndex) -> Self { Self(i.0) } }
-impl From<LocalIndex> for Index { fn from (i: LocalIndex) -> Self { Self(i.0) } }
-impl From<ElementIndex> for Index { fn from (i: ElementIndex) -> Self { Self(i.0) } }
+impl From<TypeID> for ID { fn from (i: TypeID) -> Self { Self(i.0) } }
+impl From<GlobalID> for ID { fn from (i: GlobalID) -> Self { Self(i.0) } }
+impl From<FunctionID> for ID { fn from (i: FunctionID) -> Self { Self(i.0) } }
+impl From<LocalID> for ID { fn from (i: LocalID) -> Self { Self(i.0) } }
+impl From<ElementID> for ID { fn from (i: ElementID) -> Self { Self(i.0) } }
 
-impl Encode for Index { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
+impl Encode for ID { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 
-impl Decode for Index { fn decode (buff: &mut &[u8]) -> Result<Index, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
+impl Decode for ID { fn decode (buff: &mut &[u8]) -> Result<ID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 
 
 
-/// A unique (per-`Module`) index for a `Type` in a `Module`
+/// A unique (per-`Module`) id for a `Type` in a `Module`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct TypeIndex(pub u64);
+pub struct TypeID(pub u64);
 
-/// A unique (per-`Module`) index for a `Global` in a `Module`
+/// A unique (per-`Module`) id for a `Global` in a `Module`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct GlobalIndex(pub u64);
+pub struct GlobalID(pub u64);
 
-/// A unique (per-`Module`) index for a `Function` in a `Module`
+/// A unique (per-`Module`) id for a `Function` in a `Module`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct FunctionIndex(pub u64);
+pub struct FunctionID(pub u64);
 
-/// A unique (per-`Function`) index for a local variable in a `Function`
+/// A unique (per-`Function`) id for a local variable in a `Function`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct LocalIndex(pub u64);
+pub struct LocalID(pub u64);
 
-/// A unique (per-struct) index for an element in a `Type`
+/// A unique (per-struct) id for an element in a `Type`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct ElementIndex(pub u64);
+pub struct ElementID(pub u64);
 
-impl From<u64> for TypeIndex { fn from (i: u64) -> Self { Self(i) } }
-impl From<u64> for GlobalIndex { fn from (i: u64) -> Self { Self(i) } }
-impl From<u64> for FunctionIndex { fn from (i: u64) -> Self { Self(i) } }
-impl From<u64> for LocalIndex { fn from (i: u64) -> Self { Self(i) } }
-impl From<u64> for ElementIndex { fn from (i: u64) -> Self { Self(i) } }
+impl From<u64> for TypeID { fn from (i: u64) -> Self { Self(i) } }
+impl From<u64> for GlobalID { fn from (i: u64) -> Self { Self(i) } }
+impl From<u64> for FunctionID { fn from (i: u64) -> Self { Self(i) } }
+impl From<u64> for LocalID { fn from (i: u64) -> Self { Self(i) } }
+impl From<u64> for ElementID { fn from (i: u64) -> Self { Self(i) } }
 
-impl From<TypeIndex> for u64 { fn from (i: TypeIndex) -> Self { i.0 } }
-impl From<GlobalIndex> for u64 { fn from (i: GlobalIndex) -> Self { i.0 } }
-impl From<FunctionIndex> for u64 { fn from (i: FunctionIndex) -> Self { i.0 } }
-impl From<LocalIndex> for u64 { fn from (i: LocalIndex) -> Self { i.0 } }
-impl From<ElementIndex> for u64 { fn from (i: ElementIndex) -> Self { i.0 } }
+impl From<TypeID> for u64 { fn from (i: TypeID) -> Self { i.0 } }
+impl From<GlobalID> for u64 { fn from (i: GlobalID) -> Self { i.0 } }
+impl From<FunctionID> for u64 { fn from (i: FunctionID) -> Self { i.0 } }
+impl From<LocalID> for u64 { fn from (i: LocalID) -> Self { i.0 } }
+impl From<ElementID> for u64 { fn from (i: ElementID) -> Self { i.0 } }
 
-impl From<Index> for TypeIndex { fn from (i: Index) -> Self { Self(i.0) } }
-impl From<Index> for GlobalIndex { fn from (i: Index) -> Self { Self(i.0) } }
-impl From<Index> for FunctionIndex { fn from (i: Index) -> Self { Self(i.0) } }
-impl From<Index> for LocalIndex { fn from (i: Index) -> Self { Self(i.0) } }
-impl From<Index> for ElementIndex { fn from (i: Index) -> Self { Self(i.0) } }
+impl From<ID> for TypeID { fn from (i: ID) -> Self { Self(i.0) } }
+impl From<ID> for GlobalID { fn from (i: ID) -> Self { Self(i.0) } }
+impl From<ID> for FunctionID { fn from (i: ID) -> Self { Self(i.0) } }
+impl From<ID> for LocalID { fn from (i: ID) -> Self { Self(i.0) } }
+impl From<ID> for ElementID { fn from (i: ID) -> Self { Self(i.0) } }
 
-impl Encode for TypeIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
-impl Encode for GlobalIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
-impl Encode for FunctionIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
-impl Encode for LocalIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
-impl Encode for ElementIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
+impl Encode for TypeID { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
+impl Encode for GlobalID { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
+impl Encode for FunctionID { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
+impl Encode for LocalID { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
+impl Encode for ElementID { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 
-impl Decode for TypeIndex { fn decode (buff: &mut &[u8]) -> Result<TypeIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
-impl Decode for GlobalIndex { fn decode (buff: &mut &[u8]) -> Result<GlobalIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
-impl Decode for FunctionIndex { fn decode (buff: &mut &[u8]) -> Result<FunctionIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
-impl Decode for LocalIndex { fn decode (buff: &mut &[u8]) -> Result<LocalIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
-impl Decode for ElementIndex { fn decode (buff: &mut &[u8]) -> Result<ElementIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
+impl Decode for TypeID { fn decode (buff: &mut &[u8]) -> Result<TypeID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
+impl Decode for GlobalID { fn decode (buff: &mut &[u8]) -> Result<GlobalID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
+impl Decode for FunctionID { fn decode (buff: &mut &[u8]) -> Result<FunctionID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
+impl Decode for LocalID { fn decode (buff: &mut &[u8]) -> Result<LocalID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
+impl Decode for ElementID { fn decode (buff: &mut &[u8]) -> Result<ElementID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 
 
 
 /// Represents a type definition in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Type {
-  /// The index of a `Type` in a `Module`'s types list
-  pub index: TypeIndex,
+  /// The id of a `Type` in a `Module`'s types list
+  pub id: TypeID,
   /// The variant data associated with a `Type`
   pub data: TypeData,
 }
 
 impl Type {
   /// Create a new `Type`
-  pub fn new (index: TypeIndex, data: TypeData) -> Self {
-    Self { index, data }
+  pub fn new (id: TypeID, data: TypeData) -> Self {
+    Self { id, data }
   }
 }
 
 impl Encode for Type {
   fn encode (&self, buff: &mut Vec<u8>) {
-    self.index.encode(buff);
+    self.id.encode(buff);
     self.data.encode(buff);
   }
 }
@@ -233,7 +233,7 @@ impl Encode for Type {
 impl Decode for Type {
   fn decode (buff: &mut &[u8]) -> Result<Type, DecodeError> {
     Ok(Type {
-      index: TypeIndex::decode(buff)?,
+      id: TypeID::decode(buff)?,
       data: TypeData::decode(buff)?,
     })
   }
@@ -247,15 +247,15 @@ pub enum TypeData {
   /// A built in type defined by the compiler
   Intrinsic(IntrinsicType),
   /// The address of a value of another type
-  Pointer(TypeIndex),
+  Pointer(TypeID),
   /// An aggregate containing a list of values of other types
-  Struct(Vec<TypeIndex>),
+  Struct(Vec<TypeID>),
   /// A functional interface signature
   Function {
     /// Types of values provided to a function
-    parameters: Vec<TypeIndex>,
+    parameters: Vec<TypeID>,
     /// Type of value returned by a function
-    result: Option<TypeIndex>
+    result: Option<TypeID>
   },
 }
 
@@ -295,7 +295,7 @@ impl Decode for TypeData {
   fn decode (buff: &mut &[u8]) -> Result<TypeData, DecodeError> {
     Ok(match TypeDataKind::decode(buff)? {
       TypeDataKind::Intrinsic => TypeData::Intrinsic(IntrinsicType::decode(buff)?),
-      TypeDataKind::Pointer => TypeData::Pointer(TypeIndex::decode(buff)?),
+      TypeDataKind::Pointer => TypeData::Pointer(TypeID::decode(buff)?),
       TypeDataKind::Struct => TypeData::Struct(Vec::decode(buff)?),
       TypeDataKind::Function => TypeData::Function {
         parameters: Vec::decode(buff)?,
@@ -436,7 +436,7 @@ impl Decode for ImportModule {
 
 
 
-/// Binds an item from an imported module to a unique index in a `Module`
+/// Binds an item from an imported module to a unique id in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Import {
   /// The uniquely identifying name of an `Import` binding
@@ -475,10 +475,10 @@ impl Decode for Import {
 pub enum ImportData {
   /// An imported namespace; contains other `Import` bindings
   Namespace(Vec<Import>),
-  /// An imported `Global`; contains a `GlobalIndex` and a `TypeIndex`
-  Global(GlobalIndex, TypeIndex),
-  /// An imported `Function`; contains a `FunctionIndex` and a `TypeIndex`
-  Function(FunctionIndex, TypeIndex),
+  /// An imported `Global`; contains a `GlobalID` and a `TypeID`
+  Global(GlobalID, TypeID),
+  /// An imported `Function`; contains a `FunctionID` and a `TypeID`
+  Function(FunctionID, TypeID),
 }
 
 impl ImportData {
@@ -520,8 +520,8 @@ impl Decode for ImportData {
   fn decode (buff: &mut &[u8]) -> Result<ImportData, DecodeError> {
     Ok(match AliasDataKind::decode(buff)? {
       AliasDataKind::Namespace => ImportData::Namespace(Vec::decode(buff)?),
-      AliasDataKind::Global    => ImportData::Global(GlobalIndex::decode(buff)?, TypeIndex::decode(buff)?),
-      AliasDataKind::Function  => ImportData::Function(FunctionIndex::decode(buff)?, TypeIndex::decode(buff)?),
+      AliasDataKind::Global    => ImportData::Global(GlobalID::decode(buff)?, TypeID::decode(buff)?),
+      AliasDataKind::Function  => ImportData::Function(FunctionID::decode(buff)?, TypeID::decode(buff)?),
     })
   }
 }
@@ -531,19 +531,19 @@ impl Decode for ImportData {
 /// Represents a global variable definition in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Global {
-  /// The index of a `Global` in a `Module`'s globals list
-  pub index: GlobalIndex,
-  /// The index of a `Global`'s `Type`
-  pub ty: TypeIndex,
+  /// The id of a `Global` in a `Module`'s globals list
+  pub id: GlobalID,
+  /// The id of a `Global`'s `Type`
+  pub ty: TypeID,
   /// The instructions used to initialize a `Global`
   pub initializer: Vec<Instruction>,
 }
 
 impl Global {
   /// Create a new, empty `Global` with no initializer
-  pub fn empty (index: GlobalIndex, ty: TypeIndex) -> Self {
+  pub fn empty (id: GlobalID, ty: TypeID) -> Self {
     Self {
-      index,
+      id,
       ty,
       initializer: Vec::default(),
     }
@@ -552,7 +552,7 @@ impl Global {
 
 impl Encode for Global {
   fn encode (&self, buff: &mut Vec<u8>) {
-    self.index.encode(buff);
+    self.id.encode(buff);
     self.ty.encode(buff);
     self.initializer.encode(buff);
   }
@@ -561,8 +561,8 @@ impl Encode for Global {
 impl Decode for Global {
   fn decode (buff: &mut &[u8]) -> Result<Global, DecodeError> {
     Ok(Global {
-      index: GlobalIndex::decode(buff)?,
-      ty: TypeIndex::decode(buff)?,
+      id: GlobalID::decode(buff)?,
+      ty: TypeID::decode(buff)?,
       initializer: Vec::decode(buff)?,
     })
   }
@@ -573,19 +573,19 @@ impl Decode for Global {
 /// Represents a function definition in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
-  /// The index of a `Function` in a `Module`'s functions list
-  pub index: FunctionIndex,
-  /// The index of a `Function`'s `Type`
-  pub ty: TypeIndex,
+  /// The id of a `Function` in a `Module`'s functions list
+  pub id: FunctionID,
+  /// The id of a `Function`'s `Type`
+  pub ty: TypeID,
   /// The instructions used to execute a `Function`
   pub body: Vec<Instruction>,
 }
 
 impl Function {
   /// Create a new, empty `Function` with no body
-  pub fn empty (index: FunctionIndex, ty: TypeIndex) -> Self {
+  pub fn empty (id: FunctionID, ty: TypeID) -> Self {
     Self {
-      index,
+      id,
       ty,
       body: Vec::default(),
     }
@@ -594,7 +594,7 @@ impl Function {
 
 impl Encode for Function {
   fn encode (&self, buff: &mut Vec<u8>) {
-    self.index.encode(buff);
+    self.id.encode(buff);
     self.ty.encode(buff);
     self.body.encode(buff);
   }
@@ -603,8 +603,8 @@ impl Encode for Function {
 impl Decode for Function {
   fn decode (buff: &mut &[u8]) -> Result<Function, DecodeError> {
     Ok(Function {
-      index: FunctionIndex::decode(buff)?,
-      ty: TypeIndex::decode(buff)?,
+      id: FunctionID::decode(buff)?,
+      ty: TypeID::decode(buff)?,
       body: Vec::decode(buff)?,
     })
   }
@@ -651,10 +651,10 @@ impl Decode for Export {
 pub enum ExportData {
   /// An exported namespace; contains other `Export` bindings
   Namespace(Vec<Export>),
-  /// An exported `Global`; contains a `GlobalIndex`
-  Global(GlobalIndex),
-  /// An exported `Function`; contains a `FunctionIndex`
-  Function(FunctionIndex),
+  /// An exported `Global`; contains a `GlobalID`
+  Global(GlobalID),
+  /// An exported `Function`; contains a `FunctionID`
+  Function(FunctionID),
 }
 
 impl ExportData {
@@ -689,8 +689,8 @@ impl Decode for ExportData {
   fn decode (buff: &mut &[u8]) -> Result<ExportData, DecodeError> {
     Ok(match AliasDataKind::decode(buff)? {
       AliasDataKind::Namespace => ExportData::Namespace(Vec::decode(buff)?),
-      AliasDataKind::Global    => ExportData::Global(GlobalIndex::decode(buff)?),
-      AliasDataKind::Function  => ExportData::Function(FunctionIndex::decode(buff)?),
+      AliasDataKind::Global    => ExportData::Global(GlobalID::decode(buff)?),
+      AliasDataKind::Function  => ExportData::Function(FunctionID::decode(buff)?),
     })
   }
 }
@@ -739,26 +739,26 @@ pub enum Instruction {
   /// Pushes a constant value on the stack
   ImmediateValue(ImmediateValue),
 
-  /// Creates a local variable in the current stack frame, of the type given by an index
-  CreateLocal(TypeIndex),
+  /// Creates a local variable in the current stack frame, of the type given by an id
+  CreateLocal(TypeID),
 
   /// Gets the address of a local variable,
   /// then pushes it on the stack
-  LocalAddress(LocalIndex),
+  LocalAddress(LocalID),
   /// Gets the address of a `Global` variable,
   /// then pushes it on the stack
-  GlobalAddress(GlobalIndex),
+  GlobalAddress(GlobalID),
   /// Gets the address of a `Function`,
   /// then pushes it on the stack
-  FunctionAddress(FunctionIndex),
+  FunctionAddress(FunctionID),
   
-  /// Pops an address off the stack and offsets it to the specified struct element index,
+  /// Pops an address off the stack and offsets it to the specified struct element id,
   /// then pushes it back on the stack with the type of the struct element
-  GetElement(ElementIndex),
+  GetElement(ElementID),
 
-  /// Pops a value off the stack and casts it to the type given by an index,
+  /// Pops a value off the stack and casts it to the type given by an id,
   /// then pushes the newly typed value back on the stack
-  Cast(TypeIndex),
+  Cast(TypeID),
   
   /// Pops a value off the stack and uses it as an address for a dereference,
   /// then pushes the loaded data back on the stack
@@ -827,10 +827,10 @@ pub enum Instruction {
   /// and pushes the result back on the stack
   GEQ,
 
-  /// Calls a `Module`-local `Function` by index,
+  /// Calls a `Module`-local `Function` by id,
   /// after popping a type-dependant amount of arguments off the stack.
   /// After the call is complete, pushes the function's return value back on the stack (if one was given)
-  CallDirect(FunctionIndex),
+  CallDirect(FunctionID),
 
   /// Pops a functional address off the stack,
   /// then pops a type-dependant amount of arguments off the stack.
@@ -997,13 +997,13 @@ impl Decode for Instruction {
 
       InstructionKind::ImmediateValue => Instruction::ImmediateValue(ImmediateValue::decode(buff)?),
 
-      InstructionKind::CreateLocal => Instruction::CreateLocal(TypeIndex::decode(buff)?),
-      InstructionKind::LocalAddress => Instruction::LocalAddress(LocalIndex::decode(buff)?),
-      InstructionKind::GlobalAddress => Instruction::GlobalAddress(GlobalIndex::decode(buff)?),
-      InstructionKind::FunctionAddress => Instruction::FunctionAddress(FunctionIndex::decode(buff)?),
-      InstructionKind::GetElement => Instruction::GetElement(ElementIndex::decode(buff)?),
-      InstructionKind::Cast => Instruction::Cast(TypeIndex::decode(buff)?),
-      InstructionKind::CallDirect => Instruction::CallDirect(FunctionIndex::decode(buff)?),
+      InstructionKind::CreateLocal => Instruction::CreateLocal(TypeID::decode(buff)?),
+      InstructionKind::LocalAddress => Instruction::LocalAddress(LocalID::decode(buff)?),
+      InstructionKind::GlobalAddress => Instruction::GlobalAddress(GlobalID::decode(buff)?),
+      InstructionKind::FunctionAddress => Instruction::FunctionAddress(FunctionID::decode(buff)?),
+      InstructionKind::GetElement => Instruction::GetElement(ElementID::decode(buff)?),
+      InstructionKind::Cast => Instruction::Cast(TypeID::decode(buff)?),
+      InstructionKind::CallDirect => Instruction::CallDirect(FunctionID::decode(buff)?),
 
       InstructionKind::IfBlock => Instruction::IfBlock(Vec::decode(buff)?, Vec::decode(buff)?),
       InstructionKind::LoopBlock => Instruction::LoopBlock(Vec::decode(buff)?),
@@ -1399,14 +1399,14 @@ mod test {
       ],
       globals: vec! [
         Global {
-          index: 1.into(),
+          id: 1.into(),
           ty: 0.into(),
           initializer: vec! [
             Instruction::ImmediateValue(ImmediateValue::S64(99))
           ]
         },
         Global {
-          index: 2.into(),
+          id: 2.into(),
           ty: 0.into(),
           initializer: vec! [
             Instruction::CallDirect(1.into())
@@ -1415,7 +1415,7 @@ mod test {
       ],
       functions: vec! [
         Function {
-          index: 1.into(),
+          id: 1.into(),
           ty: 2.into(),
           body: vec! [
             Instruction::GlobalAddress(1.into()),
@@ -1426,7 +1426,7 @@ mod test {
           ]
         },
         Function {
-          index: 2.into(),
+          id: 2.into(),
           ty: 1.into(),
           body: vec! [
             Instruction::LocalAddress(0.into()),
