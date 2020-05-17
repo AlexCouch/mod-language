@@ -1458,7 +1458,6 @@ mod test {
     };
 
     let mut encoded = Vec::default();
-
     module.encode(&mut encoded);
 
     let mut decoder = encoded.as_slice();
@@ -1592,12 +1591,132 @@ mod test {
     ];
 
     let mut encoded = Vec::default();
-
     instructions.encode(&mut encoded);
 
     let mut decoder = encoded.as_slice();
     let decoded = Vec::decode(&mut decoder).expect("Failed to decode instructions");
 
     assert_eq!(instructions, decoded)
+  }
+
+  #[test]
+  fn test_enum_encode_decode () {
+    let bad_data = vec! [ 255 ];
+
+
+    let type_data_types = vec! [
+      TypeDataType::Function,
+      TypeDataType::Intrinsic,
+      TypeDataType::Pointer,
+      TypeDataType::Struct,
+    ];
+
+    let mut encoded = Vec::default();
+    type_data_types.encode(&mut encoded);
+
+    let mut decoder = encoded.as_slice();
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode type_data_types");
+
+    assert_eq!(type_data_types, decoded);
+
+    let mut decoder = bad_data.as_slice();
+    TypeDataType::decode(&mut decoder).expect_err("TypeDataType decoder failed to reject out of range value");
+
+
+    let intrinsic_types = vec! [
+      IntrinsicType::Void,
+      IntrinsicType::Bool,
+      IntrinsicType::U8,
+      IntrinsicType::U16,
+      IntrinsicType::U32,
+      IntrinsicType::U64,
+      IntrinsicType::S8,
+      IntrinsicType::S16,
+      IntrinsicType::S32,
+      IntrinsicType::S64,
+      IntrinsicType::F32,
+      IntrinsicType::F64,
+    ];
+
+    let mut encoded = Vec::default();
+    intrinsic_types.encode(&mut encoded);
+    
+    let mut decoder = encoded.as_slice();
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode intrinsic_types");
+
+    assert_eq!(intrinsic_types, decoded);
+
+    let mut decoder = bad_data.as_slice();
+    IntrinsicType::decode(&mut decoder).expect_err("IntrinsicType decoder failed to reject out of range value");
+
+
+    let alias_data_types = vec! [
+      AliasDataType::Function,
+      AliasDataType::Global,
+      AliasDataType::Namespace,
+    ];
+
+    let mut encoded = Vec::default();
+    alias_data_types.encode(&mut encoded);
+    
+    let mut decoder = encoded.as_slice();
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode alias_data_types");
+
+    assert_eq!(alias_data_types, decoded);
+
+    let mut decoder = bad_data.as_slice();
+    AliasDataType::decode(&mut decoder).expect_err("AliasDataType decoder failed to reject out of range value");
+
+
+    let instruction_types = vec! [
+      InstructionType::NoOp,
+      InstructionType::ImmediateValue,
+      InstructionType::CreateLocal,
+      InstructionType::LocalAddress,
+      InstructionType::GlobalAddress,
+      InstructionType::FunctionAddress,
+      InstructionType::GetElement,
+      InstructionType::Cast,
+      InstructionType::Load,
+      InstructionType::Store,
+      InstructionType::Discard,
+      InstructionType::Add,
+      InstructionType::Sub,
+      InstructionType::Mul,
+      InstructionType::Div,
+      InstructionType::Rem,
+      InstructionType::Neg,
+      InstructionType::And,
+      InstructionType::Or,
+      InstructionType::Xor,
+      InstructionType::LShift,
+      InstructionType::RShift,
+      InstructionType::Not,
+      InstructionType::EQ,
+      InstructionType::NEQ,
+      InstructionType::LT,
+      InstructionType::GT,
+      InstructionType::LEQ,
+      InstructionType::GEQ,
+      InstructionType::CallDirect,
+      InstructionType::CallIndirect,
+      InstructionType::IfBlock,
+      InstructionType::LoopBlock,
+      InstructionType::Break,
+      InstructionType::Continue,
+      InstructionType::Ret,
+      InstructionType::RetVoid,
+    ];
+
+    let mut encoded = Vec::default();
+    instruction_types.encode(&mut encoded);
+    
+    let mut decoder = encoded.as_slice();
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode instruction_types");
+
+    assert_eq!(instruction_types, decoded);
+
+    let mut decoder = bad_data.as_slice();
+    InstructionType::decode(&mut decoder).expect_err("InstructionType decoder failed to reject out of range value");
   }
 }
