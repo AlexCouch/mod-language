@@ -1,7 +1,12 @@
 //! The bytecode form and component structures
 
 use std::{
+  fmt::{ Display, Formatter, Result as FMTResult, },
   mem::{ transmute, },
+};
+
+use crate::{
+  common::{ HierarchicalDisplay, Padding, },
 };
 
 
@@ -94,6 +99,113 @@ impl Decode for Module {
   }
 }
 
+impl HierarchicalDisplay for Module {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    write!(f, "(module (name \"{}\") {}", self.name, self.version)?;
+    *level += 1;
+
+    let mut body = false;
+    
+    if !self.types.is_empty() {
+      writeln!(f)?;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, "(types")?;
+      *level += 1;
+      for ty in self.types.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        ty.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, ")")?;
+      body = true;
+    }
+
+    if !self.imports.is_empty() {
+      writeln!(f)?;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, "(imports")?;
+      *level += 1;
+      for imp in self.imports.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        imp.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, ")")?;
+      body = true;
+    }
+
+    if !self.globals.is_empty() {
+      writeln!(f)?;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, "(globals")?;
+      *level += 1;
+      for glo in self.globals.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        glo.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, ")")?;
+      body = true;
+    }
+
+    if !self.functions.is_empty() {
+      writeln!(f)?;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, "(functions")?;
+      *level += 1;
+      for func in self.functions.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        func.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, ")")?;
+      body = true;
+    }
+
+    if !self.exports.is_empty() {
+      writeln!(f)?;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, "(exports")?;
+      *level += 1;
+      for exp in self.exports.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        exp.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+      write!(f, ")")?;
+      body = true;
+    }
+
+    *level -= 1;
+
+    if body {
+      writeln!(f)?;
+      Padding.fmt_hierarchical(f, level)?
+    }
+
+    write!(f, ")")?;
+
+    Ok(())
+  }
+}
+
+impl Display for Module { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
 
 
 /// Represents a `Module`'s semver2 version number
@@ -132,11 +244,19 @@ impl Decode for Version {
   }
 }
 
+impl HierarchicalDisplay for Version {
+  fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult {
+    write!(f, "(version {} {} {})", self.major, self.minor, self.patch)
+  }
+}
+
+impl Display for Version { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
 
 
 /// A unique (per-item-kind, per-`Module`) id for an item in a `Module`
 /// 
-/// This is a generic version of the type safe indices defined later
+/// This is a generic version of the type safe ids defined later
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ID(pub u64);
 
@@ -152,6 +272,10 @@ impl From<ElementID> for ID { fn from (i: ElementID) -> Self { Self(i.0) } }
 impl Encode for ID { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 
 impl Decode for ID { fn decode (buff: &mut &[u8]) -> Result<ID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
+
+impl HierarchicalDisplay for ID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
+
+impl Display for ID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 
 
 
@@ -205,6 +329,18 @@ impl Decode for FunctionID { fn decode (buff: &mut &[u8]) -> Result<FunctionID, 
 impl Decode for LocalID { fn decode (buff: &mut &[u8]) -> Result<LocalID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 impl Decode for ElementID { fn decode (buff: &mut &[u8]) -> Result<ElementID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 
+impl HierarchicalDisplay for TypeID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
+impl HierarchicalDisplay for GlobalID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
+impl HierarchicalDisplay for FunctionID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
+impl HierarchicalDisplay for LocalID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
+impl HierarchicalDisplay for ElementID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
+
+impl Display for TypeID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+impl Display for GlobalID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+impl Display for FunctionID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+impl Display for LocalID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+impl Display for ElementID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
 
 
 /// Represents a type definition in a `Module`
@@ -238,6 +374,16 @@ impl Decode for Type {
     })
   }
 }
+
+impl HierarchicalDisplay for Type {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    write!(f, "(type {} ", self.id)?;
+    self.data.fmt_hierarchical(f, level)?;
+    write!(f, ")")
+  }
+}
+
+impl Display for Type { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 
 
 
@@ -281,7 +427,7 @@ impl Encode for TypeData {
 
     match self {
       Intrinsic(ity) => ity.encode(buff),
-      Pointer(idx) => idx.encode(buff),
+      Pointer(t_id) => t_id.encode(buff),
       Struct(fields) => fields.encode(buff),
       Function { parameters, result } => {
         parameters.encode(buff);
@@ -305,6 +451,42 @@ impl Decode for TypeData {
   }
 }
 
+impl HierarchicalDisplay for TypeData {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    use TypeData::*;
+
+    write!(f, "({}", self.get_kind().name())?;
+
+    match self {
+      Intrinsic(ity) => write!(f, " {})", ity.name()),
+      Pointer(ity) => write!(f, " {})", ity),
+      Struct(fields) => {
+        *level += 1;
+        for field in fields.iter() {
+          writeln!(f)?;
+          Padding.fmt_hierarchical(f, level)?;
+          write!(f, "(field {})", field)?;
+        }
+        writeln!(f)?;
+        *level -= 1;
+        Padding.fmt_hierarchical(f, level)?;
+        write!(f, ")")
+      },
+      Function { parameters, result } => {
+        for parameter in parameters.iter() {
+          write!(f, " (parameter {})", parameter)?;
+        }
+        if let Some(result) = result {
+          write!(f, " (result {})", result)?;
+        }
+        write!(f, ")")
+      }
+    }
+  }
+}
+
+impl Display for TypeData { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
 
 
 /// A data-less variant only version of `TypeData`
@@ -318,6 +500,20 @@ pub enum TypeDataKind {
   Pointer,
   Struct,
   Function,
+}
+
+impl TypeDataKind {
+  /// Get the name of a `TypeDataKind` as a lowercase `&'static str`
+  pub fn name (self) -> &'static str {
+    use TypeDataKind::*;
+
+    match self {
+      Intrinsic => "intrinsic",
+      Pointer => "pointer",
+      Struct => "struct",
+      Function => "function",
+    }
+  }
 }
 
 impl Encode for TypeDataKind {
@@ -369,6 +565,28 @@ pub enum IntrinsicType {
   F32,
   /// 64 bit real
   F64,
+}
+
+impl IntrinsicType {
+  /// Get the name of a `IntrinsicType` as a lowercase `&'static str`
+  pub fn name (self) -> &'static str {
+    use IntrinsicType::*;
+
+    match self {
+      Void => "void",
+      Bool => "bool",
+      U8 => "u8",
+      U16 => "u16",
+      U32 => "u32",
+      U64 => "u64",
+      S8 => "s8",
+      S16 => "s16",
+      S32 => "s32",
+      S64 => "s64",
+      F32 => "f32",
+      F64 => "f64",
+    }
+  }
 }
 
 impl Default for IntrinsicType { fn default () -> Self { Self::Void } }
@@ -434,6 +652,26 @@ impl Decode for ImportModule {
   }
 }
 
+impl HierarchicalDisplay for ImportModule {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    write!(f, "(module (name \"{}\") {}", self.name, self.version)?;
+    if !self.items.is_empty() {
+      *level += 1;
+      for item in self.items.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        item.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+    }
+    write!(f, ")")
+  }
+}
+
+impl Display for ImportModule { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
 
 
 /// Binds an item from an imported module to a unique id in a `Module`
@@ -467,6 +705,36 @@ impl Decode for Import {
     })
   }
 }
+
+impl HierarchicalDisplay for Import {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    use ImportData::*;
+
+    write!(f, "({} (name \"{}\")", self.data.get_kind().name(), self.name)?;
+
+    match &self.data {
+      Namespace(imports) => {
+        if !imports.is_empty() {
+          *level += 1;
+          for imp in imports.iter() {
+            writeln!(f)?;
+            Padding.fmt_hierarchical(f, level)?;
+            imp.fmt_hierarchical(f, level)?;
+          }
+          writeln!(f)?;
+          *level -= 1;
+          Padding.fmt_hierarchical(f, level)?;
+        }
+      },
+      Global(g_id, t_id) => write!(f, " {} (type {})", g_id, t_id)?,
+      Function(f_id, t_id) => write!(f, " {} (type {})", f_id, t_id)?,
+    }
+    
+    write!(f, ")")
+  }
+}
+
+impl Display for Import { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 
 
 
@@ -503,14 +771,14 @@ impl Encode for ImportData {
         items.encode(buff);
       },
 
-      Global(g_idx, t_idx) => {
-        g_idx.encode(buff);
-        t_idx.encode(buff);
+      Global(g_id, t_id) => {
+        g_id.encode(buff);
+        t_id.encode(buff);
       },
 
-      Function(f_idx, t_idx) => {
-        f_idx.encode(buff);
-        t_idx.encode(buff);
+      Function(f_id, t_id) => {
+        f_id.encode(buff);
+        t_id.encode(buff);
       },
     }
   }
@@ -568,6 +836,27 @@ impl Decode for Global {
   }
 }
 
+impl HierarchicalDisplay for Global {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    write!(f, "(global {} (type {})", self.id, self.ty)?;
+    if !self.initializer.is_empty() {
+      *level += 1;
+      for instr in self.initializer.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        instr.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+    }
+    write!(f, ")")?;
+    Ok(())
+  }
+}
+
+impl Display for Global { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
 
 
 /// Represents a function definition in a `Module`
@@ -610,6 +899,27 @@ impl Decode for Function {
   }
 }
 
+impl HierarchicalDisplay for Function {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    write!(f, "(function {} (type {})", self.id, self.ty)?;
+    if !self.body.is_empty() {
+      *level += 1;
+      for instr in self.body.iter() {
+        writeln!(f)?;
+        Padding.fmt_hierarchical(f, level)?;
+        instr.fmt_hierarchical(f, level)?;
+      }
+      writeln!(f)?;
+      *level -= 1;
+      Padding.fmt_hierarchical(f, level)?;
+    }
+    write!(f, ")")?;
+    Ok(())
+  }
+}
+
+impl Display for Function { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
 
 
 /// Binds an item exported by a `Module`
@@ -643,6 +953,37 @@ impl Decode for Export {
     })
   }
 }
+
+impl HierarchicalDisplay for Export {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    write!(f, "({} (name \"{}\")", self.data.get_kind().name(), self.name)?;
+
+    use ExportData::*;
+
+    match &self.data {
+      Namespace(exports) => {
+        if !exports.is_empty() {
+          *level += 1;
+          for exp in exports.iter() {
+            writeln!(f)?;
+            Padding.fmt_hierarchical(f, level)?;
+            exp.fmt_hierarchical(f, level)?;
+          }
+          *level -= 1;
+          writeln!(f)?;
+          Padding.fmt_hierarchical(f, level)?;
+          write!(f, ")")?;
+        }
+      },
+      Global(g_id) => write!(f, " {})", g_id)?,
+      Function(f_id) => write!(f, " {})", f_id)?,
+    }
+
+    Ok(())
+  }
+}
+
+impl Display for Export { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 
 
 
@@ -679,8 +1020,8 @@ impl Encode for ExportData {
         items.encode(buff);
       },
 
-      Global(g_idx) => g_idx.encode(buff),
-      Function(f_idx) => f_idx.encode(buff),
+      Global(g_id) => g_id.encode(buff),
+      Function(f_id) => f_id.encode(buff),
     }
   }
 }
@@ -707,6 +1048,19 @@ pub enum AliasDataKind {
   Namespace,
   Global,
   Function,
+}
+
+impl AliasDataKind {
+  /// Get the name of a `AliasDataKind` as a lowercase `&'static str`
+  pub fn name (self) -> &'static str {
+    use AliasDataKind::*;
+
+    match self {
+      Namespace => "namespace",
+      Global => "global",
+      Function => "function",
+    }
+  }
 }
 
 impl Encode for AliasDataKind {
@@ -946,13 +1300,13 @@ impl Encode for Instruction {
 
       ImmediateValue(imm) => imm.encode(buff),
 
-      CreateLocal(t_idx) => t_idx.encode(buff),
-      LocalAddress(l_idx) => l_idx.encode(buff),
-      GlobalAddress(g_idx) => g_idx.encode(buff),
-      FunctionAddress(f_idx) => f_idx.encode(buff),
-      GetElement(e_idx) => e_idx.encode(buff),
-      Cast(t_idx) => t_idx.encode(buff),
-      CallDirect(f_idx) => f_idx.encode(buff),
+      CreateLocal(t_id) => t_id.encode(buff),
+      LocalAddress(l_id) => l_id.encode(buff),
+      GlobalAddress(g_id) => g_id.encode(buff),
+      FunctionAddress(f_id) => f_id.encode(buff),
+      GetElement(e_id) => e_id.encode(buff),
+      Cast(t_id) => t_id.encode(buff),
+      CallDirect(f_id) => f_id.encode(buff),
 
       IfBlock(then_instrs, else_instrs) => {
         then_instrs.encode(buff);
@@ -1010,6 +1364,140 @@ impl Decode for Instruction {
     })
   }
 }
+
+impl HierarchicalDisplay for Instruction {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    use Instruction::*;
+
+    let kind_name = self.get_kind().name();
+
+    match self {
+      | NoOp
+      | Load
+      | Store
+      | Discard
+      | Add
+      | Sub
+      | Mul
+      | Div
+      | Rem
+      | Neg
+      | And
+      | Or
+      | Xor
+      | LShift
+      | RShift
+      | Not
+      | EQ
+      | NEQ
+      | LT
+      | GT
+      | LEQ
+      | GEQ
+      | CallIndirect
+      | Break
+      | Continue
+      | Return
+      | ReturnVoid
+      => write!(f, "{}", kind_name)?,
+
+      operand_instr @ (
+          ImmediateValue { .. }
+        | CreateLocal { .. }
+        | LocalAddress { .. }
+        | GlobalAddress { .. }
+        | FunctionAddress { .. }
+        | GetElement { .. }
+        | Cast { .. }
+        | CallDirect { .. }
+      ) => {
+        write!(f, "{} ", kind_name)?;
+
+        match operand_instr {
+          ImmediateValue(imm) => write!(f, "{}", imm)?,
+
+          CreateLocal(t_id) => write!(f, "{}", t_id)?,
+          LocalAddress(l_id) => write!(f, "{}", l_id)?,
+          GlobalAddress(g_id) => write!(f, "{}", g_id)?,
+          FunctionAddress(f_id) => write!(f, "{}", f_id)?,
+          GetElement(e_id) => write!(f, "{}", e_id)?,
+          Cast(t_id) => write!(f, "{}", t_id)?,
+          CallDirect(f_id) => write!(f, "{}", f_id)?,
+          
+          _ => unreachable!()
+        }
+      },
+
+      block_instr @ (
+          IfBlock { .. }
+        | LoopBlock { .. }
+      ) => {
+        write!(f, "({}", kind_name)?;
+
+        match block_instr {
+          IfBlock(then_instrs, else_instrs) => {
+            *level += 1;
+            if !then_instrs.is_empty() {
+              writeln!(f)?;
+              Padding.fmt_hierarchical(f, level)?;
+              write!(f, "(then")?;
+              *level += 1;
+              for instr in then_instrs.iter() {
+                writeln!(f)?;
+                Padding.fmt_hierarchical(f, level)?;
+                instr.fmt_hierarchical(f, level)?;
+              }
+              writeln!(f)?;
+              *level -= 1;
+              Padding.fmt_hierarchical(f, level)?;
+              write!(f, ")")?;
+            }
+            if !else_instrs.is_empty() {
+              writeln!(f)?;
+              Padding.fmt_hierarchical(f, level)?;
+              write!(f, "(else")?;
+              *level += 1;
+              for instr in else_instrs.iter() {
+                writeln!(f)?;
+                Padding.fmt_hierarchical(f, level)?;
+                instr.fmt_hierarchical(f, level)?;
+              }
+              writeln!(f)?;
+              *level -= 1;
+              Padding.fmt_hierarchical(f, level)?;
+              write!(f, ")")?;
+            }
+            writeln!(f)?;
+            *level -= 1;
+            Padding.fmt_hierarchical(f, level)?;
+          },
+
+          LoopBlock(loop_instrs) => {
+            if !loop_instrs.is_empty() {
+              *level += 1;
+              for instr in loop_instrs.iter() {
+                writeln!(f)?;
+                Padding.fmt_hierarchical(f, level)?;
+                instr.fmt_hierarchical(f, level)?;
+              }
+              writeln!(f)?;
+              *level -= 1;
+              Padding.fmt_hierarchical(f, level)?;
+            }
+          },
+          
+          _ => unreachable!()
+        }
+
+        write!(f, ")")?;
+      },
+    }
+
+    Ok(())
+  }
+}
+
+impl Display for Instruction { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 
 
 
@@ -1075,6 +1563,53 @@ pub enum InstructionKind {
   ReturnVoid,
 }
 
+impl InstructionKind {
+  /// Get the name of a `InstructionKind` as a snake_case `&'static str`
+  pub fn name (self) -> &'static str {
+    use InstructionKind::*;
+
+    match self {
+      NoOp => "no_op",
+      ImmediateValue => "immediate_value",
+      CreateLocal => "create_local",
+      LocalAddress => "local_address",
+      GlobalAddress => "global_address",
+      FunctionAddress => "function_address",
+      GetElement => "get_element",
+      Cast => "cast",
+      Load => "load",
+      Store => "store",
+      Discard => "discard",
+      Add => "add",
+      Sub => "sub",
+      Mul => "mul",
+      Div => "div",
+      Rem => "rem",
+      Neg => "neg",
+      And => "and",
+      Or => "or",
+      Xor => "xor",
+      LShift => "lshift",
+      RShift => "rshift",
+      Not => "not",
+      EQ => "eq",
+      NEQ => "neq",
+      LT => "lt",
+      GT => "gt",
+      LEQ => "leq",
+      GEQ => "geq",
+      CallDirect => "call_direct",
+      CallIndirect => "call_indirect",
+      IfBlock => "if_block",
+      LoopBlock => "loop_block",
+      Break => "break",
+      Continue => "continue",
+      Return => "return",
+      ReturnVoid => "return_void",
+    }
+  }
+}
+
 impl Default for InstructionKind { fn default () -> Self { Self::NoOp } }
 
 impl Encode for InstructionKind {
@@ -1130,16 +1665,16 @@ impl ImmediateValue {
   pub fn get_intrinsic_type (&self) -> IntrinsicType {
     match self {
       Self::Bool(_) => IntrinsicType::Bool,
-      Self::U8(_) => IntrinsicType::U8,
-      Self::U16(_) => IntrinsicType::U16,
-      Self::U32(_) => IntrinsicType::U32,
-      Self::U64(_) => IntrinsicType::U64,
-      Self::S8(_) => IntrinsicType::S8,
-      Self::S16(_) => IntrinsicType::S16,
-      Self::S32(_) => IntrinsicType::S32,
-      Self::S64(_) => IntrinsicType::S64,
-      Self::F32(_) => IntrinsicType::F32,
-      Self::F64(_) => IntrinsicType::F64,
+      Self::U8(_)   => IntrinsicType::U8,
+      Self::U16(_)  => IntrinsicType::U16,
+      Self::U32(_)  => IntrinsicType::U32,
+      Self::U64(_)  => IntrinsicType::U64,
+      Self::S8(_)   => IntrinsicType::S8,
+      Self::S16(_)  => IntrinsicType::S16,
+      Self::S32(_)  => IntrinsicType::S32,
+      Self::S64(_)  => IntrinsicType::S64,
+      Self::F32(_)  => IntrinsicType::F32,
+      Self::F64(_)  => IntrinsicType::F64,
     }
   }
 }
@@ -1152,17 +1687,16 @@ impl Encode for ImmediateValue {
 
     match self {
       &Bool(x) => x.encode(buff),
-
-      &U8(x) => x.encode(buff),
-      U16(x) => x.encode(buff),
-      U32(x) => x.encode(buff),
-      U64(x) => x.encode(buff),
-      &S8(x) => x.encode(buff),
-      S16(x) => x.encode(buff),
-      S32(x) => x.encode(buff),
-      S64(x) => x.encode(buff),
-      F32(x) => x.encode(buff),
-      F64(x) => x.encode(buff),
+      &U8(x)   => x.encode(buff),
+      U16(x)   => x.encode(buff),
+      U32(x)   => x.encode(buff),
+      U64(x)   => x.encode(buff),
+      &S8(x)   => x.encode(buff),
+      S16(x)   => x.encode(buff),
+      S32(x)   => x.encode(buff),
+      S64(x)   => x.encode(buff),
+      F32(x)   => x.encode(buff),
+      F64(x)   => x.encode(buff),
     }
   }
 }
@@ -1171,22 +1705,47 @@ impl Decode for ImmediateValue {
   fn decode (buff: &mut &[u8]) -> Result<ImmediateValue, DecodeError> {
     Ok(match IntrinsicType::decode(buff)? {
       IntrinsicType::Bool => bool::decode(buff)?.into(),
-
-      IntrinsicType::U8  => u8 ::decode(buff)?.into(),
-      IntrinsicType::U16 => u16::decode(buff)?.into(),
-      IntrinsicType::U32 => u32::decode(buff)?.into(),
-      IntrinsicType::U64 => u64::decode(buff)?.into(),
-      IntrinsicType::S8  => i8 ::decode(buff)?.into(),
-      IntrinsicType::S16 => i16::decode(buff)?.into(),
-      IntrinsicType::S32 => i32::decode(buff)?.into(),
-      IntrinsicType::S64 => i64::decode(buff)?.into(),
-      IntrinsicType::F32 => f32::decode(buff)?.into(),
-      IntrinsicType::F64 => f64::decode(buff)?.into(),
+      IntrinsicType::U8   =>   u8::decode(buff)?.into(),
+      IntrinsicType::U16  =>  u16::decode(buff)?.into(),
+      IntrinsicType::U32  =>  u32::decode(buff)?.into(),
+      IntrinsicType::U64  =>  u64::decode(buff)?.into(),
+      IntrinsicType::S8   =>   i8::decode(buff)?.into(),
+      IntrinsicType::S16  =>  i16::decode(buff)?.into(),
+      IntrinsicType::S32  =>  i32::decode(buff)?.into(),
+      IntrinsicType::S64  =>  i64::decode(buff)?.into(),
+      IntrinsicType::F32  =>  f32::decode(buff)?.into(),
+      IntrinsicType::F64  =>  f64::decode(buff)?.into(),
       
       IntrinsicType::Void => return Err(DecodeError::UnexpectedValue),
     })
   }
 }
+
+impl HierarchicalDisplay for ImmediateValue {
+  fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult {
+    use ImmediateValue::*;
+
+    write!(f, "({} ", self.get_intrinsic_type().name())?;
+
+    match self {
+      Bool(x) => Display::fmt(x, f)?,
+      U8(x)   => Display::fmt(x, f)?,
+      U16(x)  => Display::fmt(x, f)?,
+      U32(x)  => Display::fmt(x, f)?,
+      U64(x)  => Display::fmt(x, f)?,
+      S8(x)   => Display::fmt(x, f)?,
+      S16(x)  => Display::fmt(x, f)?,
+      S32(x)  => Display::fmt(x, f)?,
+      S64(x)  => Display::fmt(x, f)?,
+      F32(x)  => Display::fmt(x, f)?,
+      F64(x)  => Display::fmt(x, f)?,
+    }
+
+    write!(f, ")")
+  }
+}
+
+impl Display for ImmediateValue { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 
 impl From<bool> for ImmediateValue { fn from (u: bool) -> Self { Self::Bool (u) } }
 
@@ -1375,15 +1934,18 @@ impl<D: Decode> Decode for Option<D> {
 mod test {
   use super::*;
 
-  #[test]
-  fn test_bytecode_encode_decode () {
-    let module = Module {
+  fn make_test_module () -> Module {
+    Module {
       name: "test_module".to_owned(),
       version: Version::new(0, 0, 1),
       types: vec! [
         Type::new(0.into(), TypeData::Intrinsic(IntrinsicType::S64)),
         Type::new(1.into(), TypeData::Function { parameters: vec! [ 0.into(), 0.into() ], result: Some(0.into()) }),
         Type::new(2.into(), TypeData::Function { parameters: vec! [ ], result: Some(0.into()) }),
+        Type::new(3.into(), TypeData::Struct(vec! [
+          0.into(),
+          0.into(),
+        ]))
       ],
       imports: vec! [
         ImportModule {
@@ -1443,7 +2005,12 @@ mod test {
         Export::new("test_export_global".to_owned(), ExportData::Global(1.into())),
         Export::new("test_reexport".to_owned(), ExportData::Global(0.into())),
       ]
-    };
+    }
+  }
+
+  #[test]
+  fn test_module_encode_decode () {
+    let module = make_test_module();
 
     let mut encoded = Vec::default();
     module.encode(&mut encoded);
@@ -1706,5 +2273,42 @@ mod test {
 
     let mut decoder = bad_data.as_slice();
     InstructionKind::decode(&mut decoder).expect_err("InstructionKind decoder failed to reject out of range value");
+  }
+
+  #[test]
+  fn test_bytecode_display () {
+    let mut module = make_test_module();
+    
+    use Instruction::*;
+
+    module.functions.push(Function {
+      id: 3.into(),
+      ty: 1.into(),
+      body: vec! [
+        LoopBlock(vec! [
+          LocalAddress(0.into()),
+          Load,
+          LocalAddress(1.into()),
+          Load,
+          LEQ,
+          IfBlock(vec! [
+            LocalAddress(0.into()),
+            Load,
+            ImmediateValue(2i32.into()),
+            Mul,
+            LocalAddress(0.into()),
+            Store,
+          ], vec! [
+            LocalAddress(0.into()),
+            Load,
+            Return,
+          ]),
+        ]),
+      ]
+    });
+
+    println!("{}", module);
+
+    println!("{}", Module::empty("empty".to_owned(), Version::default()));
   }
 }
