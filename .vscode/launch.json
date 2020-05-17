@@ -5,6 +5,25 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'mod_language'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=mod_language"
+        ],
+        "filter": {
+          "name": "mod_language",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
       "name": "(Linux/lldb) Launch",
       "type": "lldb",
       "request": "launch",
