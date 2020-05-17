@@ -1281,11 +1281,46 @@ impl Decode for bool { fn decode (buff: &mut &[u8]) -> Result<bool, DecodeError>
 impl Decode for i8   { fn decode (buff: &mut &[u8]) -> Result<i8,   DecodeError> { Ok(u8::decode(buff)? as i8) } }
 
 type BytePair  = [u8; 2];
+
+impl Decode for BytePair  {
+  fn decode (buff: &mut &[u8]) -> Result<BytePair,  DecodeError> {
+    if buff.len() >= 2 {
+      let arr = unsafe { * (buff.as_ptr() as *const BytePair) };
+      *buff = &buff[2..];
+      Ok(arr)
+    } else {
+      Err(DecodeError::EOF)
+    }
+  }
+}
+
 type ByteQuad  = [u8; 4];
+
+impl Decode for ByteQuad  {
+  fn decode (buff: &mut &[u8]) -> Result<ByteQuad,  DecodeError> {
+    if buff.len() >= 4 {
+      let arr = unsafe { * (buff.as_ptr() as *const ByteQuad) };
+      *buff = &buff[4..];
+      Ok(arr)
+    } else {
+      Err(DecodeError::EOF)
+    }
+  }
+}
+
 type ByteOctet = [u8; 8];
-impl Decode for BytePair  { fn decode (buff: &mut &[u8]) -> Result<BytePair,  DecodeError> { Ok([ u8::decode(buff)?, u8::decode(buff)? ]) } }
-impl Decode for ByteQuad  { fn decode (buff: &mut &[u8]) -> Result<ByteQuad,  DecodeError> { Ok([ u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)? ]) } }
-impl Decode for ByteOctet { fn decode (buff: &mut &[u8]) -> Result<ByteOctet, DecodeError> { Ok([ u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)?, u8::decode(buff)? ]) } }
+
+impl Decode for ByteOctet  {
+  fn decode (buff: &mut &[u8]) -> Result<ByteOctet,  DecodeError> {
+    if buff.len() >= 8 {
+      let arr = unsafe { *(buff.as_ptr() as *const ByteOctet) };
+      *buff = &buff[8..];
+      Ok(arr)
+    } else {
+      Err(DecodeError::EOF)
+    }
+  }
+}
 
 impl Decode for u16 { fn decode (buff: &mut &[u8]) -> Result<u16, DecodeError> { Ok(u16::from_le_bytes( BytePair::decode(buff)?)) }}
 impl Decode for u32 { fn decode (buff: &mut &[u8]) -> Result<u32, DecodeError> { Ok(u32::from_le_bytes( ByteQuad::decode(buff)?)) }}
