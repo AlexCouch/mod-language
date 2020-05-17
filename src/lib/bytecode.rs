@@ -1,35 +1,32 @@
 //! The bytecode form and component structures
 
-#![allow(unused_imports)]
-#![allow(dead_code)]
-
 use std::{
   mem::{ transmute, },
 };
 
 
 
-/// Interface trait for encoding a Bytecode value into a byte buffer
+/// Interface trait for encoding a bytecode value into a byte buffer
 pub trait Encode {
   /// Encodes a Bytecode value into a byte buffer
   fn encode (&self, buff: &mut Vec<u8>);
 }
 
-/// Interface trait for decoding a Bytecode value from a byte buffer
+/// Interface trait for decoding a bytecode value from a byte buffer
 pub trait Decode: Sized {
-  /// Decodes a Bytecode value from a byte buffer
+  /// Decodes a bytecode value from a byte buffer
   fn decode (buff: &mut &[u8]) -> Result<Self, DecodeError>;
 }
 
-/// An error resulting from attempting to decode a Bytecode value from an improperly formed byte buffer
+/// An error resulting from attempting to decode a bytecode value from an improperly formed byte buffer
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DecodeError {
-  /// The Decoder hit the end of the byte buffer without getting enough data to complete a value
+  /// The decoder hit the end of the byte buffer without getting enough data to complete a value
   EOF,
-  /// The Decoder read a badly encoded String
+  /// The decoder read a badly encoded String
   InvalidString,
-  /// The Decoder encountered an unexpected value
+  /// The decoder encountered an unexpected value
   UnexpectedValue,
 }
 
@@ -56,7 +53,7 @@ pub struct Module {
 }
 
 impl Module {
-  /// Create a new, empty Module
+  /// Create a new, empty `Module`
   pub fn empty (name: String, version: Version) -> Self {
     Self {
       name,
@@ -99,7 +96,7 @@ impl Decode for Module {
 
 
 
-/// Represents a Module's semver2 version number
+/// Represents a `Module`'s semver2 version number
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Version {
   /// Bumped for incompatible API changes
@@ -111,7 +108,7 @@ pub struct Version {
 }
 
 impl Version {
-  /// Create a new Version and initialize its values
+  /// Create a new `Version` and initialize its values
   pub fn new (major: u8, minor: u8, patch: u8) -> Self {
     Self { major, minor, patch }
   }
@@ -137,14 +134,15 @@ impl Decode for Version {
 
 
 
-/// A unique (per-item-kind, per-module) index for an item in a Module
+/// A unique (per-item-kind, per-`Module`) index for an item in a `Module`
+/// 
+/// This is a generic version of the type safe indices defined later
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Index(pub u64);
 
 impl From<u64> for Index { fn from (i: u64) -> Self { Self(i) } }
 impl From<Index> for u64 { fn from (i: Index) -> Self { i.0 } }
 
-impl From<NamespaceIndex> for Index { fn from (i: NamespaceIndex) -> Self { Self(i.0) } }
 impl From<TypeIndex> for Index { fn from (i: TypeIndex) -> Self { Self(i.0) } }
 impl From<GlobalIndex> for Index { fn from (i: GlobalIndex) -> Self { Self(i.0) } }
 impl From<FunctionIndex> for Index { fn from (i: FunctionIndex) -> Self { Self(i.0) } }
@@ -157,59 +155,50 @@ impl Decode for Index { fn decode (buff: &mut &[u8]) -> Result<Index, DecodeErro
 
 
 
-/// A unique (per-module) index for a Namespace in a Module
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct NamespaceIndex(pub u64);
-
-/// A unique (per-module) index for a Type in a Module
+/// A unique (per-`Module`) index for a `Type` in a `Module`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct TypeIndex(pub u64);
 
-/// A unique (per-module) index for a Global in a Module
+/// A unique (per-`Module`) index for a `Global` in a `Module`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct GlobalIndex(pub u64);
 
-/// A unique (per-module) index for a Function in a Module
+/// A unique (per-`Module`) index for a `Function` in a `Module`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct FunctionIndex(pub u64);
 
-/// A unique (per-function) index for a Local in a Function
+/// A unique (per-`Function`) index for a local variable in a `Function`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct LocalIndex(pub u64);
 
-/// A unique (per-struct) index for an element in a Type
+/// A unique (per-struct) index for an element in a `Type`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementIndex(pub u64);
 
-impl From<u64> for NamespaceIndex { fn from (i: u64) -> Self { Self(i) } }
 impl From<u64> for TypeIndex { fn from (i: u64) -> Self { Self(i) } }
 impl From<u64> for GlobalIndex { fn from (i: u64) -> Self { Self(i) } }
 impl From<u64> for FunctionIndex { fn from (i: u64) -> Self { Self(i) } }
 impl From<u64> for LocalIndex { fn from (i: u64) -> Self { Self(i) } }
 impl From<u64> for ElementIndex { fn from (i: u64) -> Self { Self(i) } }
 
-impl From<NamespaceIndex> for u64 { fn from (i: NamespaceIndex) -> Self { i.0 } }
 impl From<TypeIndex> for u64 { fn from (i: TypeIndex) -> Self { i.0 } }
 impl From<GlobalIndex> for u64 { fn from (i: GlobalIndex) -> Self { i.0 } }
 impl From<FunctionIndex> for u64 { fn from (i: FunctionIndex) -> Self { i.0 } }
 impl From<LocalIndex> for u64 { fn from (i: LocalIndex) -> Self { i.0 } }
 impl From<ElementIndex> for u64 { fn from (i: ElementIndex) -> Self { i.0 } }
 
-impl From<Index> for NamespaceIndex { fn from (i: Index) -> Self { Self(i.0) } }
 impl From<Index> for TypeIndex { fn from (i: Index) -> Self { Self(i.0) } }
 impl From<Index> for GlobalIndex { fn from (i: Index) -> Self { Self(i.0) } }
 impl From<Index> for FunctionIndex { fn from (i: Index) -> Self { Self(i.0) } }
 impl From<Index> for LocalIndex { fn from (i: Index) -> Self { Self(i.0) } }
 impl From<Index> for ElementIndex { fn from (i: Index) -> Self { Self(i.0) } }
 
-impl Encode for NamespaceIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 impl Encode for TypeIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 impl Encode for GlobalIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 impl Encode for FunctionIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 impl Encode for LocalIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 impl Encode for ElementIndex { fn encode (&self, buff: &mut Vec<u8>) { self.0.encode(buff) } }
 
-impl Decode for NamespaceIndex { fn decode (buff: &mut &[u8]) -> Result<NamespaceIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 impl Decode for TypeIndex { fn decode (buff: &mut &[u8]) -> Result<TypeIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 impl Decode for GlobalIndex { fn decode (buff: &mut &[u8]) -> Result<GlobalIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 impl Decode for FunctionIndex { fn decode (buff: &mut &[u8]) -> Result<FunctionIndex, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
@@ -218,17 +207,17 @@ impl Decode for ElementIndex { fn decode (buff: &mut &[u8]) -> Result<ElementInd
 
 
 
-/// Represents a Type definition in a Module
+/// Represents a type definition in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Type {
-  /// The index of a Type in a Module's types list
+  /// The index of a `Type` in a `Module`'s types list
   pub index: TypeIndex,
-  /// The variant data associated with a Type
+  /// The variant data associated with a `Type`
   pub data: TypeData,
 }
 
 impl Type {
-  /// Create a new Type
+  /// Create a new `Type`
   pub fn new (index: TypeIndex, data: TypeData) -> Self {
     Self { index, data }
   }
@@ -252,10 +241,10 @@ impl Decode for Type {
 
 
 
-/// Variant data associated with a Type
+/// Variant data associated with a `Type`
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TypeData {
-  /// A built in Type defined by the compiler
+  /// A built in type defined by the compiler
   Intrinsic(IntrinsicType),
   /// The address of a value of another type
   Pointer(TypeIndex),
@@ -271,13 +260,13 @@ pub enum TypeData {
 }
 
 impl TypeData {
-  /// Get the TypeDataType of a TypeData
-  pub fn get_type (&self) -> TypeDataType {
+  /// Get the `TypeDataKind` of a `TypeData`
+  pub fn get_kind (&self) -> TypeDataKind {
     match self {
-      TypeData::Intrinsic { .. } => TypeDataType::Intrinsic,
-      TypeData::Pointer { .. } => TypeDataType::Pointer,
-      TypeData::Struct { .. } => TypeDataType::Struct,
-      TypeData::Function { .. } => TypeDataType::Function,
+      TypeData::Intrinsic { .. } => TypeDataKind::Intrinsic,
+      TypeData::Pointer   { .. } => TypeDataKind::Pointer,
+      TypeData::Struct    { .. } => TypeDataKind::Struct,
+      TypeData::Function  { .. } => TypeDataKind::Function,
     }
   }
 }
@@ -286,7 +275,7 @@ impl Default for TypeData { fn default () -> Self { Self::Intrinsic(IntrinsicTyp
 
 impl Encode for TypeData {
   fn encode (&self, buff: &mut Vec<u8>) {
-    self.get_type().encode(buff);
+    self.get_kind().encode(buff);
 
     use TypeData::*;
 
@@ -304,11 +293,11 @@ impl Encode for TypeData {
 
 impl Decode for TypeData {
   fn decode (buff: &mut &[u8]) -> Result<TypeData, DecodeError> {
-    Ok(match TypeDataType::decode(buff)? {
-      TypeDataType::Intrinsic => TypeData::Intrinsic(IntrinsicType::decode(buff)?),
-      TypeDataType::Pointer => TypeData::Pointer(TypeIndex::decode(buff)?),
-      TypeDataType::Struct => TypeData::Struct(Vec::decode(buff)?),
-      TypeDataType::Function => TypeData::Function {
+    Ok(match TypeDataKind::decode(buff)? {
+      TypeDataKind::Intrinsic => TypeData::Intrinsic(IntrinsicType::decode(buff)?),
+      TypeDataKind::Pointer => TypeData::Pointer(TypeIndex::decode(buff)?),
+      TypeDataKind::Struct => TypeData::Struct(Vec::decode(buff)?),
+      TypeDataKind::Function => TypeData::Function {
         parameters: Vec::decode(buff)?,
         result: Option::decode(buff)?,
       },
@@ -318,31 +307,31 @@ impl Decode for TypeData {
 
 
 
-/// A data-less variant only version of ImportData/ExportData
+/// A data-less variant only version of `TypeData`
 /// 
-/// See ImportData and ExportData for docs on each variant
+/// See `TypeData` for docs on each variant
 #[repr(u8)]
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TypeDataType {
+pub enum TypeDataKind {
   Intrinsic,
   Pointer,
   Struct,
   Function,
 }
 
-impl Encode for TypeDataType {
+impl Encode for TypeDataKind {
   fn encode (&self, buff: &mut Vec<u8>) {
     buff.push(*self as _)
   }
 }
 
-impl Decode for TypeDataType {
-  fn decode (buff: &mut &[u8]) -> Result<TypeDataType, DecodeError> {
+impl Decode for TypeDataKind {
+  fn decode (buff: &mut &[u8]) -> Result<TypeDataKind, DecodeError> {
     let byte = u8::decode(buff)?;
     
-    if byte >= TypeDataType::Intrinsic as _
-    && byte <= TypeDataType::Function  as _ {
+    if byte >= TypeDataKind::Intrinsic as _
+    && byte <= TypeDataKind::Function  as _ {
       Ok(unsafe { transmute(byte) })
     } else {
       Err(DecodeError::UnexpectedValue)
@@ -352,7 +341,7 @@ impl Decode for TypeDataType {
 
 
 
-/// Variant data associated with a built in Type defined by the compiler
+/// Represents a type defined by the compiler
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub enum IntrinsicType {
@@ -405,19 +394,19 @@ impl Decode for IntrinsicType {
 
 
 
-/// Binds another Module imported by a Module
+/// Binds another module imported by a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportModule {
-  /// The uniquely identifying name of an ImportModule
+  /// The uniquely identifying name of an `ImportModule`
   pub name: String,
-  /// The semantic Version number of an ImportModule
+  /// The semantic `Version` number of an `ImportModule`
   pub version: Version,
-  /// List of items bound from the ImportModule
+  /// List of items bound from the `ImportModule`
   pub items: Vec<Import>,
 }
 
 impl ImportModule {
-  /// Create a new, empty ImportModule
+  /// Create a new, empty `ImportModule`
   pub fn empty (name: String, version: Version) -> Self {
     Self {
       name,
@@ -447,17 +436,17 @@ impl Decode for ImportModule {
 
 
 
-/// Binds an item from an imported Module to a unique Index a Module
+/// Binds an item from an imported module to a unique index in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Import {
-  /// The uniquely identifying name of an Import binding
+  /// The uniquely identifying name of an `Import` binding
   pub name: String,
-  /// The variant data associated with an Import binding
+  /// The variant data associated with an `Import` binding
   pub data: ImportData,
 }
 
 impl Import {
-  /// Create a new Import
+  /// Create a new `Import`
   pub fn new (name: String, data: ImportData) -> Self {
     Self { name, data }
   }
@@ -481,31 +470,31 @@ impl Decode for Import {
 
 
 
-/// Variant data associated with an Import
+/// Variant data associated with an `Import`
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImportData {
-  /// An imported Namespace; contains other Import bindings
+  /// An imported namespace; contains other `Import` bindings
   Namespace(Vec<Import>),
-  /// An imported Global; contains a Global index and a Type index
+  /// An imported `Global`; contains a `GlobalIndex` and a `TypeIndex`
   Global(GlobalIndex, TypeIndex),
-  /// An imported Function; contains a Function index and a Type index
+  /// An imported `Function`; contains a `FunctionIndex` and a `TypeIndex`
   Function(FunctionIndex, TypeIndex),
 }
 
 impl ImportData {
-  /// Get the AliasDataType of an ImportData
-  pub fn get_type (&self) -> AliasDataType {
+  /// Get the `AliasDataKind` of an `ImportData`
+  pub fn get_kind (&self) -> AliasDataKind {
     match self {
-      ImportData::Namespace { .. } => AliasDataType::Namespace,
-      ImportData::Global { .. } => AliasDataType::Global,
-      ImportData::Function { .. } => AliasDataType::Function,
+      ImportData::Namespace { .. } => AliasDataKind::Namespace,
+      ImportData::Global { .. } => AliasDataKind::Global,
+      ImportData::Function { .. } => AliasDataKind::Function,
     }
   }
 }
 
 impl Encode for ImportData {
   fn encode (&self, buff: &mut Vec<u8>) {
-    self.get_type().encode(buff);
+    self.get_kind().encode(buff);
 
     use ImportData::*;
 
@@ -529,29 +518,29 @@ impl Encode for ImportData {
 
 impl Decode for ImportData {
   fn decode (buff: &mut &[u8]) -> Result<ImportData, DecodeError> {
-    Ok(match AliasDataType::decode(buff)? {
-      AliasDataType::Namespace => ImportData::Namespace(Vec::decode(buff)?),
-      AliasDataType::Global    => ImportData::Global(GlobalIndex::decode(buff)?, TypeIndex::decode(buff)?),
-      AliasDataType::Function  => ImportData::Function(FunctionIndex::decode(buff)?, TypeIndex::decode(buff)?),
+    Ok(match AliasDataKind::decode(buff)? {
+      AliasDataKind::Namespace => ImportData::Namespace(Vec::decode(buff)?),
+      AliasDataKind::Global    => ImportData::Global(GlobalIndex::decode(buff)?, TypeIndex::decode(buff)?),
+      AliasDataKind::Function  => ImportData::Function(FunctionIndex::decode(buff)?, TypeIndex::decode(buff)?),
     })
   }
 }
 
 
 
-/// Represents a Global variable definition in a Module
+/// Represents a global variable definition in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Global {
-  /// The index of a Global in a Module's globals list
+  /// The index of a `Global` in a `Module`'s globals list
   pub index: GlobalIndex,
-  /// The index of a Global's Type
+  /// The index of a `Global`'s `Type`
   pub ty: TypeIndex,
-  /// The instructions used to initialize a Global
+  /// The instructions used to initialize a `Global`
   pub initializer: Vec<Instruction>,
 }
 
 impl Global {
-  /// Create a new, empty Global with no initializer
+  /// Create a new, empty `Global` with no initializer
   pub fn empty (index: GlobalIndex, ty: TypeIndex) -> Self {
     Self {
       index,
@@ -581,19 +570,19 @@ impl Decode for Global {
 
 
 
-/// Represents a Function definition in a Module
+/// Represents a function definition in a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
-  /// The index of a Function in a Module's globals list
+  /// The index of a `Function` in a `Module`'s functions list
   pub index: FunctionIndex,
-  /// The index of a Function's Type
+  /// The index of a `Function`'s `Type`
   pub ty: TypeIndex,
-  /// The instructions used to execute a Function
+  /// The instructions used to execute a `Function`
   pub body: Vec<Instruction>,
 }
 
 impl Function {
-  /// Create a new, empty Function with no body
+  /// Create a new, empty `Function` with no body
   pub fn empty (index: FunctionIndex, ty: TypeIndex) -> Self {
     Self {
       index,
@@ -623,17 +612,17 @@ impl Decode for Function {
 
 
 
-/// Binds an item exported by a Module
+/// Binds an item exported by a `Module`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Export {
-  /// The uniquely identifying name of an Export binding
+  /// The uniquely identifying name of an `Export` binding
   pub name: String,
-  /// The variant data associated with an Export binding
+  /// The variant data associated with an `Export` binding
   pub data: ExportData,
 }
 
 impl Export {
-  /// Create a new Export
+  /// Create a new `Export`
   pub fn new (name: String, data: ExportData) -> Self {
     Self { name, data }
   }
@@ -657,31 +646,31 @@ impl Decode for Export {
 
 
 
-/// Variant data associated with an Export
+/// Variant data associated with an `Export`
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExportData {
-  /// An exported Namespace; contains other Export bindings
+  /// An exported namespace; contains other `Export` bindings
   Namespace(Vec<Export>),
-  /// An exported Global; contains a Global index
+  /// An exported `Global`; contains a `GlobalIndex`
   Global(GlobalIndex),
-  /// An exported Function; contains a Function index
+  /// An exported `Function`; contains a `FunctionIndex`
   Function(FunctionIndex),
 }
 
 impl ExportData {
-  /// Get the AliasDataType of an ExportData
-  pub fn get_type (&self) -> AliasDataType {
+  /// Get the `AliasDataKind` of an `ExportData`
+  pub fn get_kind (&self) -> AliasDataKind {
     match self {
-      ExportData::Namespace { .. } => AliasDataType::Namespace,
-      ExportData::Global { .. } => AliasDataType::Global,
-      ExportData::Function { .. } => AliasDataType::Function,
+      ExportData::Namespace { .. } => AliasDataKind::Namespace,
+      ExportData::Global { .. } => AliasDataKind::Global,
+      ExportData::Function { .. } => AliasDataKind::Function,
     }
   }
 }
 
 impl Encode for ExportData {
   fn encode (&self, buff: &mut Vec<u8>) {
-    self.get_type().encode(buff);
+    self.get_kind().encode(buff);
     
     use ExportData::*;
 
@@ -698,40 +687,40 @@ impl Encode for ExportData {
 
 impl Decode for ExportData {
   fn decode (buff: &mut &[u8]) -> Result<ExportData, DecodeError> {
-    Ok(match AliasDataType::decode(buff)? {
-      AliasDataType::Namespace => ExportData::Namespace(Vec::decode(buff)?),
-      AliasDataType::Global    => ExportData::Global(GlobalIndex::decode(buff)?),
-      AliasDataType::Function  => ExportData::Function(FunctionIndex::decode(buff)?),
+    Ok(match AliasDataKind::decode(buff)? {
+      AliasDataKind::Namespace => ExportData::Namespace(Vec::decode(buff)?),
+      AliasDataKind::Global    => ExportData::Global(GlobalIndex::decode(buff)?),
+      AliasDataKind::Function  => ExportData::Function(FunctionIndex::decode(buff)?),
     })
   }
 }
 
 
 
-/// A data-less variant only version of ImportData/ExportData
+/// A data-less variant only version of `ImportData`/`ExportData`
 /// 
-/// See ImportData and ExportData for docs on each variant
+/// See `ImportData` and `ExportData` for docs on each variant
 #[repr(u8)]
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AliasDataType {
+pub enum AliasDataKind {
   Namespace,
   Global,
   Function,
 }
 
-impl Encode for AliasDataType {
+impl Encode for AliasDataKind {
   fn encode (&self, buff: &mut Vec<u8>) {
     buff.push(*self as _);
   }
 }
 
-impl Decode for AliasDataType {
-  fn decode (buff: &mut &[u8]) -> Result<AliasDataType, DecodeError> {
+impl Decode for AliasDataKind {
+  fn decode (buff: &mut &[u8]) -> Result<AliasDataKind, DecodeError> {
     let byte = u8::decode(buff)?;
     
-    if byte >= AliasDataType::Namespace as _
-    && byte <= AliasDataType::Function  as _ {
+    if byte >= AliasDataKind::Namespace as _
+    && byte <= AliasDataKind::Function  as _ {
       Ok(unsafe { transmute(byte) })
     } else {
       Err(DecodeError::UnexpectedValue)
@@ -741,7 +730,7 @@ impl Decode for AliasDataType {
 
 
 
-/// Bytecode instructions used by Global initializers and Function bodies
+/// Bytecode instructions used by `Global`'s initializers and `Function`'s bodies
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Instruction {
   /// Does nothing, filler data
@@ -756,10 +745,10 @@ pub enum Instruction {
   /// Gets the address of a local variable,
   /// then pushes it on the stack
   LocalAddress(LocalIndex),
-  /// Gets the address of a global variable,
+  /// Gets the address of a `Global` variable,
   /// then pushes it on the stack
   GlobalAddress(GlobalIndex),
-  /// Gets the address of a function,
+  /// Gets the address of a `Function`,
   /// then pushes it on the stack
   FunctionAddress(FunctionIndex),
   
@@ -774,76 +763,76 @@ pub enum Instruction {
   /// Pops a value off the stack and uses it as an address for a dereference,
   /// then pushes the loaded data back on the stack
   Load,
-  /// Pops an address and a value off the stack (Addr, Val),
+  /// Pops an address and a value off the stack `(Addr, Val)`,
   /// and stores the value to the address
   Store,
 
   /// Pops a value off the stack and discards it
   Discard,
 
-  /// Pops two values off the stack (A, B), performs addition (A + B),
+  /// Pops two values off the stack `(A, B)`, performs addition `(A + B)`,
   /// and pushes the result back on the stack
   Add,
-  /// Pops two values off the stack (A, B), performs subtraction (A - B),
+  /// Pops two values off the stack `(A, B)`, performs subtraction `(A - B)`,
   /// and pushes the result back on the stack
   Sub,
-  /// Pops two values off the stack (A, B), performs multiplication (A * B),
+  /// Pops two values off the stack `(A, B)`, performs multiplication `(A * B)`,
   /// and pushes the result back on the stack
   Mul,
-  /// Pops two values off the stack (A, B), performs division (A / B),
+  /// Pops two values off the stack `(A, B)`, performs division `(A / B)`,
   /// and pushes the result back on the stack
   Div,
-  /// Pops two values off the stack (A, B), performs remainder division (A % B),
+  /// Pops two values off the stack `(A, B)`, performs remainder division `(A % B)`,
   /// and pushes the result back on the stack
   Rem,
   /// Pops a single value off the stack and negates its sign (-Val),
   /// and pushes the result back on the stack
   Neg,
 
-  /// Pops two values off the stack (A, B), performs bitwise AND (A & B),
+  /// Pops two values off the stack `(A, B)`, performs bitwise AND `(A & B)`,
   /// and pushes the result back on the stack
   And,
-  /// Pops two values off the stack (A, B), performs bitwise OR (A | B),
+  /// Pops two values off the stack `(A, B)`, performs bitwise OR `(A | B)`,
   /// and pushes the result back on the stack
   Or,
-  /// Pops two values off the stack (A, B), performs bitwise XOR (A ~ B),
+  /// Pops two values off the stack `(A, B)`, performs bitwise XOR `(A ~ B)`,
   /// and pushes the result back on the stack
   Xor,
-  /// Pops two values off the stack (A, B), performs bitwise LSHIFT (A << B),
+  /// Pops two values off the stack `(A, B)`, performs bitwise LSHIFT `(A << B)`,
   /// and pushes the result back on the stack
   LShift,
-  /// Pops two values off the stack (A, B), performs bitwise RSHIFT (A >> B),
+  /// Pops two values off the stack `(A, B)`, performs bitwise RSHIFT `(A >> B)`,
   /// and pushes the result back on the stack
   RShift,
   /// Pops a single value off the stack, performs bitwise NOT,
   /// and pushes the result back on the stack
   Not,
 
-  /// Pops two values off the stack (A, B), performs equality comparison (A == B),
+  /// Pops two values off the stack `(A, B)`, performs equality comparison `(A == B)`,
   /// and pushes the result back on the stack
   EQ,
-  /// Pops two values off the stack (A, B), performs inequality comparison (A != B),
+  /// Pops two values off the stack `(A, B)`, performs inequality comparison `(A != B)`,
   /// and pushes the result back on the stack
   NEQ,
-  /// Pops two values off the stack (A, B), performs less than comparison (A < B),
+  /// Pops two values off the stack `(A, B)`, performs less than comparison `(A < B)`,
   /// and pushes the result back on the stack
   LT,
-  /// Pops two values off the stack (A, B), performs greater than comparison (A > B),
+  /// Pops two values off the stack `(A, B)`, performs greater than comparison `(A > B)`,
   /// and pushes the result back on the stack
   GT,
-  /// Pops two values off the stack (A, B), performs less than or equal comparison (A <= B),
+  /// Pops two values off the stack `(A, B)`, performs less than or equal comparison `(A <= B)`,
   /// and pushes the result back on the stack
   LEQ,
-  /// Pops two values off the stack (A, B), performs greater than or equal comparison (A >= B),
+  /// Pops two values off the stack `(A, B)`, performs greater than or equal comparison `(A >= B)`,
   /// and pushes the result back on the stack
   GEQ,
 
-  /// Calls a Module-local function by index,
+  /// Calls a `Module`-local `Function` by index,
   /// after popping a type-dependant amount of arguments off the stack.
   /// After the call is complete, pushes the function's return value back on the stack (if one was given)
   CallDirect(FunctionIndex),
 
-  /// Pops a function address off the stack,
+  /// Pops a functional address off the stack,
   /// then pops a type-dependant amount of arguments off the stack.
   /// After the call is complete, pushes the function's return value back on the stack (if one was given)
   CallIndirect,
@@ -855,7 +844,9 @@ pub enum Instruction {
   /// but in serialized form it is a sequence
   IfBlock(Vec<Instruction>, Vec<Instruction>),
 
-  /// Continues executing its branch until a Break or Return instruction is reached
+  /// Continues repeatedly executing its branch until a `Break` `Return`, or `ReturnVoid` instruction is reached
+  /// 
+  /// `Continue` instruction jumps to the top of this block
   /// 
   /// Conceptually contains other instructions,
   /// but in serialized form it is a sequence
@@ -867,52 +858,52 @@ pub enum Instruction {
   Continue,
 
   /// Pops a value off the stack, and returns it from a function
-  Ret,
+  Return,
   /// Returns from a function
-  RetVoid,
+  ReturnVoid,
 }
 
 impl Instruction {
-  /// Get the InstructionType of an Instruction
-  pub fn get_type (&self) -> InstructionType {
+  /// Get the InstructionKind of an Instruction
+  pub fn get_kind (&self) -> InstructionKind {
     match self {
-      Instruction::NoOp { .. } => InstructionType::NoOp,
-      Instruction::ImmediateValue { .. } => InstructionType::ImmediateValue,
-      Instruction::CreateLocal { .. } => InstructionType::CreateLocal,
-      Instruction::LocalAddress { .. } => InstructionType::LocalAddress,
-      Instruction::GlobalAddress { .. } => InstructionType::GlobalAddress,
-      Instruction::FunctionAddress { .. } => InstructionType::FunctionAddress,
-      Instruction::GetElement { .. } => InstructionType::GetElement,
-      Instruction::Cast { .. } => InstructionType::Cast,
-      Instruction::Load { .. } => InstructionType::Load,
-      Instruction::Store { .. } => InstructionType::Store,
-      Instruction::Discard { .. } => InstructionType::Discard,
-      Instruction::Add { .. } => InstructionType::Add,
-      Instruction::Sub { .. } => InstructionType::Sub,
-      Instruction::Mul { .. } => InstructionType::Mul,
-      Instruction::Div { .. } => InstructionType::Div,
-      Instruction::Rem { .. } => InstructionType::Rem,
-      Instruction::Neg { .. } => InstructionType::Neg,
-      Instruction::And { .. } => InstructionType::And,
-      Instruction::Or { .. } => InstructionType::Or,
-      Instruction::Xor { .. } => InstructionType::Xor,
-      Instruction::LShift { .. } => InstructionType::LShift,
-      Instruction::RShift { .. } => InstructionType::RShift,
-      Instruction::Not { .. } => InstructionType::Not,
-      Instruction::EQ { .. } => InstructionType::EQ,
-      Instruction::NEQ { .. } => InstructionType::NEQ,
-      Instruction::LT { .. } => InstructionType::LT,
-      Instruction::GT { .. } => InstructionType::GT,
-      Instruction::LEQ { .. } => InstructionType::LEQ,
-      Instruction::GEQ { .. } => InstructionType::GEQ,
-      Instruction::CallDirect { .. } => InstructionType::CallDirect,
-      Instruction::CallIndirect { .. } => InstructionType::CallIndirect,
-      Instruction::IfBlock { .. } => InstructionType::IfBlock,
-      Instruction::LoopBlock { .. } => InstructionType::LoopBlock,
-      Instruction::Break { .. } => InstructionType::Break,
-      Instruction::Continue { .. } => InstructionType::Continue,
-      Instruction::Ret { .. } => InstructionType::Ret,
-      Instruction::RetVoid { .. } => InstructionType::RetVoid,
+      Instruction::NoOp { .. } => InstructionKind::NoOp,
+      Instruction::ImmediateValue { .. } => InstructionKind::ImmediateValue,
+      Instruction::CreateLocal { .. } => InstructionKind::CreateLocal,
+      Instruction::LocalAddress { .. } => InstructionKind::LocalAddress,
+      Instruction::GlobalAddress { .. } => InstructionKind::GlobalAddress,
+      Instruction::FunctionAddress { .. } => InstructionKind::FunctionAddress,
+      Instruction::GetElement { .. } => InstructionKind::GetElement,
+      Instruction::Cast { .. } => InstructionKind::Cast,
+      Instruction::Load { .. } => InstructionKind::Load,
+      Instruction::Store { .. } => InstructionKind::Store,
+      Instruction::Discard { .. } => InstructionKind::Discard,
+      Instruction::Add { .. } => InstructionKind::Add,
+      Instruction::Sub { .. } => InstructionKind::Sub,
+      Instruction::Mul { .. } => InstructionKind::Mul,
+      Instruction::Div { .. } => InstructionKind::Div,
+      Instruction::Rem { .. } => InstructionKind::Rem,
+      Instruction::Neg { .. } => InstructionKind::Neg,
+      Instruction::And { .. } => InstructionKind::And,
+      Instruction::Or { .. } => InstructionKind::Or,
+      Instruction::Xor { .. } => InstructionKind::Xor,
+      Instruction::LShift { .. } => InstructionKind::LShift,
+      Instruction::RShift { .. } => InstructionKind::RShift,
+      Instruction::Not { .. } => InstructionKind::Not,
+      Instruction::EQ { .. } => InstructionKind::EQ,
+      Instruction::NEQ { .. } => InstructionKind::NEQ,
+      Instruction::LT { .. } => InstructionKind::LT,
+      Instruction::GT { .. } => InstructionKind::GT,
+      Instruction::LEQ { .. } => InstructionKind::LEQ,
+      Instruction::GEQ { .. } => InstructionKind::GEQ,
+      Instruction::CallDirect { .. } => InstructionKind::CallDirect,
+      Instruction::CallIndirect { .. } => InstructionKind::CallIndirect,
+      Instruction::IfBlock { .. } => InstructionKind::IfBlock,
+      Instruction::LoopBlock { .. } => InstructionKind::LoopBlock,
+      Instruction::Break { .. } => InstructionKind::Break,
+      Instruction::Continue { .. } => InstructionKind::Continue,
+      Instruction::Return { .. } => InstructionKind::Return,
+      Instruction::ReturnVoid { .. } => InstructionKind::ReturnVoid,
     }
   }
 }
@@ -921,7 +912,7 @@ impl Encode for Instruction {
   fn encode (&self, buff: &mut Vec<u8>) {
     use Instruction::*;
 
-    self.get_type().encode(buff);
+    self.get_kind().encode(buff);
 
     match self {
       | NoOp
@@ -949,8 +940,8 @@ impl Encode for Instruction {
       | CallIndirect
       | Break
       | Continue
-      | Ret
-      | RetVoid
+      | Return
+      | ReturnVoid
       => { },
 
       ImmediateValue(imm) => imm.encode(buff),
@@ -975,47 +966,47 @@ impl Encode for Instruction {
 
 impl Decode for Instruction {
   fn decode (buff: &mut &[u8]) -> Result<Instruction, DecodeError> {
-    Ok(match InstructionType::decode(buff)? {
-      InstructionType::NoOp => Instruction::NoOp,
-      InstructionType::Load => Instruction::Load,
-      InstructionType::Store => Instruction::Store,
-      InstructionType::Discard => Instruction::Discard,
-      InstructionType::Add => Instruction::Add,
-      InstructionType::Sub => Instruction::Sub,
-      InstructionType::Mul => Instruction::Mul,
-      InstructionType::Div => Instruction::Div,
-      InstructionType::Rem => Instruction::Rem,
-      InstructionType::Neg => Instruction::Neg,
-      InstructionType::And => Instruction::And,
-      InstructionType::Or => Instruction::Or,
-      InstructionType::Xor => Instruction::Xor,
-      InstructionType::LShift => Instruction::LShift,
-      InstructionType::RShift => Instruction::RShift,
-      InstructionType::Not => Instruction::Not,
-      InstructionType::EQ => Instruction::EQ,
-      InstructionType::NEQ => Instruction::NEQ,
-      InstructionType::LT => Instruction::LT,
-      InstructionType::GT => Instruction::GT,
-      InstructionType::LEQ => Instruction::LEQ,
-      InstructionType::GEQ => Instruction::GEQ,
-      InstructionType::CallIndirect => Instruction::CallIndirect,
-      InstructionType::Break => Instruction::Break,
-      InstructionType::Continue => Instruction::Continue,
-      InstructionType::Ret => Instruction::Ret,
-      InstructionType::RetVoid => Instruction::RetVoid,
+    Ok(match InstructionKind::decode(buff)? {
+      InstructionKind::NoOp => Instruction::NoOp,
+      InstructionKind::Load => Instruction::Load,
+      InstructionKind::Store => Instruction::Store,
+      InstructionKind::Discard => Instruction::Discard,
+      InstructionKind::Add => Instruction::Add,
+      InstructionKind::Sub => Instruction::Sub,
+      InstructionKind::Mul => Instruction::Mul,
+      InstructionKind::Div => Instruction::Div,
+      InstructionKind::Rem => Instruction::Rem,
+      InstructionKind::Neg => Instruction::Neg,
+      InstructionKind::And => Instruction::And,
+      InstructionKind::Or => Instruction::Or,
+      InstructionKind::Xor => Instruction::Xor,
+      InstructionKind::LShift => Instruction::LShift,
+      InstructionKind::RShift => Instruction::RShift,
+      InstructionKind::Not => Instruction::Not,
+      InstructionKind::EQ => Instruction::EQ,
+      InstructionKind::NEQ => Instruction::NEQ,
+      InstructionKind::LT => Instruction::LT,
+      InstructionKind::GT => Instruction::GT,
+      InstructionKind::LEQ => Instruction::LEQ,
+      InstructionKind::GEQ => Instruction::GEQ,
+      InstructionKind::CallIndirect => Instruction::CallIndirect,
+      InstructionKind::Break => Instruction::Break,
+      InstructionKind::Continue => Instruction::Continue,
+      InstructionKind::Return => Instruction::Return,
+      InstructionKind::ReturnVoid => Instruction::ReturnVoid,
 
-      InstructionType::ImmediateValue => Instruction::ImmediateValue(ImmediateValue::decode(buff)?),
+      InstructionKind::ImmediateValue => Instruction::ImmediateValue(ImmediateValue::decode(buff)?),
 
-      InstructionType::CreateLocal => Instruction::CreateLocal(TypeIndex::decode(buff)?),
-      InstructionType::LocalAddress => Instruction::LocalAddress(LocalIndex::decode(buff)?),
-      InstructionType::GlobalAddress => Instruction::GlobalAddress(GlobalIndex::decode(buff)?),
-      InstructionType::FunctionAddress => Instruction::FunctionAddress(FunctionIndex::decode(buff)?),
-      InstructionType::GetElement => Instruction::GetElement(ElementIndex::decode(buff)?),
-      InstructionType::Cast => Instruction::Cast(TypeIndex::decode(buff)?),
-      InstructionType::CallDirect => Instruction::CallDirect(FunctionIndex::decode(buff)?),
+      InstructionKind::CreateLocal => Instruction::CreateLocal(TypeIndex::decode(buff)?),
+      InstructionKind::LocalAddress => Instruction::LocalAddress(LocalIndex::decode(buff)?),
+      InstructionKind::GlobalAddress => Instruction::GlobalAddress(GlobalIndex::decode(buff)?),
+      InstructionKind::FunctionAddress => Instruction::FunctionAddress(FunctionIndex::decode(buff)?),
+      InstructionKind::GetElement => Instruction::GetElement(ElementIndex::decode(buff)?),
+      InstructionKind::Cast => Instruction::Cast(TypeIndex::decode(buff)?),
+      InstructionKind::CallDirect => Instruction::CallDirect(FunctionIndex::decode(buff)?),
 
-      InstructionType::IfBlock => Instruction::IfBlock(Vec::decode(buff)?, Vec::decode(buff)?),
-      InstructionType::LoopBlock => Instruction::LoopBlock(Vec::decode(buff)?),
+      InstructionKind::IfBlock => Instruction::IfBlock(Vec::decode(buff)?, Vec::decode(buff)?),
+      InstructionKind::LoopBlock => Instruction::LoopBlock(Vec::decode(buff)?),
     })
   }
 }
@@ -1025,13 +1016,10 @@ impl Decode for Instruction {
 /// A data-less variant only version of Instruction
 /// 
 /// See Instruction for docs on each variant
-/// 
-/// Contains some InstructionTypes which do not correlate to a variant of Instruction,
-/// for example Else, and End, which mark the ends of IfBlock branches and LoopBlocks
 #[repr(u8)]
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum InstructionType {
+pub enum InstructionKind {
   NoOp,
 
   ImmediateValue,
@@ -1083,24 +1071,24 @@ pub enum InstructionType {
   Break,
   Continue,
 
-  Ret,
-  RetVoid,
+  Return,
+  ReturnVoid,
 }
 
-impl Default for InstructionType { fn default () -> Self { Self::NoOp } }
+impl Default for InstructionKind { fn default () -> Self { Self::NoOp } }
 
-impl Encode for InstructionType {
+impl Encode for InstructionKind {
   fn encode (&self, buff: &mut Vec<u8>) {
     buff.push(*self as _)
   }
 }
 
-impl Decode for InstructionType {
-  fn decode (buff: &mut &[u8]) -> Result<InstructionType, DecodeError> {
+impl Decode for InstructionKind {
+  fn decode (buff: &mut &[u8]) -> Result<InstructionKind, DecodeError> {
     let byte = u8::decode(buff)?;
     
-    if byte >= InstructionType::NoOp as _
-    && byte <= InstructionType::RetVoid  as _ {
+    if byte >= InstructionKind::NoOp as _
+    && byte <= InstructionKind::ReturnVoid  as _ {
       Ok(unsafe { transmute(byte) })
     } else {
       Err(DecodeError::UnexpectedValue)
@@ -1434,7 +1422,7 @@ mod test {
             Instruction::Load,
             Instruction::ImmediateValue(ImmediateValue::S64(1)),
             Instruction::CallDirect(2.into()),
-            Instruction::Ret,
+            Instruction::Return,
           ]
         },
         Function {
@@ -1444,7 +1432,7 @@ mod test {
             Instruction::LocalAddress(0.into()),
             Instruction::LocalAddress(1.into()),
             Instruction::Sub,
-            Instruction::Ret,
+            Instruction::Return,
           ]
         }
       ],
@@ -1518,22 +1506,22 @@ mod test {
       IfBlock(vec! [ // random instructions
         GetElement(55.into()),
         Cast(11.into()),
-        Ret,
-        RetVoid,
+        Return,
+        ReturnVoid,
         Load,
         Store,
         IfBlock(vec! [ //nesting
           Div,
           Rem,
-          Ret,
-          RetVoid,
+          Return,
+          ReturnVoid,
           NoOp,
           Neg,
         ], vec! [
           EQ,
           NoOp,
-          Ret,
-          RetVoid,
+          Return,
+          ReturnVoid,
           ImmediateValue(99i32.into()),
           NEQ,
           LT,
@@ -1543,14 +1531,14 @@ mod test {
         RShift,
         Not,
         FunctionAddress(14.into()),
-        Ret,
-        RetVoid,
+        Return,
+        ReturnVoid,
         GetElement(55.into()),
         Cast(11.into()),
         LoopBlock(vec! [ //nesting
           NoOp,
-          Ret,
-          RetVoid,
+          Return,
+          ReturnVoid,
           ImmediateValue(99i32.into()),
           CreateLocal(64.into()),
           IfBlock(vec! [
@@ -1586,8 +1574,8 @@ mod test {
       Break,
       Continue,
 
-      Ret,
-      RetVoid,
+      Return,
+      ReturnVoid,
     ];
 
     let mut encoded = Vec::default();
@@ -1604,23 +1592,23 @@ mod test {
     let bad_data = vec! [ 255 ];
 
 
-    let type_data_types = vec! [
-      TypeDataType::Function,
-      TypeDataType::Intrinsic,
-      TypeDataType::Pointer,
-      TypeDataType::Struct,
+    let type_data_kinds = vec! [
+      TypeDataKind::Function,
+      TypeDataKind::Intrinsic,
+      TypeDataKind::Pointer,
+      TypeDataKind::Struct,
     ];
 
     let mut encoded = Vec::default();
-    type_data_types.encode(&mut encoded);
+    type_data_kinds.encode(&mut encoded);
 
     let mut decoder = encoded.as_slice();
-    let decoded = Vec::decode(&mut decoder).expect("Failed to decode type_data_types");
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode type_data_kinds");
 
-    assert_eq!(type_data_types, decoded);
+    assert_eq!(type_data_kinds, decoded);
 
     let mut decoder = bad_data.as_slice();
-    TypeDataType::decode(&mut decoder).expect_err("TypeDataType decoder failed to reject out of range value");
+    TypeDataKind::decode(&mut decoder).expect_err("TypeDataKind decoder failed to reject out of range value");
 
 
     let intrinsic_types = vec! [
@@ -1650,73 +1638,73 @@ mod test {
     IntrinsicType::decode(&mut decoder).expect_err("IntrinsicType decoder failed to reject out of range value");
 
 
-    let alias_data_types = vec! [
-      AliasDataType::Function,
-      AliasDataType::Global,
-      AliasDataType::Namespace,
+    let alias_data_kinds = vec! [
+      AliasDataKind::Function,
+      AliasDataKind::Global,
+      AliasDataKind::Namespace,
     ];
 
     let mut encoded = Vec::default();
-    alias_data_types.encode(&mut encoded);
+    alias_data_kinds.encode(&mut encoded);
     
     let mut decoder = encoded.as_slice();
-    let decoded = Vec::decode(&mut decoder).expect("Failed to decode alias_data_types");
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode alias_data_kinds");
 
-    assert_eq!(alias_data_types, decoded);
+    assert_eq!(alias_data_kinds, decoded);
 
     let mut decoder = bad_data.as_slice();
-    AliasDataType::decode(&mut decoder).expect_err("AliasDataType decoder failed to reject out of range value");
+    AliasDataKind::decode(&mut decoder).expect_err("AliasDataKind decoder failed to reject out of range value");
 
 
-    let instruction_types = vec! [
-      InstructionType::NoOp,
-      InstructionType::ImmediateValue,
-      InstructionType::CreateLocal,
-      InstructionType::LocalAddress,
-      InstructionType::GlobalAddress,
-      InstructionType::FunctionAddress,
-      InstructionType::GetElement,
-      InstructionType::Cast,
-      InstructionType::Load,
-      InstructionType::Store,
-      InstructionType::Discard,
-      InstructionType::Add,
-      InstructionType::Sub,
-      InstructionType::Mul,
-      InstructionType::Div,
-      InstructionType::Rem,
-      InstructionType::Neg,
-      InstructionType::And,
-      InstructionType::Or,
-      InstructionType::Xor,
-      InstructionType::LShift,
-      InstructionType::RShift,
-      InstructionType::Not,
-      InstructionType::EQ,
-      InstructionType::NEQ,
-      InstructionType::LT,
-      InstructionType::GT,
-      InstructionType::LEQ,
-      InstructionType::GEQ,
-      InstructionType::CallDirect,
-      InstructionType::CallIndirect,
-      InstructionType::IfBlock,
-      InstructionType::LoopBlock,
-      InstructionType::Break,
-      InstructionType::Continue,
-      InstructionType::Ret,
-      InstructionType::RetVoid,
+    let instruction_kinds = vec! [
+      InstructionKind::NoOp,
+      InstructionKind::ImmediateValue,
+      InstructionKind::CreateLocal,
+      InstructionKind::LocalAddress,
+      InstructionKind::GlobalAddress,
+      InstructionKind::FunctionAddress,
+      InstructionKind::GetElement,
+      InstructionKind::Cast,
+      InstructionKind::Load,
+      InstructionKind::Store,
+      InstructionKind::Discard,
+      InstructionKind::Add,
+      InstructionKind::Sub,
+      InstructionKind::Mul,
+      InstructionKind::Div,
+      InstructionKind::Rem,
+      InstructionKind::Neg,
+      InstructionKind::And,
+      InstructionKind::Or,
+      InstructionKind::Xor,
+      InstructionKind::LShift,
+      InstructionKind::RShift,
+      InstructionKind::Not,
+      InstructionKind::EQ,
+      InstructionKind::NEQ,
+      InstructionKind::LT,
+      InstructionKind::GT,
+      InstructionKind::LEQ,
+      InstructionKind::GEQ,
+      InstructionKind::CallDirect,
+      InstructionKind::CallIndirect,
+      InstructionKind::IfBlock,
+      InstructionKind::LoopBlock,
+      InstructionKind::Break,
+      InstructionKind::Continue,
+      InstructionKind::Return,
+      InstructionKind::ReturnVoid,
     ];
 
     let mut encoded = Vec::default();
-    instruction_types.encode(&mut encoded);
+    instruction_kinds.encode(&mut encoded);
     
     let mut decoder = encoded.as_slice();
-    let decoded = Vec::decode(&mut decoder).expect("Failed to decode instruction_types");
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode instruction_kinds");
 
-    assert_eq!(instruction_types, decoded);
+    assert_eq!(instruction_kinds, decoded);
 
     let mut decoder = bad_data.as_slice();
-    InstructionType::decode(&mut decoder).expect_err("InstructionType decoder failed to reject out of range value");
+    InstructionKind::decode(&mut decoder).expect_err("InstructionKind decoder failed to reject out of range value");
   }
 }
