@@ -34,3 +34,4 @@ pub mod ctx;
 pub mod ir;
 pub mod analyzer;
 pub mod decl_builder;
+pub mod bytecode;
