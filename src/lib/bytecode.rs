@@ -1466,4 +1466,138 @@ mod test {
 
     assert_eq!(module, decoded)
   }
+
+  #[test]
+  fn test_all_instruction_encode_decode () {
+    use Instruction::*;
+    
+    let instructions = vec! [
+      NoOp,
+
+      ImmediateValue(99i32.into()),
+
+      CreateLocal(64.into()),
+
+      LocalAddress(12.into()),
+      GlobalAddress(13.into()),
+      FunctionAddress(14.into()),
+      
+      GetElement(55.into()),
+
+      Cast(11.into()),
+      
+      Load,
+      Store,
+
+      Discard,
+
+      Add,
+      Sub,
+      Mul,
+      Div,
+      Rem,
+      Neg,
+
+      And,
+      Or,
+      Xor,
+      LShift,
+      RShift,
+      Not,
+
+      EQ,
+      NEQ,
+      LT,
+      GT,
+      LEQ,
+      GEQ,
+
+      CallDirect(4.into()),
+
+      CallIndirect,
+
+      IfBlock(vec! [ // random instructions
+        GetElement(55.into()),
+        Cast(11.into()),
+        Ret,
+        RetVoid,
+        Load,
+        Store,
+        IfBlock(vec! [ //nesting
+          Div,
+          Rem,
+          Ret,
+          RetVoid,
+          NoOp,
+          Neg,
+        ], vec! [
+          EQ,
+          NoOp,
+          Ret,
+          RetVoid,
+          ImmediateValue(99i32.into()),
+          NEQ,
+          LT,
+        ])
+      ], vec![
+        LShift,
+        RShift,
+        Not,
+        FunctionAddress(14.into()),
+        Ret,
+        RetVoid,
+        GetElement(55.into()),
+        Cast(11.into()),
+        LoopBlock(vec! [ //nesting
+          NoOp,
+          Ret,
+          RetVoid,
+          ImmediateValue(99i32.into()),
+          CreateLocal(64.into()),
+          IfBlock(vec! [
+            Div,
+            Rem,
+            Neg,
+          ], vec! [
+            EQ,
+            NEQ,
+            LT,
+          ])
+        ]),
+      ]),
+
+      LoopBlock(vec! [ //random instructions
+        LShift,
+        RShift,
+        Not,
+        FunctionAddress(14.into()),
+        IfBlock(vec! [ //nesting
+          Div,
+          Neg,
+          Rem,
+        ], vec! [
+          NEQ,
+          EQ,
+          Break,
+          LT,
+        ]),
+        Break,
+      ]),
+
+      Break,
+      Continue,
+
+      Ret,
+      RetVoid,
+    ];
+
+    let mut encoded = Vec::default();
+
+    instructions.encode(&mut encoded);
+
+    let mut decoder = encoded.as_slice();
+    let decoded = Vec::decode(&mut decoder).expect("Failed to decode instructions");
+
+    assert_eq!(instructions, decoded)
+  }
 }
