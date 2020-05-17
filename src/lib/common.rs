@@ -14,6 +14,26 @@ use crate::{
 };
 
 
+/// A trait like `Display` for use with items that need to track hierarchical level (eg for indentation (see `Padding`))
+pub trait HierarchicalDisplay {
+  /// Display a value while tracking hierarchy level (eg for indentation)
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult;
+}
+
+/// A simple interface unit structure for printing indentation in a HierarchicalDisplay implementation
+pub struct Padding;
+
+impl HierarchicalDisplay for Padding {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
+    for _ in 0..*level {
+      write!(f, "  ")?;
+    }
+
+    Ok(())
+  }
+}
+
+
 /// A value identifying a particular language variable or type
 #[derive(Clone)]
 pub struct Identifier {

@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
   source::{ SourceRegion, ASTKey, },
-  common::{ Constant, Identifier, Operator, },
+  common::{ Constant, Identifier, Operator, HierarchicalDisplay, Padding, },
 };
 
 
@@ -163,11 +163,11 @@ impl Debug for TypeExpression {
 }
 
 impl Display for TypeExpression {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, &mut 0) }
 }
 
 impl HierarchicalDisplay for TypeExpression {
-  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for TypeExpression {
@@ -260,11 +260,11 @@ impl Debug for Expression {
 }
 
 impl Display for Expression {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, &mut 0) }
 }
 
 impl HierarchicalDisplay for Expression {
-  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for Expression {
@@ -343,11 +343,11 @@ impl Debug for Statement {
 }
 
 impl Display for Statement {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, &mut 0) }
 }
 
 impl HierarchicalDisplay for Statement {
-  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for Statement {
@@ -585,11 +585,11 @@ impl Debug for Item {
 }
 
 impl Display for Item {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, &mut 0) }
 }
 
 impl HierarchicalDisplay for Item {
-  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
+  #[inline] fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult { HierarchicalDisplay::fmt_hierarchical(&self.data, f, level) }
 }
 
 impl PartialEq for Item {
@@ -619,30 +619,15 @@ impl Item {
 
 
 
-trait HierarchicalDisplay {
-  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult;
-}
 
-
-struct Padding;
-
-impl HierarchicalDisplay for Padding {
-  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
-    for _ in 0..level {
-      write!(f, "  ")?;
-    }
-
-    Ok(())
-  }
-}
 
 
 impl Display for TypeExpressionData {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl HierarchicalDisplay for TypeExpressionData {
-  fn fmt_hierarchical (&self, f: &mut Formatter, _level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult {
     match self {
       TypeExpressionData::Identifier(ident) => Display::fmt(ident, f),
       TypeExpressionData::Path(path) => Display::fmt(path, f),
@@ -675,11 +660,11 @@ impl HierarchicalDisplay for TypeExpressionData {
 }
 
 impl Display for ExpressionData {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl HierarchicalDisplay for ExpressionData {
-  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
     match self {
       ExpressionData::Identifier(ident) => Display::fmt(ident, f),
       ExpressionData::Path(path) => Display::fmt(path, f),
@@ -722,11 +707,11 @@ impl HierarchicalDisplay for ExpressionData {
 
 
 impl Display for StatementData {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl HierarchicalDisplay for StatementData {
-  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
     match self {
       StatementData::Expression(expr) => expr.fmt_hierarchical(f, level),
       StatementData::Block(block) => block.fmt_hierarchical(f, level),
@@ -779,13 +764,13 @@ impl HierarchicalDisplay for StatementData {
 
 
 impl Display for Block {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl HierarchicalDisplay for Block {
-  fn fmt_hierarchical (&self, f: &mut Formatter, mut level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
     write!(f, "{{\n")?;
-    level += 1;
+    *level += 1;
 
     for stmt in self.statements.iter() {    
       Padding.fmt_hierarchical(f, level)?;
@@ -803,7 +788,7 @@ impl HierarchicalDisplay for Block {
       trail_expr.fmt_hierarchical(f, level)?;
     }
 
-    level -= 1;
+    *level -= 1;
     Padding.fmt_hierarchical(f, level)?;
     write!(f, "}}")
   }
@@ -812,11 +797,11 @@ impl HierarchicalDisplay for Block {
 
 
 impl Display for ConditionalBranch {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl HierarchicalDisplay for ConditionalBranch {
-  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
     write!(f, "if ")?;
 
     self.condition.fmt_hierarchical(f, level)?;
@@ -827,11 +812,11 @@ impl HierarchicalDisplay for ConditionalBranch {
 
 
 impl Display for Conditional {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl HierarchicalDisplay for Conditional {
-  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
     self.if_branch.fmt_hierarchical(f, level)?;
 
     for elif in self.else_if_branches.iter() {
@@ -851,11 +836,11 @@ impl HierarchicalDisplay for Conditional {
 
 
 impl Display for ItemData {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl HierarchicalDisplay for ItemData {
-  fn fmt_hierarchical (&self, f: &mut Formatter, mut level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
     match self {
       ItemData::Import { identifier, new_name, .. } => {
         write!(f, "import {}", identifier)?;
@@ -881,7 +866,7 @@ impl HierarchicalDisplay for ItemData {
           Ok(())
         } else {
           write!(f, "{{\n")?;
-          level += 1;
+          *level += 1;
 
           let mut iter = data.iter().peekable();
           
@@ -901,7 +886,7 @@ impl HierarchicalDisplay for ItemData {
             write!(f, "\n")?;
           }
 
-          level -= 1;
+          *level -= 1;
           Padding.fmt_hierarchical(f, level)?;
           write!(f, "}}")
         }
@@ -925,7 +910,7 @@ impl HierarchicalDisplay for ItemData {
               Ok(())
             } else {
               write!(f, "{{\n")?;
-              level += 1;
+              *level += 1;
 
               let mut iter = entries.iter().peekable();
           
@@ -945,7 +930,7 @@ impl HierarchicalDisplay for ItemData {
                 write!(f, "\n")?;
               }
 
-              level -= 1;
+              *level -= 1;
               Padding.fmt_hierarchical(f, level)?;
               write!(f, "}}")
             }
@@ -955,11 +940,11 @@ impl HierarchicalDisplay for ItemData {
 
       ItemData::Namespace { identifier, items, .. } => {
         write!(f, "ns {} {{\n", identifier)?;
-        level += 1;
+        *level += 1;
     
         Displayer(items).fmt_hierarchical(f, level)?;
 
-        level -= 1;
+        *level -= 1;
         Padding.fmt_hierarchical(f, level)?;
         write!(f, "}}")
       },
@@ -971,7 +956,7 @@ impl HierarchicalDisplay for ItemData {
 
       ItemData::Struct { identifier, fields, .. } => {
         write!(f, "struct {} {{\n", identifier)?;
-        level += 1;
+        *level += 1;
 
         let mut iter = fields.iter().peekable();
     
@@ -989,7 +974,7 @@ impl HierarchicalDisplay for ItemData {
           write!(f, "\n")?;
         }
 
-        level -= 1;
+        *level -= 1;
         Padding.fmt_hierarchical(f, level)?;
         write!(f, "}}")
       },
@@ -1048,11 +1033,11 @@ impl HierarchicalDisplay for ItemData {
 pub struct Displayer<'a> (pub &'a Vec<Item>);
 
 impl<'a> Display for Displayer<'a> {
-  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, 0) }
+  #[inline] fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) }
 }
 
 impl<'a> HierarchicalDisplay for Displayer<'a> {
-  fn fmt_hierarchical (&self, f: &mut Formatter, level: usize) -> FMTResult {
+  fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
     for item in self.0.iter() {
       Padding.fmt_hierarchical(f, level)?;
 
