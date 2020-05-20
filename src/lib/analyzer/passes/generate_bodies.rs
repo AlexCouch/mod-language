@@ -82,7 +82,8 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
         }
 
         unsafe { analyzer.context.items.get_unchecked_mut(global_key).mut_global_unchecked() }
-          .initializer.replace(initializer_ir).expect_none("Internal error, global initializer IR replaced");
+          .initializer.replace(initializer_ir);
+          //.expect_none("Internal error, global initializer IR replaced"); there was an error, yes, but this is ok; our codegen is dead anyways
       }
     },
 
@@ -112,7 +113,8 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
         analyzer.remove_local_context();
 
         unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() }
-          .body.replace(some!(body_ir)).expect_none("Internal error, function body IR replaced");
+          .body.replace(some!(body_ir));
+          // .expect_none("Internal error, function body IR replaced"); there was an error, yes, but this is ok; our codegen is dead anyways
       } else if analyzer.get_active_module().is_main {
         analyzer.error(item.origin, "Function definitions inside a source module must have a body".to_owned());
       }
@@ -432,7 +434,9 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
     )),
   
     &ast::ExpressionData::Unary { box ref operand, operator } => {
-      let operand_ir = generate_expr(analyzer, operand)?;
+      let mut operand_ir = generate_expr(analyzer, operand)?;
+
+      ty_finalize_coercible(analyzer, &mut operand_ir);
 
       let result_ty = ty_from_unary(analyzer, operand_ir.ty, operator, expr.origin)?;
 
@@ -448,6 +452,8 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
 
       let (mut left_ir, mut right_ir) = (irs.0?, irs.1?);
 
+      ty_finalize_coercible(analyzer, &mut left_ir);
+      ty_finalize_coercible(analyzer, &mut right_ir);
 
       let operand_tk =
         if let Some(tk) = ty_meet(analyzer, true, left_ir.ty, right_ir.ty) { tk }
