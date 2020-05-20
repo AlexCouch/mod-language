@@ -3,7 +3,7 @@
 use crate::{
   util::{ Either, },
   source::{ SourceRegion, },
-  common::{ Operator::*, Keyword::*, get_binary_precedence },
+  common::{ Operator::*, Keyword::*, get_binary_precedence, UNARY_PRECEDENCE, },
   token::{ Token, TokenData, },
   ast::{ Expression, ExpressionData, },
 };
@@ -125,6 +125,20 @@ fn pfx_conditional (parser: &mut Parser) -> Option<Expression> {
   }
 }
 
+fn pfx_unary_operator (parser: &mut Parser) -> Option<Expression> {
+  if let Some(&Token { data: TokenData::Operator(operator), origin }) = parser.curr_tok() {
+    parser.advance();
+    
+    let operand = box pratt(UNARY_PRECEDENCE, parser)?;
+
+    let origin = SourceRegion::merge(origin, operand.origin);
+
+    return Some(Expression::new(ExpressionData::Unary { operand, operator }, origin))
+  }
+
+  unreachable!("Internal error, unary operator expression parselet called on non-unary-operator token");
+}
+
 
 struct PrefixParselet {
   predicate: ParseletPredicate,
@@ -143,6 +157,7 @@ impl PrefixParselet {
       Operator(LeftParen) => pfx_syntactic_group,
       Operator(LeftBracket) => pfx_block,
       Keyword(If) => pfx_conditional,
+      Operator(AddressOf | Dereference | Not | Sub) => pfx_unary_operator,
     ]
   };
 

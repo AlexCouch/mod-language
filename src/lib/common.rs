@@ -558,6 +558,9 @@ pub const ITEM_KEYWORDS: &[Keyword] = {
   ]
 };
 
+/// The operator precedence used by all unary operators consuming an unbounded subexpression
+pub const UNARY_PRECEDENCE: usize = 70;
+
 /// A lookup table for Pratt operator precedences of binary operators
 pub const BINARY_PRECEDENCES: &[(Operator, usize)] = {
   use Operator::*;
