@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-  common::{ HierarchicalDisplay, Padding, Version, },
+  common::{ HierarchicalDisplay, Padding, Version, Operator, },
 };
 
 
@@ -247,6 +247,9 @@ pub struct ID(pub u64);
 
 impl From<u64> for ID { fn from (i: u64) -> Self { Self(i) } }
 impl From<ID> for u64 { fn from (i: ID) -> Self { i.0 } }
+
+impl From<usize> for ID { fn from (i: usize) -> Self { Self(i as u64) } }
+impl From<ID> for usize { fn from (i: ID) -> Self { i.0 as usize } }
 
 impl From<TypeID> for ID { fn from (i: TypeID) -> Self { Self(i.0) } }
 impl From<GlobalID> for ID { fn from (i: GlobalID) -> Self { Self(i.0) } }
@@ -533,6 +536,8 @@ impl Decode for TypeDataKind {
 pub enum IntrinsicType {
   /// An empty type, with no associated values
   Void,
+  /// A universally typed address value
+  Null,
   /// A binary state
   Bool,
   /// 8 bit unsigned integer
@@ -564,6 +569,7 @@ impl IntrinsicType {
 
     match self {
       Void => "void",
+      Null => "null",
       Bool => "bool",
       U8 => "u8",
       U16 => "u16",
@@ -1210,6 +1216,43 @@ pub enum Instruction {
 }
 
 impl Instruction {
+  /// Create an Instruction from an Operator, if a matching variant exists
+  pub fn from_operator (operator: Operator) -> Option<Instruction> {
+    match operator {
+      Operator::Not => Some(Instruction::Not),
+      Operator::And => Some(Instruction::And),
+      Operator::Xor => Some(Instruction::Xor),
+      Operator::Or => Some(Instruction::Or),
+      Operator::AssignAdd | Operator::Add => Some(Instruction::Add),
+      Operator::AssignSub | Operator::Sub => Some(Instruction::Sub),
+      Operator::AssignMul | Operator::Mul => Some(Instruction::Mul),
+      Operator::AssignDiv | Operator::Div => Some(Instruction::Div),
+      Operator::AssignRem | Operator::Rem => Some(Instruction::Rem),
+      Operator::Equal => Some(Instruction::EQ),
+      Operator::NotEqual => Some(Instruction::NEQ),
+      Operator::GreaterOrEqual => Some(Instruction::GEQ),
+      Operator::LesserOrEqual => Some(Instruction::LEQ),
+      Operator::Greater => Some(Instruction::GT),
+      Operator::Lesser => Some(Instruction::LT),
+      Operator::Dereference => Some(Instruction::Load),
+      
+      // cant be directly converted to an instruction
+      | Operator::As
+      | Operator::DoubleColon
+      | Operator::RightArrow
+      | Operator::AddressOf 
+      | Operator::Assign
+      | Operator::Comma
+      | Operator::Colon
+      | Operator::Semi
+      | Operator::LeftParen
+      | Operator::RightParen
+      | Operator::LeftBracket
+      | Operator::RightBracket
+      => None,
+    }
+  }
+
   /// Get the InstructionKind of an Instruction
   pub fn get_kind (&self) -> InstructionKind {
     match self {
@@ -1628,6 +1671,8 @@ impl Decode for InstructionKind {
 /// A literal value encoded directly into a bytecode instruction
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum ImmediateValue {
+  /// A null ptr
+  Null,
   /// A binary state
   Bool(bool),
   /// 8 bit unsigned integer
@@ -1656,6 +1701,7 @@ impl ImmediateValue {
   /// Get the IntrinsicType of an ImmediateValue
   pub fn get_intrinsic_type (&self) -> IntrinsicType {
     match self {
+      Self::Null    => IntrinsicType::Null,
       Self::Bool(_) => IntrinsicType::Bool,
       Self::U8(_)   => IntrinsicType::U8,
       Self::U16(_)  => IntrinsicType::U16,
@@ -1678,6 +1724,7 @@ impl Encode for ImmediateValue {
     self.get_intrinsic_type().encode(buff);
 
     match self {
+      Null     => { },
       &Bool(x) => x.encode(buff),
       &U8(x)   => x.encode(buff),
       U16(x)   => x.encode(buff),
@@ -1696,6 +1743,7 @@ impl Encode for ImmediateValue {
 impl Decode for ImmediateValue {
   fn decode (buff: &mut &[u8]) -> Result<ImmediateValue, DecodeError> {
     Ok(match IntrinsicType::decode(buff)? {
+      IntrinsicType::Null => ImmediateValue::Null,
       IntrinsicType::Bool => bool::decode(buff)?.into(),
       IntrinsicType::U8   =>   u8::decode(buff)?.into(),
       IntrinsicType::U16  =>  u16::decode(buff)?.into(),
@@ -1720,6 +1768,7 @@ impl HierarchicalDisplay for ImmediateValue {
     write!(f, "({} ", self.get_intrinsic_type().name())?;
 
     match self {
+      Null    => write!(f, "null")?,
       Bool(x) => Display::fmt(x, f)?,
       U8(x)   => Display::fmt(x, f)?,
       U16(x)  => Display::fmt(x, f)?,
@@ -1738,6 +1787,8 @@ impl HierarchicalDisplay for ImmediateValue {
 }
 
 impl Display for ImmediateValue { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
+
+impl From<()> for ImmediateValue { fn from (_: ()) -> Self { Self::Null } }
 
 impl From<bool> for ImmediateValue { fn from (u: bool) -> Self { Self::Bool (u) } }
 
@@ -2178,6 +2229,7 @@ mod test {
 
     let intrinsic_types = test_kinds!(IntrinsicType [
       Void,
+      Null,
       Bool,
       U8,
       U16,
