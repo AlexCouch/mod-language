@@ -256,6 +256,11 @@ fn generate_function (cg: &mut Codegen, function_ctx: &ctx::Function, key: Conte
     // then we can evaluate the body code if there is any, and recursively generate dependencies
     if let Some(body) = function_ctx.body.as_ref() {
       cg.local.clear();
+      for _ in function_ctx.params.iter() {
+        let p_id = cg.local.id_counter.get_next();
+        let index = cg.local.index_counter.get_next();
+        cg.local.index_id_map.insert(index, p_id);
+      }
       generate_block(cg, body, &mut function_bc.body);
     }
 
@@ -384,15 +389,19 @@ fn generate_statement (cg: &mut Codegen, statement_ir: &ir::Statement, code: &mu
     },
 
     ir::StatementData::Declaration { ty, initializer } => {
-      generate_type_def(cg, *ty);
+      let t_id = generate_type_def(cg, *ty);
 
       let index = cg.local.index_counter.get_next();
-      let id = cg.local.id_counter.get_next();
+      let l_id = cg.local.id_counter.get_next();
 
-      cg.local.index_id_map.insert(index, id).unwrap_none();
+      cg.local.index_id_map.insert(index, l_id).unwrap_none();
+
+      code.push(bc::Instruction::CreateLocal(t_id));
       
       if let Some(expression) = initializer.as_ref() {
         generate_expression(cg, expression, code);
+        code.push(bc::Instruction::LocalAddress(l_id));
+        code.push(bc::Instruction::Store);
       }
     },
 
@@ -545,6 +554,8 @@ fn generate_cast (cg: &mut Codegen, ty_key: ContextKey, expression_ir: &ir::Expr
   let type_ctx: &ctx::Type = cg.context.items.get(ty_key).unwrap().ref_type().unwrap();
 
   match &expression_ir.data {
+    ir::ExpressionData::Coerce(sub_expression_ir) => generate_cast(cg, ty_key, sub_expression_ir, code),
+
     ir::ExpressionData::Constant(constant) => {
       code.push(bc::Instruction::ImmediateValue(match (type_ctx.data.as_ref().unwrap(), constant) {
         (ctx::TypeData::Pointer(_), Constant::NullPointer) => bc::ImmediateValue::Null,
@@ -591,7 +602,6 @@ fn generate_cast (cg: &mut Codegen, ty_key: ContextKey, expression_ir: &ir::Expr
         }
       }));
     },
-
 
     | ir::ExpressionData::Reference   { .. }
     | ir::ExpressionData::Unary       { .. }
