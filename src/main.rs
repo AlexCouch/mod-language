@@ -55,16 +55,19 @@ fn main () -> std::io::Result<()> {
   std::fs::write("./log/transformed_ast", format!("{}", ast::Displayer(&transformed_ast))).expect("Failed to dump transformed ast to ./log/transformed_ast");
 
 
+  if !SESSION.messages().is_empty() {
+    SESSION.print_messages();
+    if SESSION.count_errors() > 0 {
+      println!("Cannot procede to codegen due to errors");
+      return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput))
+    }
+  }
+
+
   let decls = generate_declarations(&context);
 
   println!("Got declaration ast, dumping to ./log/decl");
   std::fs::write("./log/decl", format!("{}", ast::Displayer(&decls))).expect("Failed to dump declaration ast to ./log/decl");
-
-
-  if !SESSION.messages().is_empty() {
-    SESSION.print_messages();
-    panic!();
-  }
 
 
   let codegen = Codegen::new(&context, "test_module".to_owned(), (0, 0, 0).into());
