@@ -191,6 +191,52 @@ impl Context {
 
     Some(active_key)
   }
+
+
+  /// Get the ContextKey associated with an item's parent Namespace, if it has one
+  pub fn get_item_parent (&self, key: ContextKey) -> Option<ContextKey> {
+    match self.items.get(key)? {
+      ContextItem::Module(_) => None,
+  
+      | &ContextItem::Namespace(Namespace { parent_namespace, .. })
+      | &ContextItem::Type(Type { parent_namespace, .. })
+      => parent_namespace,
+  
+      | &ContextItem::Global(Global { parent_namespace, .. })
+      | &ContextItem::Function(Function { parent_namespace, .. })
+      => Some(parent_namespace)
+    }
+  }
+  
+  /// Get the ContextKey associated with an item's parent Module, if it has one
+  pub fn get_item_module (&self, key: ContextKey) -> Option<ContextKey> {
+    match self.items.get(key)? {
+      ContextItem::Module(_) => None,
+  
+      &ContextItem::Type(Type { parent_module, .. })
+      => parent_module,
+      
+      | &ContextItem::Namespace(Namespace { parent_module, .. })
+      | &ContextItem::Global(Global { parent_module, .. })
+      | &ContextItem::Function(Function { parent_module, .. })
+      => Some(parent_module)
+    }
+  }
+  
+  /// Get a reference to the Identifier containing the canonical name of an item, if it has one
+  pub fn get_item_canonical_name (&self, key: ContextKey) -> Option<&Identifier> {
+    match self.items.get(key)? {
+      ContextItem::Module(Module { canonical_name, .. }) => Some(canonical_name),
+  
+      | ContextItem::Type(Type { canonical_name, .. })
+      => canonical_name.as_ref(),
+      
+      | ContextItem::Namespace(Namespace { canonical_name, .. })
+      | ContextItem::Global(Global { canonical_name, .. })
+      | ContextItem::Function(Function { canonical_name, .. })
+      => Some(canonical_name)
+    }
+  }
 }
 
 

@@ -7,7 +7,7 @@ use std::{
 use crate::{
   common::{ Identifier, },
   ast,
-  ctx::{ Context, ContextKey, ContextItem, Module, Namespace, Type, TypeData, Global, Function, },
+  ctx::{ Context, ContextKey, ContextItem, Namespace, TypeData, },
 };
 
 
@@ -233,49 +233,7 @@ fn decl_reexport (ctx: &Context, base_key: ContextKey, ns_name: Identifier, ns_k
 }
 
 
-fn get_item_parent (ctx: &Context, key: ContextKey) -> Option<ContextKey> {
-  match ctx.items.get(key)? {
-    ContextItem::Module(_) => None,
 
-    | &ContextItem::Namespace(Namespace { parent_namespace, .. })
-    | &ContextItem::Type(Type { parent_namespace, .. })
-    => parent_namespace,
-
-    | &ContextItem::Global(Global { parent_namespace, .. })
-    | &ContextItem::Function(Function { parent_namespace, .. })
-    => Some(parent_namespace)
-  }
-}
-
-
-fn get_item_module (ctx: &Context, key: ContextKey) -> Option<ContextKey> {
-  match ctx.items.get(key)? {
-    ContextItem::Module(_) => None,
-
-    &ContextItem::Type(Type { parent_module, .. })
-    => parent_module,
-    
-    | &ContextItem::Namespace(Namespace { parent_module, .. })
-    | &ContextItem::Global(Global { parent_module, .. })
-    | &ContextItem::Function(Function { parent_module, .. })
-    => Some(parent_module)
-  }
-}
-
-
-fn get_item_canonical_name (ctx: &Context, key: ContextKey) -> Option<&Identifier> {
-  match ctx.items.get(key)? {
-    ContextItem::Module(Module { canonical_name, .. }) => Some(canonical_name),
-
-    | ContextItem::Type(Type { canonical_name, .. })
-    => canonical_name.as_ref(),
-    
-    | ContextItem::Namespace(Namespace { canonical_name, .. })
-    | ContextItem::Global(Global { canonical_name, .. })
-    | ContextItem::Function(Function { canonical_name, .. })
-    => Some(canonical_name)
-  }
-}
 
 
 fn make_texpr (ctx: &Context, base_key: ContextKey, ty_key: ContextKey) -> ast::TypeExpression {
@@ -317,7 +275,7 @@ fn make_path (ctx: &Context, base_key: ContextKey, ns_key: ContextKey) -> ast::P
   let mut absolute = true;
 
   'traversal: loop {
-    if let Some(parent_key) = get_item_parent(ctx, active_key) {
+    if let Some(parent_key) = ctx.get_item_parent(active_key) {
       let parent_ns: &Namespace = ctx.items.get(parent_key).unwrap().ref_namespace().unwrap();
 
       for (export_ident, &export_key) in parent_ns.export_bindings.entry_iter() {
@@ -344,7 +302,7 @@ fn make_path (ctx: &Context, base_key: ContextKey, ns_key: ContextKey) -> ast::P
         }
       }
 
-      panic!("Could not find item named `{}` in `{}` [chain was @ {:?}]", get_item_canonical_name(ctx, active_key).map(|ident| ident.as_ref()).unwrap_or("[ERROR GETTING IDENT]"), parent_ns.canonical_name, chain);
+      panic!("Could not find item named `{}` in `{}` [chain was @ {:?}]", ctx.get_item_canonical_name(active_key).map(|ident| ident.as_ref()).unwrap_or("[ERROR GETTING IDENT]"), parent_ns.canonical_name, chain);
     } else {
       break 'traversal
     }
@@ -385,7 +343,7 @@ fn make_path (ctx: &Context, base_key: ContextKey, ns_key: ContextKey) -> ast::P
   let mut chain = resolve_path_chains(ctx, chain, bs_chain);
 
   if absolute {
-    if let Some(module_key) = get_item_module(ctx, active_key) {
+    if let Some(module_key) = ctx.get_item_module(active_key) {
       if module_key != ctx.main_mod {
         let module = ctx.items.get(module_key).unwrap().ref_module().unwrap();
         // TODO this needs to get the name the module was imported as when module imports are resolved
