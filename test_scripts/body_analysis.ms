@@ -10,13 +10,21 @@ fn get_a () -> s32 {
   X::A
 }
 
-fn test_get_set -> bool {
+export fn test_get_set -> bool {
   let my_a = 99;
   set_a(my_a + 1);
   my_a == get_a() - 1
 }
 
-fn test_branch -> bool {
+fn deref_and_add (ptr: ^s32) -> s32 {
+  @ptr + 10
+}
+
+export fn spill () -> s32 {
+  deref_and_add(^32)
+}
+
+export fn test_branch -> bool {
   if X::A == 99 {
     X::A
   } else {
@@ -24,18 +32,18 @@ fn test_branch -> bool {
   }
 }
 
-fn ret_true -> bool {
+export fn ret_true -> bool {
   true
 }
 
-fn ret_false -> bool {
+export fn ret_false -> bool {
   false
 }
 
-fn ret_void_ptr -> ^void {
+export fn ret_void_ptr -> ^void {
   null
 }
 
-fn ret_coerce_ptr -> ^s32 {
+export fn ret_coerce_ptr -> ^s32 {
   null
 }

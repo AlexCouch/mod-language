@@ -1,0 +1,8 @@
+import GlobalDef;
+
+export ns X {
+  export global Y: s32;
+}
+
+export global Z: s32;
+export GlobalDef::X as W;
