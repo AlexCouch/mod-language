@@ -36,3 +36,4 @@ pub mod ir;
 pub mod analyzer;
 pub mod decl_builder;
 pub mod bc;
+pub mod codegen;

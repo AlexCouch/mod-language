@@ -10,6 +10,7 @@ use mod_language::{
   parser::Parser,
   analyzer::Analyzer,
   decl_builder::generate_declarations,
+  codegen::Codegen,
   ast,
 };
 
@@ -23,7 +24,7 @@ fn main () -> std::io::Result<()> {
   SOURCE_MANAGER.init("./test_scripts/modules/".into());
 
 
-  let source = SOURCE_MANAGER.load_source("./test_scripts/global_analysis.ms").expect("Could not find entry source file");
+  let source = SOURCE_MANAGER.load_source("./test_scripts/body_analysis.ms").expect("Could not find entry source file");
 
 
   let mut lexer = Lexer::new(source);
@@ -62,7 +63,16 @@ fn main () -> std::io::Result<()> {
 
   if !SESSION.messages().is_empty() {
     SESSION.print_messages();
+    panic!();
   }
+
+
+  let codegen = Codegen::new(&context, "test_module".to_owned(), (0, 0, 0).into());
+
+  let bc = codegen.generate();
+
+  println!("Got bytecode, dumping to ./log/bc");
+  std::fs::write("./log/bc", format!("{}", bc)).expect("Failed to dump bytecode to ./log/bc");
 
 
   Ok(())
