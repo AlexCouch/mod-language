@@ -322,11 +322,11 @@ impl Decode for FunctionID { fn decode (buff: &mut &[u8]) -> Result<FunctionID, 
 impl Decode for LocalID { fn decode (buff: &mut &[u8]) -> Result<LocalID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 impl Decode for ElementID { fn decode (buff: &mut &[u8]) -> Result<ElementID, DecodeError> { Ok(Self(u64::decode(buff)?)) }}
 
-impl HierarchicalDisplay for TypeID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
-impl HierarchicalDisplay for GlobalID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
-impl HierarchicalDisplay for FunctionID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
-impl HierarchicalDisplay for LocalID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
-impl HierarchicalDisplay for ElementID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(id {})", self.0) } }
+impl HierarchicalDisplay for TypeID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(tid {})", self.0) } }
+impl HierarchicalDisplay for GlobalID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(gid {})", self.0) } }
+impl HierarchicalDisplay for FunctionID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(fid {})", self.0) } }
+impl HierarchicalDisplay for LocalID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(lid {})", self.0) } }
+impl HierarchicalDisplay for ElementID { fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult { write!(f, "(eid {})", self.0) } }
 
 impl Display for TypeID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 impl Display for GlobalID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
@@ -1765,21 +1765,21 @@ impl HierarchicalDisplay for ImmediateValue {
   fn fmt_hierarchical (&self, f: &mut Formatter, _level: &mut usize) -> FMTResult {
     use ImmediateValue::*;
 
-    write!(f, "({} ", self.get_intrinsic_type().name())?;
+    write!(f, "({}", self.get_intrinsic_type().name())?;
 
     match self {
-      Null    => write!(f, "null")?,
-      Bool(x) => Display::fmt(x, f)?,
-      U8(x)   => Display::fmt(x, f)?,
-      U16(x)  => Display::fmt(x, f)?,
-      U32(x)  => Display::fmt(x, f)?,
-      U64(x)  => Display::fmt(x, f)?,
-      S8(x)   => Display::fmt(x, f)?,
-      S16(x)  => Display::fmt(x, f)?,
-      S32(x)  => Display::fmt(x, f)?,
-      S64(x)  => Display::fmt(x, f)?,
-      F32(x)  => Display::fmt(x, f)?,
-      F64(x)  => Display::fmt(x, f)?,
+      Null    => { },
+      Bool(x) => write!(f, " {}", x)?,
+      U8(x)   => write!(f, " {}", x)?,
+      U16(x)  => write!(f, " {}", x)?,
+      U32(x)  => write!(f, " {}", x)?,
+      U64(x)  => write!(f, " {}", x)?,
+      S8(x)   => write!(f, " {}", x)?,
+      S16(x)  => write!(f, " {}", x)?,
+      S32(x)  => write!(f, " {}", x)?,
+      S64(x)  => write!(f, " {}", x)?,
+      F32(x)  => write!(f, " {}", x)?,
+      F64(x)  => write!(f, " {}", x)?,
     }
 
     write!(f, ")")
