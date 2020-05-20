@@ -1,5 +1,6 @@
 use crate::{
   util::{ some, },
+  common::{ Operator, },
   ast::{ self, Item, ItemData, ExportData, },
   ctx::{ ContextItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
   ir,
@@ -336,7 +337,7 @@ fn generate_stmt (analyzer: &mut Analyzer, stmt: &ast::Statement) -> Option<ir::
     },
 
     ast::StatementData::Assignment { target, value } => {
-      let target_ir = generate_expr(analyzer, target);
+      let target_ir = generate_lvalue(analyzer, target);
       let value_ir = generate_expr(analyzer, value);
 
       Some(ir::Statement::new(
@@ -346,7 +347,7 @@ fn generate_stmt (analyzer: &mut Analyzer, stmt: &ast::Statement) -> Option<ir::
     },
 
     &ast::StatementData::ModAssignment { ref target, ref value, operator } => {
-      let target_ir = generate_expr(analyzer, target);
+      let target_ir = generate_lvalue(analyzer, target);
       let value_ir = generate_expr(analyzer, value);
 
       Some(ir::Statement::new(
@@ -379,6 +380,29 @@ fn generate_stmt (analyzer: &mut Analyzer, stmt: &ast::Statement) -> Option<ir::
       ir::StatementData::Block(box generate_block(analyzer, Expect::Deny, block)?),
       stmt.origin
     )),
+  }
+}
+
+
+fn generate_lvalue (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir::Expression> {
+  let ir = generate_expr(analyzer, expr)?;
+
+  match &ir.data {
+    ir::ExpressionData::Unary { operator, .. }
+    if *operator == Operator::Dereference
+    => Some(ir),
+
+    ir::ExpressionData::Reference(ir::Reference::Local { .. })
+    => Some(ir),
+    
+    ir::ExpressionData::Reference(ir::Reference::Global(key))
+    if analyzer.context.items.get(*key).unwrap().ref_global().is_some()
+    => Some(ir),
+
+    _ => {
+      analyzer.error(expr.origin, "This expression is not a valid L-value, it cannot be assigned to".to_owned());
+      None
+    }
   }
 }
 
