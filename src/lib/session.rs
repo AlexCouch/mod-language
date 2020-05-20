@@ -375,4 +375,31 @@ impl Session {
       if message.kind == MessageKind::Notice { print!("{}", message) }
     }
   }
+
+    /// Count how many Messages associated with a Session are Errors
+    pub fn count_errors (&self) -> usize {
+      let mut count = 0usize;
+      for message in self.vec().iter() {
+        if message.kind == MessageKind::Error { count += 1 }
+      }
+      count
+    }
+  
+    /// Count how many Messages associated with a Session are Warnings
+    pub fn count_warnings (&self) -> usize {
+      let mut count = 0usize;
+      for message in self.vec().iter() {
+        if message.kind == MessageKind::Warning { count += 1 }
+      }
+      count
+    }
+  
+    /// Count how many Messages associated with a Session are Notices
+    pub fn count_notices (&self) -> usize {
+      let mut count = 0usize;
+      for message in self.vec().iter() {
+        if message.kind == MessageKind::Notice { count += 1 }
+      }
+      count
+    }
 }
