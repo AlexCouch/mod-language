@@ -33,6 +33,24 @@ impl HierarchicalDisplay for Padding {
   }
 }
 
+/// Represents a `Module`'s semver2 version number
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct Version {
+  /// Bumped for incompatible API changes
+  pub major: u8,
+  /// Bumped for added functionality in a backwards compatible manner
+  pub minor: u8,
+  /// Bumped for backwards compatible bug fixes
+  pub patch: u8,
+}
+
+impl Version {
+  /// Create a new `Version` and initialize its values
+  pub fn new (major: u8, minor: u8, patch: u8) -> Self {
+    Self { major, minor, patch }
+  }
+}
+
 
 /// A value identifying a particular language variable or type
 #[derive(Clone)]

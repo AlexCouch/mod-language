@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-  common::{ HierarchicalDisplay, Padding, },
+  common::{ HierarchicalDisplay, Padding, Version, },
 };
 
 
@@ -208,23 +208,7 @@ impl Display for Module { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.
 
 
 
-/// Represents a `Module`'s semver2 version number
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct Version {
-  /// Bumped for incompatible API changes
-  pub major: u8,
-  /// Bumped for added functionality in a backwards compatible manner
-  pub minor: u8,
-  /// Bumped for backwards compatible bug fixes
-  pub patch: u8,
-}
 
-impl Version {
-  /// Create a new `Version` and initialize its values
-  pub fn new (major: u8, minor: u8, patch: u8) -> Self {
-    Self { major, minor, patch }
-  }
-}
 
 impl Encode for Version {
   fn encode (&self, buff: &mut Vec<u8>) {
@@ -257,6 +241,7 @@ impl Display for Version { fn fmt (&self, f: &mut Formatter) -> FMTResult { self
 /// A unique (per-item-kind, per-`Module`) id for an item in a `Module`
 /// 
 /// This is a generic version of the type safe ids defined later
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ID(pub u64);
 
@@ -280,22 +265,27 @@ impl Display for ID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_
 
 
 /// A unique (per-`Module`) id for a `Type` in a `Module`
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct TypeID(pub u64);
 
 /// A unique (per-`Module`) id for a `Global` in a `Module`
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct GlobalID(pub u64);
 
 /// A unique (per-`Module`) id for a `Function` in a `Module`
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct FunctionID(pub u64);
 
 /// A unique (per-`Function`) id for a local variable in a `Function`
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct LocalID(pub u64);
 
 /// A unique (per-struct) id for an element in a `Type`
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementID(pub u64);
 
@@ -1121,6 +1111,8 @@ pub enum Instruction {
   /// and stores the value to the address
   Store,
 
+  /// Duplicates the value on the top of the stack
+  Duplicate,
   /// Pops a value off the stack and discards it
   Discard,
 
@@ -1211,10 +1203,10 @@ pub enum Instruction {
   /// Jumps back to the entry point of a LoopBlock and continues the loop
   Continue,
 
-  /// Pops a value off the stack, and returns it from a function
+  /// Returns from a function.
+  /// If a return value is required by the type of the current function,
+  /// a value is popped off the stack
   Return,
-  /// Returns from a function
-  ReturnVoid,
 }
 
 impl Instruction {
@@ -1231,6 +1223,7 @@ impl Instruction {
       Instruction::Cast { .. } => InstructionKind::Cast,
       Instruction::Load { .. } => InstructionKind::Load,
       Instruction::Store { .. } => InstructionKind::Store,
+      Instruction::Duplicate { .. } => InstructionKind::Duplicate,
       Instruction::Discard { .. } => InstructionKind::Discard,
       Instruction::Add { .. } => InstructionKind::Add,
       Instruction::Sub { .. } => InstructionKind::Sub,
@@ -1257,7 +1250,6 @@ impl Instruction {
       Instruction::Break { .. } => InstructionKind::Break,
       Instruction::Continue { .. } => InstructionKind::Continue,
       Instruction::Return { .. } => InstructionKind::Return,
-      Instruction::ReturnVoid { .. } => InstructionKind::ReturnVoid,
     }
   }
 }
@@ -1272,6 +1264,7 @@ impl Encode for Instruction {
       | NoOp
       | Load
       | Store
+      | Duplicate
       | Discard
       | Add
       | Sub
@@ -1295,7 +1288,6 @@ impl Encode for Instruction {
       | Break
       | Continue
       | Return
-      | ReturnVoid
       => { },
 
       ImmediateValue(imm) => imm.encode(buff),
@@ -1324,6 +1316,7 @@ impl Decode for Instruction {
       InstructionKind::NoOp => Instruction::NoOp,
       InstructionKind::Load => Instruction::Load,
       InstructionKind::Store => Instruction::Store,
+      InstructionKind::Duplicate => Instruction::Duplicate,
       InstructionKind::Discard => Instruction::Discard,
       InstructionKind::Add => Instruction::Add,
       InstructionKind::Sub => Instruction::Sub,
@@ -1347,7 +1340,6 @@ impl Decode for Instruction {
       InstructionKind::Break => Instruction::Break,
       InstructionKind::Continue => Instruction::Continue,
       InstructionKind::Return => Instruction::Return,
-      InstructionKind::ReturnVoid => Instruction::ReturnVoid,
 
       InstructionKind::ImmediateValue => Instruction::ImmediateValue(ImmediateValue::decode(buff)?),
 
@@ -1375,6 +1367,7 @@ impl HierarchicalDisplay for Instruction {
       | NoOp
       | Load
       | Store
+      | Duplicate
       | Discard
       | Add
       | Sub
@@ -1398,7 +1391,6 @@ impl HierarchicalDisplay for Instruction {
       | Break
       | Continue
       | Return
-      | ReturnVoid
       => write!(f, "{}", kind_name)?,
 
       operand_instr @ (
@@ -1525,6 +1517,7 @@ pub enum InstructionKind {
   Load,
   Store,
 
+  Duplicate,
   Discard,
 
   Add,
@@ -1560,7 +1553,6 @@ pub enum InstructionKind {
   Continue,
 
   Return,
-  ReturnVoid,
 }
 
 impl InstructionKind {
@@ -1579,6 +1571,7 @@ impl InstructionKind {
       Cast => "cast",
       Load => "load",
       Store => "store",
+      Duplicate => "duplicate",
       Discard => "discard",
       Add => "add",
       Sub => "sub",
@@ -1605,7 +1598,6 @@ impl InstructionKind {
       Break => "break",
       Continue => "continue",
       Return => "return",
-      ReturnVoid => "return_void",
     }
   }
 }
@@ -1623,7 +1615,7 @@ impl Decode for InstructionKind {
     let byte = u8::decode(buff)?;
     
     if byte >= InstructionKind::NoOp as _
-    && byte <= InstructionKind::ReturnVoid  as _ {
+    && byte <= InstructionKind::Return  as _ {
       Ok(unsafe { transmute(byte) })
     } else {
       Err(DecodeError::UnexpectedValue)
@@ -2074,21 +2066,18 @@ mod test {
         GetElement(55.into()),
         Cast(11.into()),
         Return,
-        ReturnVoid,
         Load,
         Store,
         IfBlock(vec! [ //nesting
           Div,
           Rem,
           Return,
-          ReturnVoid,
           NoOp,
           Neg,
         ], vec! [
           EQ,
           NoOp,
           Return,
-          ReturnVoid,
           ImmediateValue(99i32.into()),
           NEQ,
           LT,
@@ -2099,13 +2088,11 @@ mod test {
         Not,
         FunctionAddress(14.into()),
         Return,
-        ReturnVoid,
         GetElement(55.into()),
         Cast(11.into()),
         LoopBlock(vec! [ //nesting
           NoOp,
           Return,
-          ReturnVoid,
           ImmediateValue(99i32.into()),
           CreateLocal(64.into()),
           IfBlock(vec! [
@@ -2142,7 +2129,6 @@ mod test {
       Continue,
 
       Return,
-      ReturnVoid,
     ];
 
     let mut encoded = Vec::default();
@@ -2158,13 +2144,25 @@ mod test {
   fn test_enum_encode_decode () {
     let bad_data = vec! [ 255 ];
 
+    macro_rules! test_kinds {
+      ($t: ty [ $($e:ident),* $(,)? ]) => {
+        {
+          assert!(match Option::<$t>::None {
+            $(Some(<$t>::$e))|* => false,
+            None => true,
+          });
 
-    let type_data_kinds = vec! [
-      TypeDataKind::Function,
-      TypeDataKind::Intrinsic,
-      TypeDataKind::Pointer,
-      TypeDataKind::Struct,
-    ];
+          vec! [ $(<$t>::$e),* ]
+        }
+      };
+    }
+
+    let type_data_kinds = test_kinds!(TypeDataKind [
+      Function,
+      Intrinsic,
+      Pointer,
+      Struct,
+    ]);
 
     let mut encoded = Vec::default();
     type_data_kinds.encode(&mut encoded);
@@ -2178,20 +2176,20 @@ mod test {
     TypeDataKind::decode(&mut decoder).expect_err("TypeDataKind decoder failed to reject out of range value");
 
 
-    let intrinsic_types = vec! [
-      IntrinsicType::Void,
-      IntrinsicType::Bool,
-      IntrinsicType::U8,
-      IntrinsicType::U16,
-      IntrinsicType::U32,
-      IntrinsicType::U64,
-      IntrinsicType::S8,
-      IntrinsicType::S16,
-      IntrinsicType::S32,
-      IntrinsicType::S64,
-      IntrinsicType::F32,
-      IntrinsicType::F64,
-    ];
+    let intrinsic_types = test_kinds!(IntrinsicType [
+      Void,
+      Bool,
+      U8,
+      U16,
+      U32,
+      U64,
+      S8,
+      S16,
+      S32,
+      S64,
+      F32,
+      F64,
+    ]);
 
     let mut encoded = Vec::default();
     intrinsic_types.encode(&mut encoded);
@@ -2205,11 +2203,11 @@ mod test {
     IntrinsicType::decode(&mut decoder).expect_err("IntrinsicType decoder failed to reject out of range value");
 
 
-    let alias_data_kinds = vec! [
-      AliasDataKind::Function,
-      AliasDataKind::Global,
-      AliasDataKind::Namespace,
-    ];
+    let alias_data_kinds = test_kinds!(AliasDataKind [
+      Function,
+      Global,
+      Namespace,
+    ]);
 
     let mut encoded = Vec::default();
     alias_data_kinds.encode(&mut encoded);
@@ -2223,45 +2221,45 @@ mod test {
     AliasDataKind::decode(&mut decoder).expect_err("AliasDataKind decoder failed to reject out of range value");
 
 
-    let instruction_kinds = vec! [
-      InstructionKind::NoOp,
-      InstructionKind::ImmediateValue,
-      InstructionKind::CreateLocal,
-      InstructionKind::LocalAddress,
-      InstructionKind::GlobalAddress,
-      InstructionKind::FunctionAddress,
-      InstructionKind::GetElement,
-      InstructionKind::Cast,
-      InstructionKind::Load,
-      InstructionKind::Store,
-      InstructionKind::Discard,
-      InstructionKind::Add,
-      InstructionKind::Sub,
-      InstructionKind::Mul,
-      InstructionKind::Div,
-      InstructionKind::Rem,
-      InstructionKind::Neg,
-      InstructionKind::And,
-      InstructionKind::Or,
-      InstructionKind::Xor,
-      InstructionKind::LShift,
-      InstructionKind::RShift,
-      InstructionKind::Not,
-      InstructionKind::EQ,
-      InstructionKind::NEQ,
-      InstructionKind::LT,
-      InstructionKind::GT,
-      InstructionKind::LEQ,
-      InstructionKind::GEQ,
-      InstructionKind::CallDirect,
-      InstructionKind::CallIndirect,
-      InstructionKind::IfBlock,
-      InstructionKind::LoopBlock,
-      InstructionKind::Break,
-      InstructionKind::Continue,
-      InstructionKind::Return,
-      InstructionKind::ReturnVoid,
-    ];
+    let instruction_kinds = test_kinds!(InstructionKind [
+      NoOp,
+      ImmediateValue,
+      CreateLocal,
+      LocalAddress,
+      GlobalAddress,
+      FunctionAddress,
+      GetElement,
+      Cast,
+      Load,
+      Store,
+      Duplicate,
+      Discard,
+      Add,
+      Sub,
+      Mul,
+      Div,
+      Rem,
+      Neg,
+      And,
+      Or,
+      Xor,
+      LShift,
+      RShift,
+      Not,
+      EQ,
+      NEQ,
+      LT,
+      GT,
+      LEQ,
+      GEQ,
+      CallDirect,
+      CallIndirect,
+      IfBlock,
+      LoopBlock,
+      Break,
+      Continue,
+      Return,
+    ]);
 
     let mut encoded = Vec::default();
     instruction_kinds.encode(&mut encoded);

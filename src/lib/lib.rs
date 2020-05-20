@@ -1,7 +1,8 @@
-//! WIP wasm scripting language
+//! WIP scripting language
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
+#![allow(clippy::useless_let_if_seq)] // this is usually wrong
 
 #![feature(try_trait)]
 #![feature(box_syntax)]
@@ -34,4 +35,4 @@ pub mod ctx;
 pub mod ir;
 pub mod analyzer;
 pub mod decl_builder;
-pub mod bytecode;
+pub mod bc;
