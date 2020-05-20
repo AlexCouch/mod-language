@@ -20,9 +20,6 @@
 // TODO add a statement expression with no effect check?
 
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 
 use std::{
   collections::{ HashMap, },
@@ -31,11 +28,9 @@ use std::{
   marker::{ PhantomData, },
 };
 
-type PeekableSliceIter<'a, T> = PeekableIter<SliceIter<'a, T>>;
 
 use crate::{
   common::{ Identifier, Version, Operator, Constant, Number, FloatingPoint, },
-  ast,
   ctx::{ self, Context, ContextKey, ContextItem, },
   ir,
   bc,
@@ -120,6 +115,8 @@ pub struct Codegen<'a> {
   pub function_id_counter: Counter<bc::FunctionID>,
   /// Local state for a Codegen inside a bytecode context
   pub local: LocalCodegen,
+  /// A staging area for generating module imports
+  pub unresolved_imports: HashMap<ContextKey, bc::ID>,
 }
 
 impl<'a> Codegen<'a> {
@@ -133,6 +130,7 @@ impl<'a> Codegen<'a> {
       global_id_counter: Counter::default(),
       function_id_counter: Counter::default(),
       local: LocalCodegen::default(),
+      unresolved_imports: HashMap::default(),
     }
   }
 
@@ -158,6 +156,77 @@ fn generate_module (cg: &mut Codegen) {
   );
 
   cg.module.exports = exports;
+
+  let mut import_staging: HashMap<ContextKey, bc::ImportModule> = HashMap::default();
+
+  let mut unresolved_imports = HashMap::default();
+  std::mem::swap(&mut unresolved_imports, &mut cg.unresolved_imports);
+
+  for (&imp_key, &imp_id) in unresolved_imports.iter() {
+    let (chain, key_chain) = make_path(cg.context, imp_key);
+    
+    let mut iter = chain.iter().zip(key_chain.iter()).peekable();
+
+    let (module_name, &module_key) = iter.next().unwrap();
+
+    let module: &mut bc::ImportModule = if let Some(existing_module) = import_staging.get_mut(&module_key) {
+      existing_module
+    } else {
+      // TODO need module versioning
+      import_staging.insert(module_key, bc::ImportModule::empty(module_name.to_string(), (0,0,0).into()));
+      import_staging.get_mut(&module_key).unwrap()
+    };
+
+    let mut active_imports = &mut module.items;
+
+    while let Some(entry) = iter.next() {
+      if iter.peek().is_some() { // namespace
+        let (namespace_name, _) = entry;
+
+        let mut existing_index = None;
+        for (index, existing_import) in active_imports.iter().enumerate() {
+          let existing_import: &bc::Import = existing_import;
+
+          if existing_import.name == namespace_name.as_ref() {
+            existing_index = Some(index);
+            break
+          }
+        }
+
+        let index = if let Some(existing_index) = existing_index {
+          existing_index
+        } else {
+          active_imports.push(bc::Import::new(namespace_name.to_string(), bc::ImportData::Namespace(Vec::default())));
+          active_imports.len() - 1
+        };
+
+        active_imports = if let bc::ImportData::Namespace(imports) = &mut active_imports.get_mut(index).unwrap().data { imports } else { unreachable!() };
+      } else { // leaf item
+        let (item_name, &item_key) = entry;
+
+        let item = cg.context.items.get(item_key).unwrap();
+        let data = match item {
+          ContextItem::Global(glo) => {
+            let gid = imp_id.into();
+            let tid = generate_type_def(cg, glo.ty.unwrap());
+            bc::ImportData::Global(gid, tid)
+          },
+          ContextItem::Function(func) => {
+            let fid = imp_id.into();
+            let tid = generate_type_def(cg, func.ty.unwrap());
+            bc::ImportData::Function(fid, tid)
+          },
+          _ => unreachable!()
+        };
+
+        active_imports.push(bc::Import::new(item_name.to_string(), data))
+      }
+    }
+  }
+
+  for (_, imp_mod) in import_staging.into_iter() {
+    cg.module.imports.push(imp_mod)
+  }
 }
 
 
@@ -234,7 +303,11 @@ fn generate_global (cg: &mut Codegen, global_ctx: &ctx::Global, key: ContextKey)
     // and return the id
     id
   } else {
-    unimplemented!()
+    let id = cg.global_id_counter.get_next();
+    let id_generic = id.into();
+    cg.unresolved_imports.insert(key, id_generic).unwrap_none();
+    cg.key_id_map.insert(key, id_generic).unwrap_none();
+    id
   }
 }
 
@@ -270,7 +343,11 @@ fn generate_function (cg: &mut Codegen, function_ctx: &ctx::Function, key: Conte
     // and return the id
     id
   } else {
-    unimplemented!()
+    let id = cg.function_id_counter.get_next();
+    let id_generic = id.into();
+    cg.unresolved_imports.insert(key, id_generic).unwrap_none();
+    cg.key_id_map.insert(key, id_generic).unwrap_none();
+    id
   }
 }
 
@@ -613,8 +690,91 @@ fn generate_cast (cg: &mut Codegen, ty_key: ContextKey, expression_ir: &ir::Expr
       generate_expression(cg, expression_ir, code);
       code.push(bc::Instruction::Cast(type_id));
     },
-
-
-    ir::ExpressionData::Coerce(_) => unreachable!()
   }
+}
+
+
+
+
+fn make_path (context: &Context, ns_key: ContextKey) -> (Vec<Identifier>, Vec<ContextKey>) {
+  let mut chain = Vec::new();
+  let mut bs_chain: Vec<bool> = Vec::new();
+  let mut key_chain: Vec<ContextKey> = Vec::new();
+
+  let mut active_key = ns_key;
+
+  'traversal: loop {
+    if let Some(parent_key) = context.get_item_parent(active_key) {
+      let parent_ns = context.items.get(parent_key).unwrap().ref_namespace().unwrap();
+
+      for (export_ident, &export_key) in parent_ns.export_bindings.entry_iter() {
+        if export_key == active_key {
+          chain.insert(0, export_ident.to_owned());
+          bs_chain.insert(0, false);
+          key_chain.insert(0, active_key);
+          active_key = parent_key;
+          continue 'traversal
+        }
+      }
+
+      for (local_ident, &local_key) in parent_ns.local_bindings.entry_iter() {
+        if local_key == active_key {
+          active_key = parent_key;
+          chain.insert(0, local_ident.to_owned());
+          bs_chain.insert(0, true);
+          key_chain.insert(0, active_key);
+          continue 'traversal
+        }
+      }
+
+      panic!("Could not find item named `{}` in `{}` [chain was @ {:?}]", context.get_item_canonical_name(active_key).map(|ident| ident.as_ref()).unwrap_or("[ERROR GETTING IDENT]"), parent_ns.canonical_name, chain);
+    } else {
+      break 'traversal
+    }
+  }
+
+  fn resolve_path_chains (context: &Context, mut chain: Vec<Identifier>, mut bs_chain: Vec<bool>, mut key_chain: Vec<ContextKey>) -> (Vec<Identifier>, Vec<ContextKey>) {
+    let len = bs_chain.len();
+
+    if len <= 2 { return (chain, key_chain) }
+
+    for i in 0 ..= len - 3 {
+      let is_local = bs_chain[i + 1];
+      
+      if is_local {
+        let root_key  = key_chain[i];
+        let local_key = key_chain[i + 2];
+
+        let root_ns = context.items.get(root_key).unwrap().ref_namespace().unwrap();
+
+        for (export_ident, &export_key) in root_ns.export_bindings.entry_iter() {
+          if export_key == local_key {
+            bs_chain[i + 2] = false;
+            chain[i + 2] = export_ident.clone();
+            chain.remove(i + 1);
+            bs_chain.remove(i + 1);
+            key_chain.remove(i + 1);
+
+            return resolve_path_chains(context, chain, bs_chain, key_chain)
+          }
+        }
+
+        unreachable!();
+      }
+    }
+
+    (chain, key_chain)
+  }
+
+  let (mut chain, mut key_chain) = resolve_path_chains(context, chain, bs_chain, key_chain);
+
+  let module_key = context.get_item_module(active_key).unwrap();
+
+  assert!(module_key != context.main_mod);
+
+  let module = context.items.get(module_key).unwrap().ref_module().unwrap();
+  chain.insert(0, module.canonical_name.clone());
+  key_chain.insert(0, module_key);
+
+  (chain, key_chain)
 }
