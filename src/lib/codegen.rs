@@ -1,26 +1,5 @@
 //! The generator for bytecode
 
-// TODO the pass which checks for circular and forward references in global initializers could be inlined here,
-// but as to whether this is something that should be done im not sure. for the purposes of having an easily
-// understandable and factorable analyzer, it should probably be kept within the specific passes where possible.
-// however, for performance obviously inlining it here would be better.
-// there is a tradeoff to be made either way but im not sure which is more favorable
-
-// TODO there needs to be a similar pass for checking local variable initializers
-  // this may be doable as part of the main type checking / ir gen pass
-
-// TODO there needs to be an lvalue checking pass
-  // this may be doable as part of the main type checking / ir gen pass
-
-// TODO there needs to be a dereferencee and callee checking pass
-  // this may be doable as part of the main type checking / ir gen pass
-
-// TODO ensure proper checking for coercions
-
-// TODO add a statement expression with no effect check?
-
-
-
 use std::{
   collections::{ HashMap, },
   iter::{ Peekable as PeekableIter, },
@@ -157,6 +136,13 @@ fn generate_module (cg: &mut Codegen) {
 
   cg.module.exports = exports;
 
+  generate_imports(cg);
+}
+
+
+
+
+fn generate_imports(cg: &mut Codegen) {
   let mut import_staging: HashMap<ContextKey, bc::ImportModule> = HashMap::default();
 
   let mut unresolved_imports = HashMap::default();
