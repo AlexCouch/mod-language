@@ -51,6 +51,9 @@ impl Version {
   }
 }
 
+impl From<(u8, u8, u8)> for Version { fn from ((major, minor, patch): (u8, u8, u8)) -> Self { Self { major, minor, patch } } }
+impl From<Version> for (u8, u8, u8) { fn from (Version { major, minor, patch }: Version) -> Self { (major, minor, patch) } }
+
 
 /// A value identifying a particular language variable or type
 #[derive(Clone)]
