@@ -1,4 +1,8 @@
-/target
 /local
 /log
-Cargo.lock
+
+/target
+/Cargo.lock
+
+/libs/*/target
+/libs/*/Cargo.lock
