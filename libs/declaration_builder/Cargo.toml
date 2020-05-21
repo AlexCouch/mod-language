@@ -1,0 +1,18 @@
+[package]
+name = "mod_declaration_builder"
+description = "The declaration (module header file) builder for mod_language"
+version = "0.1.23"
+authors = ["noxabellus <noxabellus@gmail.com>"]
+edition = "2018"
+license = "MIT"
+repository = "https://github.com/noxabellus/mod-language"
+homepage = "https://github.com/noxabellus/mod-language"
+readme = "readme.md"
+
+[lib]
+name = "mod_declaration_builder"
+path = "declaration_builder.rs"
+
+[dependencies]
+mod_common = { path = "../common", version = "0.1.23" }
+mod_frontend = { path = "../frontend", version = "0.1.23" }

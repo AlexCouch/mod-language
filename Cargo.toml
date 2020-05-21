@@ -9,17 +9,16 @@ repository = "https://github.com/noxabellus/mod-language"
 homepage = "https://github.com/noxabellus/mod-language"
 readme = "readme.md"
 
-[lib]
-name = "mod_language"
-path = "src/lib/lib.rs"
 
 [[bin]]
 name = "mod_language"
-path = "src/main.rs"
+path = "driver/main.rs"
 
 [dependencies]
-mod_utilities = "0.1.22"
-
-[dependencies.backtrace]
-optional = true
-version = "0.3"
+mod_ansi = { path = "libs/ansi", version = "0.1.23" }
+mod_utils = { path = "libs/utils", version = "0.1.23" }
+mod_common = { path = "libs/common", version = "0.1.23" }
+mod_frontend = { path = "libs/frontend", version = "0.1.23" }
+mod_declaration_builder = { path = "libs/declaration_builder", version = "0.1.23" }
+mod_bytecode = { path = "libs/bytecode", version = "0.1.23" }
+mod_codegen = { path = "libs/codegen", version = "0.1.23" }
