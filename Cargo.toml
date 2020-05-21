@@ -9,6 +9,9 @@ repository = "https://github.com/noxabellus/mod-language"
 homepage = "https://github.com/noxabellus/mod-language"
 readme = "readme.md"
 
+[lib]
+name = "mod_language"
+path = "libs/main.rs"
 
 [[bin]]
 name = "mod_language"

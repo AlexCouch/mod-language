@@ -1,17 +1,8 @@
 [package]
 name = "mod_frontend"
-description = "The front end lexer, parser, and analyzer for mod_language"
 version = "0.1.23"
 authors = ["noxabellus <noxabellus@gmail.com>"]
 edition = "2018"
-license = "MIT"
-repository = "https://github.com/noxabellus/mod-language"
-homepage = "https://github.com/noxabellus/mod-language"
-readme = "readme.md"
-
-[lib]
-name = "mod_frontend"
-path = "frontend.rs"
 
 [dependencies]
 mod_utils = { path = "../utils", version = "0.1.23" }

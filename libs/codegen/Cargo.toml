@@ -1,17 +1,8 @@
 [package]
 name = "mod_codegen"
-description = "The bytecode generator for mod_language"
 version = "0.1.23"
 authors = ["noxabellus <noxabellus@gmail.com>"]
 edition = "2018"
-license = "MIT"
-repository = "https://github.com/noxabellus/mod-language"
-homepage = "https://github.com/noxabellus/mod-language"
-readme = "readme.md"
-
-[lib]
-name = "mod_codegen"
-path = "codegen.rs"
 
 [dependencies]
 mod_bytecode = { path = "../bytecode", version = "0.1.23" }
