@@ -17,6 +17,8 @@ use mod_frontend::{
   ast,
 };
 
+use mod_rc::context::Context;
+
 
 fn main () -> std::io::Result<()> {
   if !ansi::enable() { println!("Failed to enable ansi coloring for terminal") }
@@ -79,6 +81,9 @@ fn main () -> std::io::Result<()> {
 
   println!("Got bytecode, dumping to ./log/bc");
   std::fs::write("./log/bc", format!("{}", bc)).expect("Failed to dump bytecode to ./log/bc");
+
+
+  let _context = Context::default();
 
 
   Ok(())

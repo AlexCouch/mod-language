@@ -25,3 +25,4 @@ mod_frontend = { path = "libs/frontend", version = "0.1.23" }
 mod_declaration_builder = { path = "libs/declaration_builder", version = "0.1.23" }
 mod_bytecode = { path = "libs/bytecode", version = "0.1.23" }
 mod_codegen = { path = "libs/codegen", version = "0.1.23" }
+mod_rc = { path = "libs/rc", version = "0.1.23" }

@@ -7,3 +7,4 @@ pub extern crate mod_frontend;
 pub extern crate mod_declaration_builder;
 pub extern crate mod_bytecode;
 pub extern crate mod_codegen;
+pub extern crate mod_rc;
