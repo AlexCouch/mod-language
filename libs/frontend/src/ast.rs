@@ -770,7 +770,7 @@ impl Display for Block {
 
 impl HierarchicalDisplay for Block {
   fn fmt_hierarchical (&self, f: &mut Formatter, level: &mut usize) -> FMTResult {
-    write!(f, "{{\n")?;
+    writeln!(f, "{{")?;
     *level += 1;
 
     for stmt in self.statements.iter() {    
@@ -782,7 +782,7 @@ impl HierarchicalDisplay for Block {
         write!(f, ";")?;
       }
 
-      write!(f, "\n")?;
+      writeln!(f)?;
     }
 
     if let Some(trail_expr) = &self.trailing_expression {
@@ -866,7 +866,7 @@ impl HierarchicalDisplay for ItemData {
 
           Ok(())
         } else {
-          write!(f, "{{\n")?;
+          writeln!(f, "{{")?;
           *level += 1;
 
           let mut iter = data.iter().peekable();
@@ -884,7 +884,7 @@ impl HierarchicalDisplay for ItemData {
               write!(f, ",")?;
             }
 
-            write!(f, "\n")?;
+            writeln!(f)?;
           }
 
           *level -= 1;
@@ -910,7 +910,7 @@ impl HierarchicalDisplay for ItemData {
 
               Ok(())
             } else {
-              write!(f, "{{\n")?;
+              writeln!(f, "{{")?;
               *level += 1;
 
               let mut iter = entries.iter().peekable();
@@ -928,7 +928,7 @@ impl HierarchicalDisplay for ItemData {
                   write!(f, ",")?;
                 }
 
-                write!(f, "\n")?;
+                writeln!(f)?;
               }
 
               *level -= 1;
@@ -940,7 +940,7 @@ impl HierarchicalDisplay for ItemData {
       },
 
       ItemData::Namespace { identifier, items, .. } => {
-        write!(f, "ns {} {{\n", identifier)?;
+        writeln!(f, "ns {} {{", identifier)?;
         *level += 1;
     
         Displayer(items).fmt_hierarchical(f, level)?;
@@ -956,7 +956,7 @@ impl HierarchicalDisplay for ItemData {
       },
 
       ItemData::Struct { identifier, fields, .. } => {
-        write!(f, "struct {} {{\n", identifier)?;
+        writeln!(f, "struct {} {{", identifier)?;
         *level += 1;
 
         let mut iter = fields.iter().peekable();
@@ -972,7 +972,7 @@ impl HierarchicalDisplay for ItemData {
             write!(f, ",")?;
           }
 
-          write!(f, "\n")?;
+          writeln!(f)?;
         }
 
         *level -= 1;
@@ -1058,7 +1058,7 @@ impl<'a> HierarchicalDisplay for Displayer<'a> {
         write!(f, ";")?;
       }
 
-      write!(f, "\n")?;
+      writeln!(f)?;
     }
 
     Ok(())
