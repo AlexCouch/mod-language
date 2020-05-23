@@ -17,6 +17,9 @@ path = "libs/main.rs"
 name = "mod_language"
 path = "driver/main.rs"
 
+[workspace]
+members = [ "libs/ansi", "libs/codegen", "libs/common", "libs/declaration_builder", "libs/frontend", "libs/rc", "libs/utils" ]
+
 [dependencies]
 mod_ansi = { path = "libs/ansi", version = "0.1.23" }
 mod_utils = { path = "libs/utils", version = "0.1.23" }
