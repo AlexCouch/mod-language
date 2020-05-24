@@ -5,6 +5,8 @@ use std::{
   ffi::{ CStr, },
 };
 
+type PeekableSliceIter<'a, T> = std::iter::Peekable<std::slice::Iter<'a, T>>;
+
 use llvm_sys::{
   prelude::{
     LLVMContextRef,
@@ -12,7 +14,7 @@ use llvm_sys::{
     LLVMBuilderRef,
     LLVMPassManagerRef,
     LLVMTypeRef,
-    // LLVMValueRef,
+    LLVMValueRef,
   },
   core::{
     LLVMContextCreate,
@@ -37,6 +39,11 @@ use llvm_sys::{
     LLVMStructTypeInContext,
     LLVMFunctionType,
     LLVMDisposeMessage,
+    LLVMAddGlobal,
+    LLVMDeleteGlobal,
+    LLVMAddFunction,
+    LLVMDeleteFunction,
+    LLVMSetFunctionCallConv,
   },
   target::{
     LLVM_InitializeNativeTarget,
@@ -64,9 +71,17 @@ use llvm_sys::{
   },
 };
 
-use mod_bytecode::{
-  IntrinsicType,
+use mod_utils::{
+  UnwrapUnchecked,
+  into_decimal,
 };
+
+use mod_bytecode::{
+  Version,
+};
+
+pub use mod_bytecode::IntrinsicType;
+
 
 use crate::{
   hash,
@@ -102,8 +117,13 @@ impl Drop for LLVMContext {
 /// contributed by modules,
 /// and provides a link between modules
 pub struct Context {
+  /// All modules known by a context
+  modules: Vec<Module>,
+
+
   /// All types known by a Context
   types: Vec<Type>,
+
 
   /// TypeLinks to all Pointer types known by a Context
   pointer_types: Vec<TypeLink>,
@@ -117,6 +137,15 @@ pub struct Context {
   function_types: Vec<TypeLink>,
   /// Hash codes for all Function types known by a Context
   function_type_hashes: Vec<u64>,
+
+
+  /// All globals known by a Context
+  globals: Vec<Global>,
+  
+
+  /// All functions known by a Context
+  functions: Vec<Function>,
+
 
   pub(crate) llvm: LLVMContext,
 }
@@ -216,6 +245,8 @@ impl Context {
 
 
     let mut context = Self {
+      modules: Vec::default(),
+
       types: Vec::default(),
 
       pointer_types: Vec::default(),
@@ -225,6 +256,10 @@ impl Context {
 
       function_types: Vec::default(),
       function_type_hashes: Vec::default(),
+
+      globals: Vec::default(),
+
+      functions: Vec::default(),
 
       llvm,
     };
@@ -242,6 +277,79 @@ impl Context {
   }
 
 
+  /// Get a reference to a Module from a ModuleLink
+  /// 
+  /// # Safety
+  /// Because the only way to get a TypeLink is by using the Context's safe methods,
+  /// this uses get_unsafe on it's internal array. If for some reason you have created a TypeLink
+  /// by transmuting, it is up to you to determine the safety of this call
+  pub fn get_module (&self, ml: ModuleLink) -> &Module {
+    unsafe { self.modules.get_unchecked(ml.0) }
+  }
+
+  /// Get a ModuleLink from a module name
+  pub fn find_module<S: AsRef<str>> (&self, name: S) -> Option<ModuleLink> {
+    let name = name.as_ref();
+
+    for (i, module) in self.modules.iter().enumerate() {
+      if module.name == name {
+        return Some(ModuleLink(i))
+      }
+    }
+
+    None
+  }
+
+  /// Resolve a series of identifiers as a path to a Module Export
+  pub fn resolve_path (&self, p: &[&str]) -> Option<GenericLink> {
+    let mut iter = p.iter().peekable();
+
+    let module_name = iter.next()?;
+    let module_link = self.find_module(module_name)?;
+    let module = self.get_module(module_link);
+
+    fn traverse (exports: &[Export], idents: &mut PeekableSliceIter<&str>) -> Option<GenericLink> {
+      let next_ident = *idents.next()?;
+
+      for export in exports.iter() {
+        if export.name == next_ident {
+          match &export.data {
+            ExportData::Namespace(exports) => return traverse(exports, idents),
+
+            ExportData::Global(gl) => if idents.peek().is_none() {
+              return Some(GenericLink::Global(*gl))
+            } else {
+              return None
+            },
+
+            ExportData::Function(fl) => if idents.peek().is_none() {
+              return Some(GenericLink::Function(*fl))
+            } else {
+              return None
+            },
+          }
+        }
+      }
+
+      None
+    }
+
+    traverse(module.exports.as_slice(), &mut iter)
+  }
+
+  /// Add a new Module to a Context
+  pub(crate) fn add_module (&mut self, m: Module) -> ModuleLink {
+    let i = self.modules.len();
+    self.modules.push(m);
+    ModuleLink(i)
+  }
+
+  /// Determine how many Modules are contained in a Context
+  pub fn module_count (&self) -> usize {
+    self.modules.len()
+  }
+
+
   /// Get a reference to a Type from a TypeLink
   /// 
   /// # Safety
@@ -252,7 +360,6 @@ impl Context {
     unsafe { self.types.get_unchecked(tl.0) }
   }
 
-
   /// Add a new Type to a Context
   fn add_type (&mut self, ty: Type) -> TypeLink {
     let i = self.types.len();
@@ -260,6 +367,10 @@ impl Context {
     TypeLink(i)
   }
 
+  /// Determine how many Types are contained in a Context
+  pub fn type_count (&self) -> usize {
+    self.types.len()
+  }
   
   /// Get a TypeLink from an IntrinsicType
   pub fn tl_intrinsic (&self, i: IntrinsicType) -> TypeLink {
@@ -368,22 +479,194 @@ impl Context {
 
     new_tl
   }
+
+
+  /// Get a reference to a Global from a GlobalLink
+  /// 
+  /// # Safety
+  /// Because the only way to get a GlobalLink is by using the Context's safe methods,
+  /// this uses get_unsafe on it's internal array. If for some reason you have created a GlobalLink
+  /// by transmuting, it is up to you to determine the safety of this call
+  pub fn get_global (&self, gl: GlobalLink) -> &Global {
+    unsafe { self.globals.get_unchecked(gl.0) }
+  }
+
+  /// Determine how many Globals are contained in a Context
+  pub fn global_count (&self) -> usize {
+    self.globals.len()
+  }
+
+  /// Purge all Globals created after a given index
+  /// 
+  /// # Safety
+  /// This will invalidate any GlobalLinks,
+  /// after (but not including) the given index.
+  /// This is intended for error recovery, where the purged
+  /// Globals will by definition not be referenced again;
+  /// any other use is completely unsafe
+  pub(crate) unsafe fn purge_globals (&mut self, base: usize) {
+    while self.globals.len() > base {
+      let global = self.globals.pop().unwrap_unchecked();
+
+      LLVMDeleteGlobal(global.llvm)
+    }
+  }
+
+
+  /// Create a new Global of the given type
+  pub fn create_global (&mut self, ty: TypeLink) -> GlobalLink {
+    let i = self.globals.len();
+
+    let link = GlobalLink(i);
+    let id: LLVMIdentifier = link.into();
+
+    let llvm_ty = self.get_type(ty).llvm;
+
+    let llvm = unsafe { LLVMAddGlobal(self.llvm.module, llvm_ty, id.as_ptr()) };
+
+    self.globals.push(Global { id, ty, address: 0, initializer: None, llvm });
+
+    link
+  }
+
+  /// Set the initializer function of a Global
+  /// 
+  /// Panics if the global already has an initializer
+  pub fn set_global_initializer (&mut self, gl: GlobalLink, fl: FunctionLink) {
+    unsafe { self.globals.get_unchecked_mut(gl.0) }.initializer.replace(fl).unwrap_none()
+  }
+
+
+  /// Get a reference to a Function from a FunctionLink
+  /// 
+  /// # Safety
+  /// Because the only way to get a FunctionLink is by using the Context's safe methods,
+  /// this uses get_unsafe on it's internal array. If for some reason you have created a FunctionLink
+  /// by transmuting, it is up to you to determine the safety of this call
+  pub fn get_function (&self, fl: FunctionLink) -> &Function {
+    unsafe { self.functions.get_unchecked(fl.0) }
+  }
+
+  /// Determine how many Functions are contained in a Context
+  pub fn function_count (&self) -> usize {
+    self.functions.len()
+  }
+
+  /// Purge all Globals created after a given index
+  /// 
+  /// # Safety
+  /// This will invalidate any GlobalLinks,
+  /// after (but not including) the given index.
+  /// This is intended for error recovery, where the purged
+  /// Globals will by definition not be referenced again;
+  /// any other use is completely unsafe
+  pub(crate) unsafe fn purge_functions (&mut self, base: usize) {
+    while self.functions.len() > base {
+      let function = self.functions.pop().unwrap_unchecked();
+
+      LLVMDeleteFunction(function.llvm)
+    }
+  }
+
+  /// Create a new Function of the given type
+  /// 
+  /// Panics if the given TypeLink is not a Function type
+  pub fn create_function (&mut self, ty: TypeLink) -> FunctionLink {
+    let i = self.functions.len();
+
+    let link = FunctionLink(i);
+    let id: LLVMIdentifier = link.into();
+
+    let llvm_ty = {
+      let ty = self.get_type(ty);
+      
+      assert!(matches!(&ty.data, TypeData::Function { .. }));
+
+      ty.llvm
+    };
+
+    let llvm = unsafe { LLVMAddFunction(self.llvm.module, id.as_ptr(), llvm_ty) };
+
+    // TODO support other CC's
+    unsafe { LLVMSetFunctionCallConv(llvm, 0) }; // 0 -> C style CC
+
+    self.functions.push(Function { id, ty, address: 0, llvm });
+
+    link
+  }
 }
 
 
 
+/// Represents a reference to a Module in the Context
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ModuleLink(usize);
+
 /// Represents a reference to a Type in the Context
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeLink(usize);
 
 /// Represents a reference to a Global in the Context
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GlobalLink(usize);
 
 /// Represents a reference to a Function in the Context
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FunctionLink(usize);
 
+/// Represents a reference to either a Global or a Function in the Context
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GenericLink {
+  Global(GlobalLink),
+  Function(FunctionLink),
+}
+
+
+
+/// Represents a Module known by the Context
+#[derive(Debug, PartialEq, Eq)]
+pub struct Module {
+  /// The unique name of a Module
+  pub name: String,
+  /// The version number of a Module
+  pub version: Version,
+  /// The export bindings of a Module
+  pub exports: Vec<Export>,
+}
+
+impl Module {
+  /// Create a new Module with no Exports
+  pub fn empty (name: String, version: Version) -> Self {
+    Self {
+      name,
+      version,
+      exports: Vec::default(),
+    }
+  }
+}
+
+/// Represents an exported item in a Module
+#[derive(Debug, PartialEq, Eq)]
+pub struct Export {
+  /// The name of an Export
+  pub name: String,
+  /// The variant data associated with an Export
+  pub data: ExportData,
+}
+
+/// Data for an Export in a Module
+#[allow(missing_docs)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExportData {
+  Namespace(Vec<Export>),
+  Global(GlobalLink),
+  Function(FunctionLink),
+}
 
 
 /// Represents a Type known by the Context
@@ -396,8 +679,26 @@ pub struct Type {
   /// The alignment (in bytes) of a Type
   pub align: usize,
   /// The LLVM representation of a Type
-  pub(crate) llvm: LLVMTypeRef,
+  llvm: LLVMTypeRef,
 }
+
+impl Type {
+  pub(crate) fn llvm_t (&self, context: &Context) -> LLVMTypeRef {
+    match &self.data {
+      | TypeData::Intrinsic { .. }
+      | TypeData::Pointer { .. }
+      | TypeData::Structure { .. }
+      => self.llvm,
+
+      TypeData::Function { .. } => unsafe { LLVMPointerType(LLVMInt8TypeInContext(context.llvm.ctx), 0) }
+    }
+  }
+
+  pub(crate) fn llvm_real_t (&self) -> LLVMTypeRef {
+    self.llvm
+  }
+}
+
 
 /// Unique variant data of a Type
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -431,20 +732,29 @@ pub enum TypeData {
   },
 }
 
-
 impl PartialEq<(&[TypeLink], bool)> for TypeData {
-  fn eq (&self, struct_data: &(&[TypeLink], bool)) -> bool {
-    return matches!(self, Self::Structure { types, is_packed, .. } if struct_data.0 == types.as_slice() && *is_packed == struct_data.1)
+  fn eq (&self, &(other_types, other_is_packed): &(&[TypeLink], bool)) -> bool {
+    return matches!(
+      self, &Self::Structure { ref types, is_packed, .. }
+      if types.as_slice() == other_types
+      && is_packed == other_is_packed
+    )
   }
 }
 
 impl PartialEq<(&[TypeLink], Option<TypeLink>, bool)> for TypeData {
-  fn eq (&self, func_data: &(&[TypeLink], Option<TypeLink>, bool)) -> bool {
-    return matches!(self, Self::Function { parameters, result, is_var_arg } if func_data.0 == parameters.as_slice() && *result == func_data.1 && *is_var_arg == func_data.2)
+  fn eq (&self, &(other_parameters, other_result, other_is_var_arg): &(&[TypeLink], Option<TypeLink>, bool)) -> bool {
+    return matches!(
+      self, &Self::Function { ref parameters, result, is_var_arg }
+      if parameters.as_slice() == other_parameters
+      && result == other_result
+      && is_var_arg == other_is_var_arg
+    )
   }
 }
 
 
+// TODO get rid of this trait
 impl ToLLVMInContext for IntrinsicType {
   type TargetInContext = LLVMTypeRef;
 
@@ -463,4 +773,75 @@ impl ToLLVMInContext for IntrinsicType {
       F64 => LLVMDoubleTypeInContext(context.llvm.ctx),
     } }
   }
+}
+
+
+
+/// Contains a c-compatible string representing an LLVM value
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct LLVMIdentifier {
+  data: [u8; 22],
+  length: usize,
+}
+
+impl LLVMIdentifier {
+  /// Create a new LLVMIdentifier from a kind byte and an index
+  pub fn new (kind: u8, index: u64) -> Self {
+    let mut id = Self {
+      data: [0u8; 22],
+      length: 0usize,
+    };
+
+    id.data[0] = kind;
+
+    id.length = into_decimal(index, &mut id.data[1..]);
+
+    id
+  }
+
+  /// Get a slice of the used bytes in an LLVMIdentifier
+  pub fn as_slice (&self) -> &[u8] { self.as_ref() }
+  /// Get a str of the used bytes in an LLVMIdentifier
+  pub fn as_str (&self) -> &str { self.as_ref() }
+  /// Get a cstr of the used bytes in an LLVMIdentifier
+  pub fn as_cstr (&self) -> &CStr { self.as_ref() }
+  /// Get a c-compattible pointer to the bytes in an LLVMIdentifier
+  pub fn as_ptr (&self) -> *const i8 { self.data.as_ptr() as _ }
+}
+
+impl From<GlobalLink> for LLVMIdentifier { fn from (link: GlobalLink) -> Self { Self::new(b'G', link.0 as u64) } }
+impl From<FunctionLink> for LLVMIdentifier { fn from (link: FunctionLink) -> Self { Self::new(b'F', link.0 as u64) } }
+
+impl AsRef<[u8]> for LLVMIdentifier { fn as_ref (&self) -> &[u8] { &self.data[..self.length] } }
+impl AsRef<str> for LLVMIdentifier { fn as_ref (&self) -> &str { unsafe { std::str::from_utf8_unchecked(self.as_ref()) } } }
+impl AsRef<CStr> for LLVMIdentifier { fn as_ref (&self) -> &CStr { unsafe { CStr::from_bytes_with_nul_unchecked(&self.data[..self.length + 1]) } } }
+
+
+/// Represents a Global variable known by the Context
+#[derive(Debug, PartialEq, Eq)]
+pub struct Global {
+  /// The LLVM-compatible identifier associated with a Global
+  pub id: LLVMIdentifier,
+  /// A link to the Type of value a Global contains
+  pub ty: TypeLink,
+  /// The machine code address of a Global
+  pub address: u64,
+  /// The FunctionLink of an initializer function associated with a Global, if it has one
+  pub initializer: Option<FunctionLink>,
+  /// The LLVM representation of a Global
+  pub(crate) llvm: LLVMValueRef,
+}
+
+
+/// Represents a Function variable known by the Context
+#[derive(Debug, PartialEq, Eq)]
+pub struct Function {
+  /// The LLVM-compatible identifier associated with a Function
+  pub id: LLVMIdentifier,
+  /// A link to the Type of a Function
+  pub ty: TypeLink,
+  /// The machine code address of a Function
+  pub address: u64,
+  /// The LLVM representation of a Function
+  pub(crate) llvm: LLVMValueRef,
 }

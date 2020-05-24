@@ -11,7 +11,8 @@ use std::{
   mem::{ transmute, },
 };
 
-use mod_common::{ HierarchicalDisplay, Padding, Version, Operator, };
+use mod_common::{ HierarchicalDisplay, Padding, };
+pub use mod_common::{ Version, Operator, };
 
 
 
@@ -331,6 +332,22 @@ impl Display for LocalID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self
 impl Display for ElementID { fn fmt (&self, f: &mut Formatter) -> FMTResult { self.fmt_hierarchical(f, &mut 0) } }
 
 
+/// A generic wrapper for a typed ID
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GenericID {
+  Type(TypeID),
+  Global(GlobalID),
+  Function(FunctionID),
+  Local(LocalID),
+  Element(ElementID),
+}
+
+impl From<TypeID> for GenericID { fn from (i: TypeID) -> Self { Self::Type(i) } }
+impl From<GlobalID> for GenericID { fn from (i: GlobalID) -> Self { Self::Global(i) } }
+impl From<FunctionID> for GenericID { fn from (i: FunctionID) -> Self { Self::Function(i) } }
+impl From<LocalID> for GenericID { fn from (i: LocalID) -> Self { Self::Local(i) } }
+impl From<ElementID> for GenericID { fn from (i: ElementID) -> Self { Self::Element(i) } }
 
 /// Represents a type definition in a `Module`
 #[derive(Debug, Clone, PartialEq)]

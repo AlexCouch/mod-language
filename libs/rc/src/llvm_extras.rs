@@ -8,9 +8,9 @@ use crate::{
 
 
 /// LLVMBool true value
-// pub const LLVM_TRUE: LLVMBool = 1;
+pub const LLVM_TRUE: LLVMBool = 1;
 /// LLVMBool false value
-// pub const LLVM_FALSE: LLVMBool = 0;
+pub const LLVM_FALSE: LLVMBool = 0;
 /// LLVMBool success value
 pub const LLVM_SUCCESS: LLVMBool = 0;
 

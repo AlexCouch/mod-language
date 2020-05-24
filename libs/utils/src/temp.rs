@@ -3,6 +3,7 @@
 use std::{
   thread_local,
   cell::RefCell,
+  ffi::CStr,
   mem::{
     transmute,
     size_of,
@@ -10,7 +11,7 @@ use std::{
   slice::from_raw_parts_mut as make_slice
 };
 
-use super::{ unescape_str_into, escape_str_into };
+use super::{ unescape_str_into, escape_str_into, into_decimal };
 
 
 /// Static allocating function for getting a temporary buffer of any type,
@@ -121,6 +122,43 @@ pub fn to_uppercase (s: &str) -> &'static str {
     }
 
     unsafe { transmute(buff.as_str()) }
+  })
+}
+
+
+/// Get a temporary str version of a number
+/// 
+/// Resulting str is only valid until the next call of this function on this thread
+pub fn num_as_str (num: u64) -> &'static str {
+  thread_local! {
+    static N_BUFF: RefCell<[u8; 20]> = RefCell::new([0u8; 20]);
+  }
+
+  N_BUFF.with(|rc| {
+    let mut buff = rc.borrow_mut();
+
+    let offset = into_decimal(num, &mut *buff);
+
+    unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(buff.as_ptr(), offset)) }
+  })
+}
+
+/// Get a temporary cstr version of a number, with a null terminator
+/// 
+/// Resulting cstr is only valid until the next call of this function on this thread
+pub fn num_as_cstr (num: u64) -> &'static CStr {
+  thread_local! {
+    static N_BUFF: RefCell<[u8; 21]> = RefCell::new([0u8; 21]);
+  }
+
+  N_BUFF.with(|rc| {
+    let mut buff = rc.borrow_mut();
+
+    let offset = into_decimal(num, &mut *buff);
+
+    buff[offset] = b'\0';
+
+    unsafe { CStr::from_ptr(buff.as_ptr() as _) }
   })
 }
 

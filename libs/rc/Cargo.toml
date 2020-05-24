@@ -5,5 +5,6 @@ authors = ["noxabellus <noxabellus@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+mod_utils = { path = "../utils", version = "0.1.23" }
 mod_bytecode = { path = "../bytecode", version = "0.1.23" }
 llvm-sys = "90"

@@ -56,3 +56,6 @@ pub use un_escape_str::*;
 
 mod either;
 pub use either::*;
+
+mod into_decimal;
+pub use into_decimal::*;
