@@ -143,13 +143,13 @@ pub fn conditional (parser: &mut Parser) -> Option<Conditional> {
       Some(&Token { data: TokenData::Keyword(If), .. }) => {
         let branch = conditional_branch(parser)?;
 
-        if if_branch.is_expression() != branch.is_expression() {
-          parser.error_at(branch.origin, format!(
-            "This branch's block {} a trailing expression, while the originating if branch's block {}",
-            if branch.is_expression() { "has" } else { "does not have" },
-            if if_branch.is_expression() { "does" } else { "does not" }
-          ));
-        }
+        // if if_branch.is_expression() != branch.is_expression() {
+        //   parser.error_at(branch.origin, format!(
+        //     "This branch's block {} a trailing expression, while the originating if branch's block {}",
+        //     if branch.is_expression() { "has" } else { "does not have" },
+        //     if if_branch.is_expression() { "does" } else { "does not" }
+        //   ));
+        // }
 
         end_region = branch.origin;
 
@@ -162,13 +162,13 @@ pub fn conditional (parser: &mut Parser) -> Option<Conditional> {
 
         end_region = block.origin;
 
-        if if_branch.is_expression() != block.is_expression() {
-          parser.error_at(block.origin, format!(
-            "This else block {} a trailing expression, while the originating if branch's block {}",
-            if block.is_expression() { "has" } else { "does not have" },
-            if if_branch.is_expression() { "does" } else { "does not" }
-          ));
-        }
+        // if if_branch.is_expression() != block.is_expression() {
+        //   parser.error_at(block.origin, format!(
+        //     "This else block {} a trailing expression, while the originating if branch's block {}",
+        //     if block.is_expression() { "has" } else { "does not have" },
+        //     if if_branch.is_expression() { "does" } else { "does not" }
+        //   ));
+        // }
 
         else_block = Some(block);
 

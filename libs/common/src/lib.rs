@@ -342,6 +342,7 @@ pub enum Keyword {
   If,
   Else,
   Let,
+  Return,
 }
 
 impl Keyword {
@@ -361,6 +362,7 @@ impl Keyword {
       If        => "if",
       Else      => "else",
       Let       => "let",
+      Return    => "return",
     }
   }
 }
@@ -480,6 +482,7 @@ pub enum IdentifierValue {
 /// Note that values are stored in order of longest to shortest in order to facilitate the lexer's matching system
 pub const IDENTIFIER_VALUES: &[(&str, IdentifierValue)] = {
   &[
+    ("return", IdentifierValue::Keyword(Keyword::Return)),
     ("import", IdentifierValue::Keyword(Keyword::Import)),
     ("export", IdentifierValue::Keyword(Keyword::Export)),
     ("global", IdentifierValue::Keyword(Keyword::Global)),

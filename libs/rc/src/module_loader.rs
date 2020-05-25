@@ -81,6 +81,8 @@ pub enum CompilationErrorData {
   UnexpectedLoopControl(bc::GenericID),
   /// Could not retrieve address for an item
   UnaddressableItem(bc::GenericID),
+  /// Could not create a PHI node for an item, due to a type mismatch of resulting values of a branch
+  BadPhi(bc::GenericID),
   /// Module initialization failed
   InitializationFailed,
 }
@@ -115,6 +117,7 @@ impl Display for CompilationErrorData {
       UnusedInstructions(id) => write!(f, "A block in ({:?}) contained instructions after a terminating instruction such as return or continue", id),
       UnexpectedLoopControl(id) => write!(f, "An instruction in ({:?}) tried to break or continue while not within a loop block", id),
       UnaddressableItem(id) => write!(f, "Could not retrieve address for an item ({:?})", id),
+      BadPhi(id) => write!(f, "Could not create a PHI node for an item ({:?}), due to a type mismatch of resulting values of a branch", id),
       InitializationFailed => write!(f, "Module initialization failed"),
     }
   }

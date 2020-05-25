@@ -142,6 +142,24 @@ fn stm_conditional (parser: &mut Parser) -> Option<Statement> {
   ))
 }
 
+fn stm_return (parser: &mut Parser) -> Option<Statement> {
+  if let Some(&Token { data: TokenData::Keyword(Return), origin }) = parser.curr_tok() {
+    parser.advance();
+
+    let (expr, origin) = if !matches!(parser.curr_tok(), Some(Token { data: TokenData::Operator(Semi | RightBracket), .. })) {
+      let expr = expression(parser)?;
+      let origin = SourceRegion::merge(origin, expr.origin);
+      (Some(expr), origin)
+    } else {
+      (None, origin)
+    };
+
+    Some(Statement::new(StatementData::Return(expr), origin))
+  } else {
+    unreachable!("Internal error, return statement parser called on non-return token")
+  }
+}
+
 fn stm_expression (parser: &mut Parser) -> Option<Statement> {
   // Synchronization should be handled by higher level parselet
   Some(expression(parser)?.into())
@@ -162,6 +180,7 @@ impl StatementParselet {
       Operator(LeftBracket) => stm_block,
       Keyword(Let) => stm_declaration,
       Keyword(If) => stm_conditional,
+      Keyword(Return) => stm_return,
     ]
   };
 

@@ -90,6 +90,11 @@ fn main () -> std::io::Result<()> {
 
   load_result.expect_pretty("Failed to compile bytecode module");
 
+  let fib_path = &["test_module", "fibonacci"];
+
+  println!("fibonacci baseline ir:\n{}", context.get_baseline_ir(fib_path).expect("Failed to get baseline ir"));
+  println!("fibonacci optimized ir:\n{}", context.get_optimized_ir(fib_path).expect("Failed to get optimized ir"));
+
   fn native_fibonacci (n: i32) -> i32 {
     if n < 2 {
       n
@@ -97,7 +102,8 @@ fn main () -> std::io::Result<()> {
       native_fibonacci(n - 1) + native_fibonacci(n - 2)
     }
   }
-  let fibonacci_addr = context.get_address(&["test_module", "fibonacci"]).expect("Failed to get function address");
+
+  let fibonacci_addr = context.get_address(fib_path).expect("Failed to get function address");
 
   let fibonacci = unsafe { std::mem::transmute::<_, extern "C" fn (i32) -> i32>(fibonacci_addr) };
 

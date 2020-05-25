@@ -162,22 +162,28 @@ fn generate_conditional (analyzer: &mut Analyzer, expect_expression: Expect, con
   };
 
   if let (Some(mut if_branch), Some(mut else_if_branches), Ok(mut else_block)) = (if_branch, else_if_branches, else_block) {
-    if let Some(if_trail) = &mut if_branch.body.trailing_expression {
-      let mut trail_tys = vec! [ if_trail.ty ];
+    if conditional.is_expression() {
+      let mut trail_tys = Vec::with_capacity(else_if_branches.len() + 2);
+      
+      if let Some(if_trail) = if_branch.body.trailing_expression.as_ref() {
+        trail_tys.push(if_trail.ty);
+      }
 
-      else_if_branches.iter().for_each(|branch| trail_tys.push(branch.body.trailing_expression.as_ref().unwrap().ty));
+      else_if_branches.iter().for_each(|branch| if let Some(trail) = branch.body.trailing_expression.as_ref() { trail_tys.push(trail.ty) });
 
-      if let Some(else_block) = &else_block { trail_tys.push(else_block.trailing_expression.as_ref().unwrap().ty) };
+      if let Some(trail) = else_block.as_ref().and_then(|block| block.trailing_expression.as_ref()) { trail_tys.push(trail.ty) };
 
       let meet_result = ty_meet_n(analyzer, false, trail_tys.as_slice());
 
       match meet_result {
         TyMeetResult::Ok(coerce_ty) => {
-          ty_handle_coercion(coerce_ty, if_trail);
+          if let Some(if_trail) = &mut if_branch.body.trailing_expression {
+            ty_handle_coercion(coerce_ty, if_trail);
+          }
 
-          else_if_branches.iter_mut().for_each(|branch| ty_handle_coercion(coerce_ty, branch.body.trailing_expression.as_mut().unwrap()));
+          else_if_branches.iter_mut().for_each(|branch| if let Some(trail) = branch.body.trailing_expression.as_mut() { ty_handle_coercion(coerce_ty, trail) });
 
-          if let Some(else_block) = &mut else_block { ty_handle_coercion(coerce_ty, else_block.trailing_expression.as_mut().unwrap()) };
+          if let Some(trail) = else_block.as_mut().and_then(|block| block.trailing_expression.as_mut()) { ty_handle_coercion(coerce_ty, trail) };
         },
 
         TyMeetResult::None => {
@@ -261,8 +267,12 @@ fn generate_block (analyzer: &mut Analyzer, expect_expression: Expect, block: &a
       Err(())
     },
     (Expect::Require, None) => {
-      analyzer.error(block.origin.clip_to_end(), "Expected trailing expression".to_owned());
-      Err(())
+      if !matches!(block.statements.last(), Some(ast::Statement { data: ast::StatementData::Return(_), .. })) {
+        analyzer.error(block.origin, "Expected trailing expression".to_owned());
+        Err(())
+      } else {
+        Ok(None)
+      }
     }
   };
 
@@ -596,7 +606,26 @@ fn generate_expr (analyzer: &mut Analyzer, expr: &ast::Expression) -> Option<ir:
     ast::ExpressionData::Conditional(box conditional) => {
       let conditional = generate_conditional(analyzer, Expect::Require, conditional)?;
 
-      let ty = conditional.if_branch.body.trailing_expression.as_ref().unwrap().ty;
+      let ty = if let Some(trail_expr) = conditional.if_branch.body.trailing_expression.as_ref() {
+        trail_expr.ty
+      } else {
+        let mut ty = None;
+
+        for else_branch in conditional.else_if_branches.iter() {
+          if let Some(trail_expr) = else_branch.body.trailing_expression.as_ref() {
+            ty = Some(trail_expr.ty);
+            break
+          }
+        }
+
+        if let Some(ty) = ty {
+          ty
+        } else if let Some(trail_expr) = conditional.else_block.as_ref().and_then(|block| block.trailing_expression.as_ref()) {
+          trail_expr.ty
+        } else {
+          panic!("Internal error, found expression conditional with no trailing expressions");
+        }
+      };
 
       Some(ir::Expression::new(
         ir::ExpressionData::Conditional(box conditional),

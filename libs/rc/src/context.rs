@@ -352,6 +352,49 @@ impl Context {
     None
   }
 
+  /// Get the unoptimized IR for a value from a path into a context
+  pub fn get_baseline_ir (&self, p: &[&str]) -> Option<&String> {
+    match self.resolve_path(p)? {
+      GenericLink::Function(f_link) => {
+        let func = self.get_function(f_link);
+
+        return func.baseline_ir.as_ref()
+      },
+      GenericLink::Global(g_link) => {
+        let global = self.get_global(g_link);
+
+        if let Some(f_link) = global.initializer {
+          let func = self.get_function(f_link);
+
+          return func.baseline_ir.as_ref()
+        }
+      }
+    }
+
+    None
+  }
+
+  /// Get the optimized IR for a value from a path into a context
+  pub fn get_optimized_ir (&self, p: &[&str]) -> Option<&String> {
+    match self.resolve_path(p)? {
+      GenericLink::Function(f_link) => {
+        let func = self.get_function(f_link);
+
+        return func.optimized_ir.as_ref()
+      },
+      GenericLink::Global(g_link) => {
+        let global = self.get_global(g_link);
+
+        if let Some(f_link) = global.initializer {
+          let func = self.get_function(f_link);
+
+          return func.optimized_ir.as_ref()
+        }
+      }
+    }
+
+    None
+  }
 
   /// Compile and load a single bytecode Module into a Context
   pub fn load_module (&mut self, bc_module: bc::Module) -> CompilationResult {
@@ -541,7 +584,7 @@ impl Context {
 
 
   /// Create a new Global of the given type
-  pub fn create_global (&mut self, ty: TypeLink) -> GlobalLink {
+  pub(crate) fn create_global (&mut self, ty: TypeLink) -> GlobalLink {
     let i = self.globals.len();
 
     let link = GlobalLink(i);
@@ -559,12 +602,12 @@ impl Context {
   /// Set the initializer function of a Global
   /// 
   /// Panics if the global already has an initializer
-  pub fn set_global_initializer (&mut self, gl: GlobalLink, fl: FunctionLink) {
+  pub(crate) fn set_global_initializer (&mut self, gl: GlobalLink, fl: FunctionLink) {
     unsafe { self.globals.get_unchecked_mut(gl.0) }.initializer.replace(fl).unwrap_none()
   }
 
   /// Set the address of a Global
-  pub fn set_global_address (&mut self, gl: GlobalLink, address: u64) {
+  pub(crate) fn set_global_address (&mut self, gl: GlobalLink, address: u64) {
     unsafe { self.globals.get_unchecked_mut(gl.0) }.address = address
   }
 
@@ -607,7 +650,7 @@ impl Context {
   /// Create a new Function of the given type
   /// 
   /// Panics if the given TypeLink is not a Function type
-  pub fn create_function (&mut self, ty: TypeLink) -> FunctionLink {
+  pub(crate) fn create_function (&mut self, ty: TypeLink) -> FunctionLink {
     let i = self.functions.len();
 
     let link = FunctionLink(i);
@@ -626,13 +669,23 @@ impl Context {
     // TODO support other CC's
     unsafe { LLVMSetFunctionCallConv(llvm, 0) }; // 0 -> C style CC
 
-    self.functions.push(Function { id, ty, address: 0, llvm });
+    self.functions.push(Function { id, ty, address: 0, llvm, baseline_ir: None, optimized_ir: None });
 
     link
   }
 
+  /// Set the baseline IR of a function
+  pub(crate) fn set_function_baseline_ir (&mut self, fl: FunctionLink, ir: String) {
+    unsafe { self.functions.get_unchecked_mut(fl.0) }.baseline_ir.replace(ir).unwrap_none()
+  }
+
+  /// Set the optimized IR of a function
+  pub(crate) fn set_function_optimized_ir (&mut self, fl: FunctionLink, ir: String) {
+    unsafe { self.functions.get_unchecked_mut(fl.0) }.optimized_ir.replace(ir).unwrap_none()
+  }
+
   /// Set the address of a Function
-  pub fn set_function_address (&mut self, fl: FunctionLink, address: u64) {
+  pub(crate) fn set_function_address (&mut self, fl: FunctionLink, address: u64) {
     unsafe { self.functions.get_unchecked_mut(fl.0) }.address = address
   }
 }
@@ -885,4 +938,8 @@ pub struct Function {
   pub address: u64,
   /// The LLVM representation of a Function
   pub(crate) llvm: LLVMValueRef,
+  /// The LLVM IR representation of a Function before it was optimized
+  pub baseline_ir: Option<String>,
+  /// The LLVM IR representation of a Function after it was optimized
+  pub optimized_ir: Option<String>,
 }

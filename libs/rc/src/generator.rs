@@ -5,6 +5,8 @@ use std::{
 use llvm_sys::{
   core::LLVMDisposeMessage,
   core::LLVMPrintValueToString,
+  core::LLVMBuildPhi,
+  core::LLVMAddIncoming,
   execution_engine:: {
     LLVMGetFunctionAddress,
     LLVMFreeMachineCodeForFunction,
@@ -88,7 +90,32 @@ use crate::{
 
 type Value = (LLVMValueRef, ctx::TypeLink);
 
-type Stack = Vec<Value>;
+#[derive(Default)]
+struct Stack {
+  frames: Vec<Vec<Value>>
+}
+
+impl Stack {
+  fn push (&mut self, v: Value) {
+    self.frames.last_mut().unwrap().push(v)
+  }
+
+  fn pop (&mut self) -> Option<Value> {
+    self.frames.last_mut().unwrap().pop()
+  }
+
+  fn peek (&self) -> Option<&Value> {
+    self.frames.last().unwrap().last()
+  }
+
+  fn push_frame (&mut self) {
+    self.frames.push(vec![])
+  }
+
+  fn pop_frame (&mut self) -> Option<Vec<Value>> {
+    self.frames.pop()
+  }
+}
 
 type FuncSignature = (Vec<ctx::TypeLink>, Option<ctx::TypeLink>, bool);
 
@@ -100,7 +127,7 @@ struct LocalIR<'a, 'b> {
   func_sig: FuncSignature,
   func_llvm: LLVMValueRef,
 
-  locals: Stack,
+  locals: Vec<Value>,
   stack: Stack,
 }
 
@@ -125,7 +152,7 @@ impl<'a, 'b> LocalIR<'a, 'b> {
       func_llvm,
 
       locals: Vec::default(),
-      stack: Vec::default(),
+      stack: Stack::default(),
     })
   }
 
@@ -145,6 +172,14 @@ impl<'a, 'b> LocalIR<'a, 'b> {
     }
   }
 
+  fn stack_start_frame (&mut self) {
+    self.stack.push_frame()
+  }
+
+  fn stack_end_frame (&mut self) -> Vec<Value> {
+    self.stack.pop_frame().unwrap()
+  }
+
   fn stack_push (&mut self, v: Value) {
     self.stack.push(v)
   }
@@ -159,7 +194,7 @@ impl<'a, 'b> LocalIR<'a, 'b> {
   }
 
   fn stack_peek (&mut self) -> Result<Value, CompilationError> {
-    if let Some(v) = self.stack.last() {
+    if let Some(v) = self.stack.peek() {
       Ok(*v)
     } else {
       let ref_id = self.ref_id;
@@ -201,75 +236,34 @@ pub(crate) fn generate_function_body (ir: &mut IR, ref_id: bc::GenericID, func_l
     ir.locals.push((param_storage, param_tl))
   }
 
+  ir.stack_start_frame();
   let (termination, _) = generate_block(&mut ir, entry_b, None, instructions)?;
-
+  
   if !termination {
     generate_return(&mut ir)?;
   }
+  ir.stack_end_frame();
+
+  let llvm_ir = LLVMPrintValueToString(llvm_func);
+  let baseline_ir = std::ffi::CStr::from_ptr(llvm_ir).to_string_lossy().to_string();
+  LLVMDisposeMessage(llvm_ir);
 
   if LLVMVerifyFunction(llvm_func, LLVMVerifierFailureAction::LLVMReturnStatusAction) == LLVM_SUCCESS {
     LLVMRunFunctionPassManager(ir.context.llvm.fpm, llvm_func);
 
-    Ok(())
-  } else {
     let llvm_ir = LLVMPrintValueToString(llvm_func);
-    let string = std::ffi::CStr::from_ptr(llvm_ir).to_string_lossy().to_string();
+    let optimized_ir = std::ffi::CStr::from_ptr(llvm_ir).to_string_lossy().to_string();
     LLVMDisposeMessage(llvm_ir);
 
-    ir.error(CompilationErrorData::ValidationFailed(ref_id, string))
-  }
-} }
+    ir.context.set_function_baseline_ir(func_link, baseline_ir);
+    ir.context.set_function_optimized_ir(func_link, optimized_ir);
 
-
-/// Generates an LLVM wrapper for all global initializers in a module
-pub(crate) fn generate_module_initializer (ir: &mut IR, bc_globals: &[bc::Global]) -> CompilationResult { unsafe {
-  let fn_tl = ir.context.tl_function(&[], None, false);
-  let fn_ty = ir.context.get_type(fn_tl);
-
-  let llvm_func = LLVMAddFunction(ir.context.llvm.module, c_lit!("module_initializer"), fn_ty.llvm_real_t());
-
-  let entry_b = LLVMAppendBasicBlockInContext(ir.context.llvm.ctx, llvm_func, c_lit!("entry"));
-  LLVMPositionBuilderAtEnd(ir.context.llvm.builder, entry_b);
-
-  for bc_global in bc_globals.iter() {
-    let g_link = ir.get_global(bc_global.id, bc_global.id)?;
-    let global = ir.context.get_global(g_link);
-
-    if let Some(init_fl) = global.initializer {
-      let init_fn = ir.context.get_function(init_fl);
-
-      let ret = LLVMBuildCall(ir.context.llvm.builder, init_fn.llvm, std::ptr::null_mut(), 0, global.id.as_ptr());
-
-      LLVMBuildStore(ir.context.llvm.builder, ret, global.llvm);
-    }
-  }
-
-  LLVMBuildRetVoid(ir.context.llvm.builder);
-
-  let mut err = true;
-
-  if LLVMVerifyFunction(llvm_func, LLVMVerifierFailureAction::LLVMReturnStatusAction) == LLVM_SUCCESS {
-    let address = LLVMGetFunctionAddress(ir.context.llvm.ee, c_lit!("module_initializer"));
-
-    if address != 0 {
-      let func = std::mem::transmute::<_, extern "C" fn () -> ()>(address);
-
-      func();
-
-      LLVMFreeMachineCodeForFunction(ir.context.llvm.ee, llvm_func);
-
-      err = false;
-    }
-  }
-
-  LLVMDeleteFunction(llvm_func);
-  
-  if err {
-    ir.error(CompilationErrorData::InitializationFailed)
-  } else {
     Ok(())
+  } else {
+    ir.error(CompilationErrorData::ValidationFailed(ref_id, baseline_ir))
   }
 } }
+
 
 
 fn generate_block (
@@ -712,13 +706,17 @@ fn generate_block (
 
         let finally = LLVMAppendBasicBlockInContext(llvm_ctx, ir.func_llvm, c_lit!("if_else_end"));
 
+        ir.stack_start_frame();
         let begin_then = LLVMAppendBasicBlockInContext(llvm_ctx, ir.func_llvm, c_lit!("then"));
-        let (then_terminated, _) = generate_block(ir, begin_then, landing_pad, then_instrs)?;
+        let (then_terminated, end_then) = generate_block(ir, begin_then, landing_pad, then_instrs)?;
         if !then_terminated { LLVMBuildBr(builder, finally); }
+        let mut then_frame = ir.stack_end_frame();
 
+        ir.stack_start_frame();
         let begin_else = LLVMAppendBasicBlockInContext(llvm_ctx, ir.func_llvm, c_lit!("else"));
         let (else_terminated, end_else) = generate_block(ir, begin_else, landing_pad, else_instrs)?;
         if !else_terminated { LLVMBuildBr(builder, finally); }
+        let mut else_frame = ir.stack_end_frame();
 
         LLVMPositionBuilderAtEnd(builder, block);
 
@@ -735,6 +733,42 @@ fn generate_block (
         } else {
           LLVMMoveBasicBlockAfter(finally, end_else);
           LLVMPositionBuilderAtEnd(builder, finally);
+          if !then_frame.is_empty()
+          || !else_frame.is_empty() {
+            let mut incoming_values = [std::mem::zeroed(); 2];
+            let mut incoming_branches = [std::mem::zeroed(); 2];
+            let mut length = 0;
+            let mut tl = None;
+
+            if let Some(then_value) = then_frame.pop() {
+              tl = Some(then_value.1);
+              incoming_values[length] = then_value.0;
+              incoming_branches[length] = end_then;
+              length += 1;
+            }
+
+            let tl = if let Some(else_value) = else_frame.pop() {
+              incoming_values[length] = else_value.0;
+              incoming_branches[length] = end_else;
+              length += 1;
+              if let Some(tl) = tl {
+                equal!(else_value.1, tl; ir.error(CompilationErrorData::BadPhi(ref_id)));
+                tl
+              } else {
+                else_value.1
+              }
+            } else {
+              tl.unwrap()
+            };
+
+            let ty = ir.context.get_type(tl);
+
+            let phi = LLVMBuildPhi(builder, ty.llvm_t(ir.context), c_lit!("phi"));
+
+            LLVMAddIncoming(phi, incoming_values.as_mut_ptr(), incoming_branches.as_mut_ptr(), length as _);
+
+            ir.stack_push((phi, tl));
+          }
 
           block = finally;
         }
@@ -900,4 +934,57 @@ fn generate_immediate (ctx: &Context, imm: ImmediateValue) -> (LLVMValueRef, ctx
     F32(f32) => LLVMConstReal(llvm_t, f32 as _),
     F64(f64) => LLVMConstReal(llvm_t, f64 as _),
   }, tl)
+} }
+
+
+
+
+/// Generates an LLVM wrapper for all global initializers in a module
+pub(crate) fn generate_module_initializer (ir: &mut IR, bc_globals: &[bc::Global]) -> CompilationResult { unsafe {
+  let fn_tl = ir.context.tl_function(&[], None, false);
+  let fn_ty = ir.context.get_type(fn_tl);
+
+  let llvm_func = LLVMAddFunction(ir.context.llvm.module, c_lit!("module_initializer"), fn_ty.llvm_real_t());
+
+  let entry_b = LLVMAppendBasicBlockInContext(ir.context.llvm.ctx, llvm_func, c_lit!("entry"));
+  LLVMPositionBuilderAtEnd(ir.context.llvm.builder, entry_b);
+
+  for bc_global in bc_globals.iter() {
+    let g_link = ir.get_global(bc_global.id, bc_global.id)?;
+    let global = ir.context.get_global(g_link);
+
+    if let Some(init_fl) = global.initializer {
+      let init_fn = ir.context.get_function(init_fl);
+
+      let ret = LLVMBuildCall(ir.context.llvm.builder, init_fn.llvm, std::ptr::null_mut(), 0, global.id.as_ptr());
+
+      LLVMBuildStore(ir.context.llvm.builder, ret, global.llvm);
+    }
+  }
+
+  LLVMBuildRetVoid(ir.context.llvm.builder);
+
+  let mut err = true;
+
+  if LLVMVerifyFunction(llvm_func, LLVMVerifierFailureAction::LLVMReturnStatusAction) == LLVM_SUCCESS {
+    let address = LLVMGetFunctionAddress(ir.context.llvm.ee, c_lit!("module_initializer"));
+
+    if address != 0 {
+      let func = std::mem::transmute::<_, extern "C" fn () -> ()>(address);
+
+      func();
+
+      LLVMFreeMachineCodeForFunction(ir.context.llvm.ee, llvm_func);
+
+      err = false;
+    }
+  }
+
+  LLVMDeleteFunction(llvm_func);
+  
+  if err {
+    ir.error(CompilationErrorData::InitializationFailed)
+  } else {
+    Ok(())
+  }
 } }

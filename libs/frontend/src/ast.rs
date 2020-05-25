@@ -501,7 +501,19 @@ impl Conditional {
 
   /// Determine if a Conditional's if Branch Block has a trailing Expression, making the Conditional itself an Expression
   pub fn is_expression (&self) -> bool {
-    self.if_branch.is_expression()
+    if self.if_branch.is_expression() {
+      return true
+    }
+
+    for else_branch in self.else_if_branches.iter() {
+      if else_branch.is_expression() { return true }
+    }
+
+    if let Some(else_block) = &self.else_block {
+      if else_block.is_expression() { return true }
+    }
+
+    false
   }
 }
 
