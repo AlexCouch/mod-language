@@ -7,9 +7,11 @@ use std::{
   ops::{ Deref, DerefMut, },
 };
 
+
 use llvm_sys::{
-  core::{
-    LLVMRunFunctionPassManager,
+  execution_engine::{
+    LLVMGetGlobalValueAddress,
+    LLVMGetFunctionAddress,
   },
 };
 
@@ -18,11 +20,12 @@ use mod_bytecode::{ self as bc, Version, };
 
 use crate::{
   context::{ self as ctx, Context, },
-  generator::{ generate_function_body, },
+  generator::{ generate_function_body, generate_module_initializer, },
 };
 
 
 /// Data for an error that occurred while compiling bytecode
+#[derive(Debug)]
 pub enum CompilationErrorData {
   /// Some unexpected error occurred
   Unexpected,
@@ -51,7 +54,7 @@ pub enum CompilationErrorData {
   /// A value at the reference location was expected to be type A, but was type B
   TypeMismatch(bc::GenericID, bc::TypeID, bc::TypeID),
   /// LLVM Function validation failed
-  ValidationFailed(bc::GenericID),
+  ValidationFailed(bc::GenericID, String),
   /// An instruction either tried to get an element of a non-structural type, or tried to get an out-of-range element
   GetInvalidElement(bc::GenericID),
   /// An instruction tried to perform an invalid cast
@@ -76,14 +79,60 @@ pub enum CompilationErrorData {
   UnusedInstructions(bc::GenericID),
   /// An instruction tried to break or continue while not within a loop block
   UnexpectedLoopControl(bc::GenericID),
+  /// Could not retrieve address for an item
+  UnaddressableItem(bc::GenericID),
+  /// Module initialization failed
+  InitializationFailed,
+}
+
+impl Display for CompilationErrorData {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    use CompilationErrorData::*;
+    match self {
+      Unexpected => write!(f, "Some unexpected error occurred", ),
+      InvalidID(a, b) => write!(f, "An item ({:?}) referenced an invalid id ({:?})", a, b),
+      DuplicateDefinition(id) => write!(f, "Multiple definitions bound to the same id ({:?})", id),
+      DuplicateExport(name) => write!(f, "Multiple exports bound to the same name ({})", name),
+      InvalidExportID(path, id) => write!(f, "The ID ({:?}) associated with an export path ({}) was invalid", id, path),
+      MissingImport(path, version) => write!(f, "Found no existing module with the given name ({}) and version ({}) of an import", path, version),
+      InvalidImportPath(path) => write!(f, "An import path ({}) inside an import module was invalid", path),
+      InvalidImportType(path) => write!(f, "Imported value ({}) evaluated to a different type than was expected, or an invalid type", path),
+      ModuleAlreadyExists(name) => write!(f, "A module with the same name ({}) has already been loaded in the target Context", name),
+      ModuleExistsWithDifferentVersion(name, a, b) => write!(f, "A module with the same name ({}) and a different version ({} / {}) has already been loaded in the target Context", name, a, b),
+      StackUnderflow(id) => write!(f, "A function ({:?}) had no value on its stack for an instruction that called stack.pop", id),
+      InvalidLocalID(id, local) => write!(f, "A function ({:?}) had no local variable with the given id ({:?})", id, local),
+      TypeMismatch(id, a, b) => write!(f, "A value in ({:?}) was expected to be type A ({:?}), but was type B ({:?})", id, a, b),
+      ValidationFailed(id, ir) => write!(f, "LLVM Function ({:?}) validation failed, generated ir was:\n{}", id, ir),
+      GetInvalidElement(id) => write!(f, "An instruction in ({:?}) either tried to get an element of a non-structural type, or tried to get an out-of-range element", id),
+      InvalidCast(id, a, b) => write!(f, "An instruction in ({:?}) tried to perform an invalid cast from ({:?}) to ({:?})", id, a, b),
+      InvalidLoad(id, ty) => write!(f, "An instruction in ({:?}) tried to load a value that was of type ({:?}) instead of a pointer", id, ty),
+      InvalidStore(id, a, b) => write!(f, "An instruction in ({:?}) either tried to store a value that was not the same type as a pointer's value type, or tried to store to a value that was not a pointer, the types were ({:?}) and ({:?})", id, a, b),
+      InvalidUnary(id, instr, ty) => write!(f, "An instruction in ({:?}) tried to perform a unary operation ({:?}) on an invalid operand of type ({:?})", id, instr, ty),
+      BinaryMismatch(id, instr, a, b) => write!(f, "An instruction in ({:?}) tried to perform a binary operation ({:?}) on operands with different types, the types were ({:?}) and ({:?})", id, instr, a, b),
+      InvalidBinary(id, instr, ty) => write!(f, "An instruction in ({:?}) tried to perform a binary operation ({:?}) on an invalid operand type ({:?})", id, instr, ty),
+      InvalidCall(id) => write!(f, "An instruction in ({:?}) tried to perform a call with an invalid argument operand, without enough operands on the stack, or an invalid function address", id),
+      InvalidBranchPredicate(id, ty) => write!(f, "A branch in ({:?}) found a predicate operand of a type ({:?}) other than bool", id, ty),
+      UnusedInstructions(id) => write!(f, "A block in ({:?}) contained instructions after a terminating instruction such as return or continue", id),
+      UnexpectedLoopControl(id) => write!(f, "An instruction in ({:?}) tried to break or continue while not within a loop block", id),
+      UnaddressableItem(id) => write!(f, "Could not retrieve address for an item ({:?})", id),
+      InitializationFailed => write!(f, "Module initialization failed"),
+    }
+  }
 }
 
 /// An error that occurred while compiling bytecode
+#[derive(Debug)]
 pub struct CompilationError {
   /// The module of a compilation set in which an error occurred
   pub module_origin: String,
   /// The specific data for the error
   pub data: CompilationErrorData,
+}
+
+impl Display for CompilationError {
+  fn fmt (&self, f: &mut Formatter) -> FMTResult {
+    write!(f, "Failed to compile module {}:\n{}", self.module_origin, self.data)
+  }
 }
 
 /// A Result with no Ok value and CompilationError as its Err
@@ -316,6 +365,10 @@ pub fn load_modules (context: &mut Context, bc_modules: &[bc::Module]) -> Compil
     define_module(&mut ir, bc_module)?;
   }
 
+  for bc_module in bc_modules.iter() {
+    initialize_module(&mut ir, bc_module)?;
+  }
+
   Ok(())
 }
 
@@ -366,6 +419,21 @@ fn define_module (ir: &mut IR, bc_module: &bc::Module) -> CompilationResult {
   create_global_initializers(ir, &bc_module.globals)?;
 
   create_function_bodies(ir, &bc_module.functions)?;
+
+  ir.unset_active_module();
+
+  Ok(())
+}
+
+
+fn initialize_module (ir: &mut IR, bc_module: &bc::Module) -> CompilationResult {
+  ir.set_active_module(&bc_module.name);
+
+  generate_module_initializer(ir, &bc_module.globals)?;
+  
+  get_global_addresses(ir, &bc_module.globals)?;
+
+  get_function_addresses(ir, &bc_module.functions)?;
 
   ir.unset_active_module();
 
@@ -627,6 +695,45 @@ fn create_function_bodies (ir: &mut IR, bc_functions: &[bc::Function]) -> Compil
     let f_link = *ir.functions.get(&bc_function.id).unwrap();
     
     generate_function_body(ir, bc_function.id.into(), f_link, bc_function.body.as_slice())?;
+  }
+
+  Ok(())
+}
+
+
+
+fn get_global_addresses (ir: &mut IR, bc_globals: &[bc::Global]) -> CompilationResult {
+  for bc_global in bc_globals.iter() {
+    let g_link = *ir.globals.get(&bc_global.id).unwrap();
+
+    let global = ir.context.get_global(g_link); 
+
+    let address = unsafe { LLVMGetGlobalValueAddress(ir.context.llvm.ee, global.id.as_ptr()) };
+
+    if address == 0 {
+      return ir.error(CompilationErrorData::UnaddressableItem(bc_global.id.into()));
+    }
+
+    ir.context.set_global_address(g_link, address);
+  }
+
+  Ok(())
+}
+
+
+fn get_function_addresses (ir: &mut IR, bc_functions: &[bc::Function]) -> CompilationResult {
+  for bc_function in bc_functions.iter() {
+    let f_link = *ir.functions.get(&bc_function.id).unwrap();
+
+    let function = ir.context.get_function(f_link); 
+
+    let address = unsafe { LLVMGetFunctionAddress(ir.context.llvm.ee, function.id.as_ptr()) };
+
+    if address == 0 {
+      return ir.error(CompilationErrorData::UnaddressableItem(bc_function.id.into()));
+    }
+
+    ir.context.set_function_address(f_link, address)
   }
 
   Ok(())

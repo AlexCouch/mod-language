@@ -55,13 +55,14 @@ use llvm_sys::{
     LLVMABISizeOfType,
     LLVMABIAlignmentOfType,
     LLVMOffsetOfElement,
-    LLVMCopyStringRepOfTargetData,
+    // LLVMCopyStringRepOfTargetData,
   },
   execution_engine::{
     LLVMCreateExecutionEngineForModule,
     LLVMDisposeExecutionEngine,
     LLVMExecutionEngineRef,
     LLVMLinkInMCJIT,
+    LLVMFreeMachineCodeForFunction,
   },
   transforms::pass_manager_builder::{
     LLVMPassManagerBuilderCreate,
@@ -77,6 +78,7 @@ use mod_utils::{
 };
 
 use mod_bytecode::{
+  self as bc,
   Version,
 };
 
@@ -87,6 +89,7 @@ use crate::{
   hash,
   c_lit,
   llvm_extras::{ LLVM_SUCCESS, ToLLVMInContext, },
+  module_loader::{ load_module, load_modules, CompilationResult, },
 };
 
 
@@ -203,16 +206,6 @@ impl Context {
 
       // create module target data
       llvm.td = LLVMGetModuleDataLayout(llvm.module);
-
-      // TODO: Do I need to specify a layout myself, since this is empty?
-      #[cfg(debug_assertions)]
-      {
-        let layout_str = LLVMCopyStringRepOfTargetData(llvm.td);
-
-        println!("Created context module with data layout {}", CStr::from_ptr(layout_str).to_str().unwrap_or("[Error retrieving layout str]"));
-
-        LLVMDisposeMessage(layout_str);
-      }
 
       // create execution engine
       llvm.ee = zeroed();
@@ -336,6 +329,40 @@ impl Context {
 
     traverse(module.exports.as_slice(), &mut iter)
   }
+
+  /// Get a native address from a path into a context
+  pub fn get_address (&self, p: &[&str]) -> Option<u64> {
+    match self.resolve_path(p)? {
+      GenericLink::Function(f_link) => {
+        let func = self.get_function(f_link);
+
+        if func.address != 0 {
+          return Some(func.address)
+        }
+      },
+      GenericLink::Global(g_link) => {
+        let global = self.get_global(g_link);
+
+        if global.address != 0 {
+          return Some(global.address);
+        }
+      }
+    }
+
+    None
+  }
+
+
+  /// Compile and load a single bytecode Module into a Context
+  pub fn load_module (&mut self, bc_module: bc::Module) -> CompilationResult {
+    load_module(self, bc_module)
+  }
+
+  /// Compile and load multiple bytecode Modules into a Context, allowing cross-linking
+  pub fn load_modules (&mut self, bc_modules: &[bc::Module]) -> CompilationResult {
+    load_modules(self, bc_modules)
+  }
+
 
   /// Add a new Module to a Context
   pub(crate) fn add_module (&mut self, m: Module) -> ModuleLink {
@@ -536,6 +563,11 @@ impl Context {
     unsafe { self.globals.get_unchecked_mut(gl.0) }.initializer.replace(fl).unwrap_none()
   }
 
+  /// Set the address of a Global
+  pub fn set_global_address (&mut self, gl: GlobalLink, address: u64) {
+    unsafe { self.globals.get_unchecked_mut(gl.0) }.address = address
+  }
+
 
   /// Get a reference to a Function from a FunctionLink
   /// 
@@ -563,7 +595,11 @@ impl Context {
   pub(crate) unsafe fn purge_functions (&mut self, base: usize) {
     while self.functions.len() > base {
       let function = self.functions.pop().unwrap_unchecked();
-
+      
+      if function.address != 0 {
+        LLVMFreeMachineCodeForFunction(self.llvm.ee, function.llvm)
+      }
+      
       LLVMDeleteFunction(function.llvm)
     }
   }
@@ -593,6 +629,11 @@ impl Context {
     self.functions.push(Function { id, ty, address: 0, llvm });
 
     link
+  }
+
+  /// Set the address of a Function
+  pub fn set_function_address (&mut self, fl: FunctionLink, address: u64) {
+    unsafe { self.functions.get_unchecked_mut(fl.0) }.address = address
   }
 }
 

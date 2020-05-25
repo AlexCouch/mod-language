@@ -3,6 +3,12 @@ use std::{
 };
 
 use llvm_sys::{
+  core::LLVMDisposeMessage,
+  core::LLVMPrintValueToString,
+  execution_engine:: {
+    LLVMGetFunctionAddress,
+    LLVMFreeMachineCodeForFunction,
+  },
   LLVMIntPredicate,
   LLVMRealPredicate,
   core::{
@@ -55,6 +61,9 @@ use llvm_sys::{
     LLVMBuildCall2,
     LLVMBuildBr,
     LLVMBuildCondBr,
+    LLVMRunFunctionPassManager,
+    LLVMAddFunction,
+    LLVMDeleteFunction,
   },
   analysis::{
     LLVMVerifyFunction,
@@ -199,9 +208,66 @@ pub(crate) fn generate_function_body (ir: &mut IR, ref_id: bc::GenericID, func_l
   }
 
   if LLVMVerifyFunction(llvm_func, LLVMVerifierFailureAction::LLVMReturnStatusAction) == LLVM_SUCCESS {
+    LLVMRunFunctionPassManager(ir.context.llvm.fpm, llvm_func);
+
     Ok(())
   } else {
-    ir.error(CompilationErrorData::ValidationFailed(ref_id))
+    let llvm_ir = LLVMPrintValueToString(llvm_func);
+    let string = std::ffi::CStr::from_ptr(llvm_ir).to_string_lossy().to_string();
+    LLVMDisposeMessage(llvm_ir);
+
+    ir.error(CompilationErrorData::ValidationFailed(ref_id, string))
+  }
+} }
+
+
+/// Generates an LLVM wrapper for all global initializers in a module
+pub(crate) fn generate_module_initializer (ir: &mut IR, bc_globals: &[bc::Global]) -> CompilationResult { unsafe {
+  let fn_tl = ir.context.tl_function(&[], None, false);
+  let fn_ty = ir.context.get_type(fn_tl);
+
+  let llvm_func = LLVMAddFunction(ir.context.llvm.module, c_lit!("module_initializer"), fn_ty.llvm_real_t());
+
+  let entry_b = LLVMAppendBasicBlockInContext(ir.context.llvm.ctx, llvm_func, c_lit!("entry"));
+  LLVMPositionBuilderAtEnd(ir.context.llvm.builder, entry_b);
+
+  for bc_global in bc_globals.iter() {
+    let g_link = ir.get_global(bc_global.id, bc_global.id)?;
+    let global = ir.context.get_global(g_link);
+
+    if let Some(init_fl) = global.initializer {
+      let init_fn = ir.context.get_function(init_fl);
+
+      let ret = LLVMBuildCall(ir.context.llvm.builder, init_fn.llvm, std::ptr::null_mut(), 0, global.id.as_ptr());
+
+      LLVMBuildStore(ir.context.llvm.builder, ret, global.llvm);
+    }
+  }
+
+  LLVMBuildRetVoid(ir.context.llvm.builder);
+
+  let mut err = true;
+
+  if LLVMVerifyFunction(llvm_func, LLVMVerifierFailureAction::LLVMReturnStatusAction) == LLVM_SUCCESS {
+    let address = LLVMGetFunctionAddress(ir.context.llvm.ee, c_lit!("module_initializer"));
+
+    if address != 0 {
+      let func = std::mem::transmute::<_, extern "C" fn () -> ()>(address);
+
+      func();
+
+      LLVMFreeMachineCodeForFunction(ir.context.llvm.ee, llvm_func);
+
+      err = false;
+    }
+  }
+
+  LLVMDeleteFunction(llvm_func);
+  
+  if err {
+    ir.error(CompilationErrorData::InitializationFailed)
+  } else {
+    Ok(())
   }
 } }
 

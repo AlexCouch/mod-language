@@ -18,25 +18,5 @@ pub mod module_loader;
 pub(crate) mod generator;
 
 
-#[cfg(test)]
-mod test {
-  use super::*;
-  use mod_bytecode::IntrinsicType;
-
-  #[test]
-  fn context_create_and_drop () {
-    context::Context::new(3).expect("context creation works");
-  }
-
-  #[test]
-  fn struct_creation () {
-    let mut ctx = context::Context::default();
-
-    let field_tys = &[ ctx.tl_intrinsic(IntrinsicType::Bool), ctx.tl_intrinsic(IntrinsicType::S64), ctx.tl_intrinsic(IntrinsicType::Bool) ];
-
-    assert_ne!(
-      ctx.tl_structure(field_tys, false),
-      ctx.tl_structure(field_tys, true)
-    );
-  }
-}
+pub use context::Context;
+pub use module_loader::{ CompilationResult, CompilationError, CompilationErrorData, };

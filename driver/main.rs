@@ -5,6 +5,7 @@
 #![allow(clippy::useless_let_if_seq)]
 
 use mod_ansi as ansi;
+use mod_utils::UnwrapPretty;
 use mod_declaration_builder::generate_declarations;
 use mod_codegen::Codegen;
 
@@ -17,7 +18,7 @@ use mod_frontend::{
   ast,
 };
 
-use mod_rc::context::Context;
+use mod_rc::Context;
 
 
 fn main () -> std::io::Result<()> {
@@ -29,7 +30,7 @@ fn main () -> std::io::Result<()> {
   SOURCE_MANAGER.init("./test_scripts/modules/".into());
 
 
-  let source = SOURCE_MANAGER.load_source("./test_scripts/body_analysis.ms").expect("Could not find entry source file");
+  let source = SOURCE_MANAGER.load_source("./test_scripts/fibonacci.ms").expect("Could not find entry source file");
 
 
   let mut lexer = Lexer::new(source);
@@ -83,8 +84,32 @@ fn main () -> std::io::Result<()> {
   std::fs::write("./log/bc", format!("{}", bc)).expect("Failed to dump bytecode to ./log/bc");
 
 
-  let _context = Context::default();
+  let mut context = Context::default();
 
+  let load_result = context.load_module(bc);
+
+  load_result.expect_pretty("Failed to compile bytecode module");
+
+  fn native_fibonacci (n: i32) -> i32 {
+    if n < 2 {
+      n
+    } else {
+      native_fibonacci(n - 1) + native_fibonacci(n - 2)
+    }
+  }
+  let fibonacci_addr = context.get_address(&["test_module", "fibonacci"]).expect("Failed to get function address");
+
+  let fibonacci = unsafe { std::mem::transmute::<_, extern "C" fn (i32) -> i32>(fibonacci_addr) };
+
+  let n = 32;
+
+  let res = fibonacci(n);
+
+  let native_res = native_fibonacci(n);
+
+  assert_eq!(res, native_res);
+
+  println!("fibonacci({}) = {}", n, res);
 
   Ok(())
 }
