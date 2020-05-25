@@ -84,7 +84,7 @@ fn main () -> std::io::Result<()> {
   std::fs::write("./log/bc", format!("{}", bc)).expect("Failed to dump bytecode to ./log/bc");
 
 
-  let mut context = Context::default();
+  let mut context = Context::new(2).expect("Failed to create rc context");
 
   let load_result = context.load_module(bc);
 
