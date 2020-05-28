@@ -6,6 +6,7 @@
 
 #![feature(option_unwrap_none)]
 #![feature(or_patterns)]
+#![feature(track_caller)]
 
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("This crate can only be used on 64-bit targets");

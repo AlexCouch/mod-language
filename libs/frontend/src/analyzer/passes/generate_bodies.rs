@@ -1,9 +1,9 @@
-use mod_utils::{ some, };
+use mod_utils::{ some, equal, };
 use mod_common::{ Operator, };
 
 use crate::{
   ast::{ self, Item, ItemData, ExportData, },
-  ctx::{ ContextItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
+  ctx::{ ContextKey, ContextItem, Type, TypeData, LocalItem,  MultiKey, TypeDisplay, },
   ir,
 };
 
@@ -101,6 +101,8 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
         // its possible some shadowing error has overwritten this def and if so we just return
         let function = some!(analyzer.context.items.get(function_key).unwrap().ref_function());
 
+        let expect = if function.return_ty.is_some() { Expect::Allow } else { Expect::Deny };
+
         // TODO :[ temp allocation here sucks but what can you do?
         let params = function.params.clone();
         
@@ -110,12 +112,32 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
           local_ctx.create_variable(param_name, param_type, true, param_origin);
         }
 
-        let body_ir = generate_block(analyzer, Expect::Allow, body_block);
-        
+        let body_ir = generate_block(analyzer, expect, body_block);
+
         analyzer.remove_local_context();
 
+
+        let function = some!(analyzer.context.items.get(function_key).unwrap().ref_function());
+
+        let body_ir: ir::Block = some!(body_ir);
+
+        if let Some(return_ty) = function.return_ty {
+          let result_ty = some!(check_block_return(analyzer, &body_ir));
+
+          if result_ty != return_ty {
+            analyzer.error(item.origin, format!(
+              "Function declares return type {} but returns {}",
+              TypeDisplay { ty_key: return_ty, context: &analyzer.context },
+              TypeDisplay { ty_key: result_ty, context: &analyzer.context }
+            ));
+            return
+          }
+        } else {
+          equal!(check_no_block_return(analyzer, &body_ir), true);
+        }
+
         unsafe { analyzer.context.items.get_unchecked_mut(function_key).mut_function_unchecked() }
-          .body.replace(some!(body_ir));
+          .body.replace(body_ir);
           // .expect_none("Internal error, function body IR replaced"); there was an error, yes, but this is ok; our codegen is dead anyways
       } else if analyzer.get_active_module().is_main {
         analyzer.error(item.origin, "Function definitions inside a source module must have a body".to_owned());
@@ -133,6 +155,89 @@ fn generate_item (analyzer: &mut Analyzer, item: &mut Item) {
     | ItemData::Export { .. }
     => unreachable!()
   }
+}
+
+fn check_no_block_return (analyzer: &mut Analyzer, block: &ir::Block) -> bool {
+  if let Some(trail) = block.trailing_expression.as_ref() {
+    analyzer.error(trail.origin, "Unexpected trailing expression".to_owned());
+    false
+  } else if let Some(last_stmt) = block.statements.last() {
+    let last_stmt: &ir::Statement = last_stmt;
+
+    match &last_stmt.data {
+      ir::StatementData::Block(block) => check_no_block_return(analyzer, block),
+      ir::StatementData::Conditional(cond) => check_no_conditional_return(analyzer, cond),
+      ir::StatementData::Return(expr) => {
+        if let Some(expr) = expr {
+          analyzer.error(expr.origin, "Unexpected return value".to_owned());
+          false
+        } else {
+          true
+        }
+      },
+      _ => true,
+    }
+  } else {
+    true
+  }
+}
+
+fn check_no_conditional_return (analyzer: &mut Analyzer, conditional: &ir::Conditional) -> bool {
+  let if_br_ty = check_no_conditional_branch_return(analyzer, &conditional.if_branch);
+  for else_br in conditional.else_if_branches.iter() {
+    if !check_no_conditional_branch_return(analyzer, else_br) {
+      analyzer.error(else_br.origin, "Branch should not return a value".to_owned());
+    }
+  }
+  if let Some(else_block) = &conditional.else_block {
+    if !check_no_block_return(analyzer, else_block) {
+      analyzer.error(else_block.origin, "Branch should not return a value".to_owned());
+    }
+  }
+  if_br_ty
+}
+
+fn check_no_conditional_branch_return (analyzer: &mut Analyzer, conditional_branch: &ir::ConditionalBranch) -> bool {
+  check_no_block_return(analyzer, &conditional_branch.body)
+}
+
+fn check_block_return (analyzer: &mut Analyzer, block: &ir::Block) -> Option<ContextKey> {
+  if let Some(trail) = block.trailing_expression.as_ref() { Some(trail.ty) }
+  else if let Some(last_stmt) = block.statements.last() {
+    let last_stmt: &ir::Statement = last_stmt;
+
+    match &last_stmt.data {
+      ir::StatementData::Block(block) => check_block_return(analyzer, block),
+      ir::StatementData::Conditional(cond) => check_conditional_return(analyzer, cond),
+      ir::StatementData::Return(expr) => expr.as_ref().map(|e| e.ty),
+      _ => {
+        analyzer.error(block.origin, "Expected a return value".to_owned());
+        None
+      },
+    }
+  } else {
+    analyzer.error(block.origin, "Expected a return value".to_owned());
+    None
+  }
+}
+
+fn check_conditional_return (analyzer: &mut Analyzer, conditional: &ir::Conditional) -> Option<ContextKey> {
+  let if_br_ty = check_conditional_branch_return(analyzer, &conditional.if_branch)?;
+  for else_br in conditional.else_if_branches.iter() {
+    if check_conditional_branch_return(analyzer, else_br)? != if_br_ty {
+      analyzer.error(else_br.origin, "Branch returns a different type than the originating if branch".to_owned());
+    }
+  }
+  if let Some(else_block) = &conditional.else_block {
+    if check_block_return(analyzer, else_block)? != if_br_ty {
+      analyzer.error(else_block.origin, "Branch returns a different type than the originating if branch".to_owned());
+    }
+  }
+  Some(if_br_ty)
+}
+
+fn check_conditional_branch_return (analyzer: &mut Analyzer, conditional_branch: &ir::ConditionalBranch) -> Option<ContextKey> {
+  check_block_return(analyzer, &conditional_branch.body)
 }
 
 

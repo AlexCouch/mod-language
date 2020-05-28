@@ -182,12 +182,13 @@ impl IRModule {
     }
   }
 
-  pub(crate) fn reverse_type_lookup (&self, tl: ctx::TypeLink) -> bc::TypeID {
+  #[track_caller]
+  pub(crate) fn reverse_type_lookup (&self, tl: ctx::TypeLink) -> Option<bc::TypeID> {
     for (&l_id, &l_tl) in self.types.iter() {
-      if l_tl == tl { return l_id }
+      if l_tl == tl { return Some(l_id) }
     }
-
-    panic!("Failed to find type in reverse lookup");
+    
+    None
   }
 
   // pub(crate) fn reverse_global_lookup (&self, gl: ctx::GlobalLink) -> bc::GlobalID {

@@ -30,7 +30,7 @@ fn main () -> std::io::Result<()> {
   SOURCE_MANAGER.init("./test_scripts/modules/".into());
 
 
-  let source = SOURCE_MANAGER.load_source("./test_scripts/fibonacci.ms").expect("Could not find entry source file");
+  let source = SOURCE_MANAGER.load_source("./test_scripts/factorial.ms").expect("Could not find entry source file");
 
 
   let mut lexer = Lexer::new(source);
@@ -90,32 +90,29 @@ fn main () -> std::io::Result<()> {
 
   load_result.expect_pretty("Failed to compile bytecode module");
 
-  let fib_path = &["test_module", "fibonacci"];
+  let fact_path = &["test_module", "factorial"];
 
-  println!("fibonacci baseline ir:\n{}", context.get_baseline_ir(fib_path).expect("Failed to get baseline ir"));
-  println!("fibonacci optimized ir:\n{}", context.get_optimized_ir(fib_path).expect("Failed to get optimized ir"));
+  println!("factorial baseline ir:\n{}", context.get_baseline_ir(fact_path).expect("Failed to get baseline ir"));
+  println!("factorial optimized ir:\n{}", context.get_optimized_ir(fact_path).expect("Failed to get optimized ir"));
 
-  fn native_fibonacci (n: i32) -> i32 {
-    if n < 2 {
-      n
-    } else {
-      native_fibonacci(n - 1) + native_fibonacci(n - 2)
-    }
+  fn native_factorial (n: i32) -> i32 {
+    if n < 2 { n }
+    else { n * native_factorial(n - 1) }
   }
 
-  let fibonacci_addr = context.get_address(fib_path).expect("Failed to get function address");
+  let factorial_addr = context.get_address(fact_path).expect("Failed to get function address");
 
-  let fibonacci = unsafe { std::mem::transmute::<_, extern "C" fn (i32) -> i32>(fibonacci_addr) };
+  let factorial = unsafe { std::mem::transmute::<_, extern "C" fn (i32) -> i32>(factorial_addr) };
 
-  let n = 32;
+  let n = 8;
 
-  let res = fibonacci(n);
+  let res = factorial(n);
 
-  let native_res = native_fibonacci(n);
+  let native_res = native_factorial(n);
 
   assert_eq!(res, native_res);
 
-  println!("fibonacci({}) = {}", n, res);
+  println!("factorial({}) = {}", n, res);
 
   Ok(())
 }

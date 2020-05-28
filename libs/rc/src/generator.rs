@@ -140,7 +140,7 @@ impl<'a, 'b> LocalIR<'a, 'b> {
     let func_sig =
       if let ctx::TypeData::Function { parameters, result, is_var_arg } = &func_ty.data { (parameters.clone(), *result, *is_var_arg) }
       else {
-        let t_id = ir.reverse_type_lookup(ctx_func.ty).into();
+        let t_id = ir.reverse_type_lookup(ctx_func.ty).unwrap().into();
         return ir.error(CompilationErrorData::InvalidID(ref_id, t_id))
       };
 
@@ -396,8 +396,8 @@ fn generate_block (
           => LLVMBuildFPToUI(builder, val, llvm_t, c_lit!("f_to_u")),
 
           _ => {
-            let a_id = ir.reverse_type_lookup(val_tl);
-            let b_id = ir.reverse_type_lookup(new_tl);
+            let a_id = ir.reverse_type_lookup(val_tl).unwrap();
+            let b_id = ir.reverse_type_lookup(new_tl).unwrap();
             return ir.error(CompilationErrorData::InvalidCast(ref_id, a_id, b_id))
           }
         };
@@ -419,13 +419,13 @@ fn generate_block (
           continue
         }
 
-        let t_id = ir.reverse_type_lookup(ptr_tl);
+        let t_id = ir.reverse_type_lookup(ptr_tl).unwrap();
         return ir.error(CompilationErrorData::InvalidLoad(ref_id, t_id))
       },
 
       Store => {
-        let (val, val_tl) = ir.stack_pop()?;
         let (ptr, ptr_tl) = ir.stack_pop()?;
+        let (val, val_tl) = ir.stack_pop()?;
 
         let ptr_ty = ir.context.get_type(ptr_tl);
 
@@ -434,12 +434,15 @@ fn generate_block (
             LLVMBuildStore(builder, val, ptr);
 
             continue
+          } else {
+            let ptr_val_ty = ir.context.get_type(ptr_val_tl);
+            let val_ty = ir.context.get_type(val_tl);
+            panic!("Failed to build store\n  ptr_val_ty: {:#?}\n  val_ty: {:#?}", ptr_val_ty, val_ty);
           }
+        } else {
+          let val_ty = ir.context.get_type(val_tl);
+          panic!("Failed to build store\n  ptr_ty: {:#?}\n  val_ty: {:#?}", ptr_ty, val_ty);
         }
-
-        let a_id = ir.reverse_type_lookup(ptr_tl);
-        let b_id = ir.reverse_type_lookup(val_tl);
-        return ir.error(CompilationErrorData::InvalidStore(ref_id, a_id, b_id))
       },
 
       Duplicate => {
@@ -472,7 +475,7 @@ fn generate_block (
           => LLVMBuildNot(builder, val, c_lit!("not")),
 
           _ => {
-            let t_id = ir.reverse_type_lookup(val_tl);
+            let t_id = ir.reverse_type_lookup(val_tl).unwrap();
             return ir.error(CompilationErrorData::InvalidUnary(ref_id, un_op.get_kind(), t_id))
           }
         };
@@ -487,8 +490,8 @@ fn generate_block (
         let (mut a_val, a_tl) = ir.stack_pop()?;
 
         equal!(a_tl, b_tl; {
-          let a_id = ir.reverse_type_lookup(a_tl);
-          let b_id = ir.reverse_type_lookup(b_tl);
+          let a_id = ir.reverse_type_lookup(a_tl).unwrap();
+          let b_id = ir.reverse_type_lookup(b_tl).unwrap();
           ir.error(CompilationErrorData::BinaryMismatch(ref_id, bin_op.get_kind(), a_id, b_id))
         });
 
@@ -613,7 +616,7 @@ fn generate_block (
           ),
 
           _ => {
-            let op_id = ir.reverse_type_lookup(op_tl);
+            let op_id = ir.reverse_type_lookup(op_tl).unwrap();
             return ir.error(CompilationErrorData::InvalidBinary(ref_id, bin_op.get_kind(), op_id))
           }
         };
@@ -698,7 +701,7 @@ fn generate_block (
         let (cond_val, cond_tl) = ir.stack_pop()?;
 
         equal!(cond_tl, ir.context.tl_intrinsic(IntrinsicType::Bool); {
-          let t_id = ir.reverse_type_lookup(cond_tl);
+          let t_id = ir.reverse_type_lookup(cond_tl).unwrap();
           ir.error(CompilationErrorData::InvalidBranchPredicate(ref_id, t_id))
         });
 
@@ -870,8 +873,8 @@ fn ty_ck (ir: &mut LocalIR, a: ctx::TypeLink, b: ctx::TypeLink) -> CompilationRe
     Ok(())
   } else {
     let ref_id = ir.ref_id;
-    let a_id = ir.reverse_type_lookup(a);
-    let b_id = ir.reverse_type_lookup(b);
+    let a_id = ir.reverse_type_lookup(a).unwrap();
+    let b_id = ir.reverse_type_lookup(b).unwrap();
     ir.error(CompilationErrorData::TypeMismatch(ref_id, a_id, b_id))
   }
 }
